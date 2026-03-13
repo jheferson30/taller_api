@@ -2354,6 +2354,18 @@ button.outline {
   color: #2c3e50;
 }
 
+.form-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #34495e;
+  margin: 1.5rem 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #ecf0f1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -2392,13 +2404,7 @@ button.outline {
   cursor: not-allowed;
 }
 
-/* Filtros */
-.filtros-citas {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
-}
+/* Filtros - ELIMINADO (movido abajo con vista toggle) */
 
 .filtro-btn {
   padding: 0.5rem 1rem;
@@ -2577,6 +2583,28 @@ button.outline {
   cursor: not-allowed;
 }
 
+.btn-confirmar-cita {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-confirmar-cita:hover:not(:disabled) {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+.btn-confirmar-cita:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-cancelar-cita {
   padding: 0.6rem 1rem;
   background: #e74c3c;
@@ -2627,5 +2655,213 @@ button.outline {
   .citas-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+
+/* Vista toggle */
+.filtros-citas {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.filtros-grupo {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.vista-toggle {
+  display: flex;
+  gap: 0.5rem;
+  background: white;
+  padding: 0.3rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.vista-btn {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+  color: #6b7280;
+}
+
+.vista-btn.active {
+  background: #667eea;
+  color: white;
+}
+
+.vista-btn:hover:not(.active) {
+  background: #f3f4f6;
+}
+
+/* Calendario */
+.calendario-container {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.calendario-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.calendario-titulo {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #2c3e50;
+  text-transform: capitalize;
+}
+
+.calendario-nav {
+  padding: 0.6rem 1.2rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.calendario-nav:hover {
+  background: #5568d3;
+}
+
+.calendario-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+}
+
+.calendario-dia-nombre {
+  text-align: center;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 0.8rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.calendario-dia-vacio {
+  min-height: 100px;
+}
+
+.calendario-dia {
+  min-height: 100px;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.calendario-dia:hover {
+  background: #f3f4f6;
+  border-color: #667eea;
+}
+
+.calendario-dia.hoy {
+  background: #eef2ff;
+  border-color: #667eea;
+}
+
+.calendario-dia.con-citas {
+  background: #fef3c7;
+}
+
+.calendario-dia.hoy.con-citas {
+  background: #dbeafe;
+}
+
+.calendario-dia-numero {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.3rem;
+  font-size: 0.95rem;
+}
+
+.calendario-citas-badge {
+  font-size: 0.7rem;
+  color: #667eea;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.calendario-citas-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.calendario-cita-mini {
+  background: white;
+  padding: 0.3rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  border-left: 3px solid #667eea;
+}
+
+.cita-hora-mini {
+  font-weight: 600;
+  color: #667eea;
+}
+
+.cita-cliente-mini {
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendario-cita-mas {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  text-align: center;
+  padding: 0.2rem;
+  font-style: italic;
+}
+
+/* Responsive calendario */
+@media (max-width: 768px) {
+  .calendario-grid {
+    gap: 0.3rem;
+  }
+  
+  .calendario-dia {
+    min-height: 80px;
+    padding: 0.3rem;
+  }
+  
+  .calendario-dia-numero {
+    font-size: 0.8rem;
+  }
+  
+  .calendario-citas-badge {
+    font-size: 0.65rem;
+  }
+  
+  .calendario-cita-mini {
+    font-size: 0.65rem;
+    padding: 0.2rem;
   }
 }

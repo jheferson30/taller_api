@@ -52,17 +52,54 @@ def listar_citas_proximas(
 
 @router.post("", response_model=CitaRespuesta)
 def crear_cita(datos: CitaCrear, db: Session = Depends(obtener_db)):
-    """Crea una nueva cita"""
-    # Si tiene placa, buscar el vehículo
-    vehiculo_id = None
-    if datos.placa:
-        vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == datos.placa.strip().upper()).first()
-        if vehiculo:
-            vehiculo_id = vehiculo.id
+    """Crea una nueva cita y opcionalmente crea o actualiza el vehículo"""
+    placa_norm = datos.placa.strip().upper()
     
+    # Buscar si el vehículo ya existe
+    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
+    
+    if vehiculo:
+        # Vehículo existe - actualizar datos si se proporcionaron
+        if datos.marca:
+            vehiculo.marca = datos.marca
+        if datos.modelo:
+            vehiculo.modelo = datos.modelo
+        if datos.anio:
+            vehiculo.anio = datos.anio
+        if datos.cilindraje:
+            vehiculo.cilindraje = datos.cilindraje
+        if datos.color:
+            vehiculo.color = datos.color
+        
+        # Actualizar datos del propietario si cambiaron
+        if datos.nombre_cliente and datos.nombre_cliente != vehiculo.nombre_propietario:
+            vehiculo.nombre_propietario = datos.nombre_cliente
+        if datos.telefono_cliente and datos.telefono_cliente != vehiculo.telefono_propietario:
+            vehiculo.telefono_propietario = datos.telefono_cliente
+    else:
+        # Vehículo no existe - crear uno nuevo
+        vehiculo = Vehiculo(
+            placa=placa_norm,
+            marca=datos.marca,
+            modelo=datos.modelo,
+            anio=datos.anio,
+            cilindraje=datos.cilindraje,
+            color=datos.color,
+            nombre_propietario=datos.nombre_cliente,
+            telefono_propietario=datos.telefono_cliente
+        )
+        db.add(vehiculo)
+        db.flush()
+    
+    # Crear la cita con todos los datos
     cita = Cita(
-        vehiculo_id=vehiculo_id,
-        placa=datos.placa.strip().upper() if datos.placa else None,
+        vehiculo_id=vehiculo.id,
+        placa=placa_norm,
+        marca=datos.marca,
+        modelo=datos.modelo,
+        anio=datos.anio,
+        cilindraje=datos.cilindraje,
+        color=datos.color,
         nombre_cliente=datos.nombre_cliente,
         telefono_cliente=datos.telefono_cliente,
         fecha_cita=datos.fecha_cita,
@@ -135,22 +172,38 @@ def generar_ticket_desde_cita(cita_id: int, db: Session = Depends(obtener_db)):
     if cita.estado == "CONVERTIDA":
         raise HTTPException(status_code=400, detail="Esta cita ya fue convertida en ticket")
     
-    # Buscar o crear vehículo
-    vehiculo = None
-    if cita.placa:
-        vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == cita.placa).first()
-        
-        if not vehiculo:
-            # Crear vehículo nuevo
-            vehiculo = Vehiculo(
-                placa=cita.placa,
-                nombre_propietario=cita.nombre_cliente,
-                telefono_propietario=cita.telefono_cliente
-            )
-            db.add(vehiculo)
-            db.flush()
-    else:
+    if not cita.placa:
         raise HTTPException(status_code=400, detail="La cita debe tener una placa para generar ticket")
+    
+    # El vehículo ya debe existir porque se creó/actualizó al crear la cita
+    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == cita.placa).first()
+    
+    if not vehiculo:
+        # Esto no debería pasar, pero por seguridad creamos el vehículo
+        vehiculo = Vehiculo(
+            placa=cita.placa,
+            marca=cita.marca,
+            modelo=cita.modelo,
+            anio=cita.anio,
+            cilindraje=cita.cilindraje,
+            color=cita.color,
+            nombre_propietario=cita.nombre_cliente,
+            telefono_propietario=cita.telefono_cliente
+        )
+        db.add(vehiculo)
+        db.flush()
+    else:
+        # Actualizar vehículo con datos de la cita si están más completos
+        if cita.marca and not vehiculo.marca:
+            vehiculo.marca = cita.marca
+        if cita.modelo and not vehiculo.modelo:
+            vehiculo.modelo = cita.modelo
+        if cita.anio and not vehiculo.anio:
+            vehiculo.anio = cita.anio
+        if cita.cilindraje and not vehiculo.cilindraje:
+            vehiculo.cilindraje = cita.cilindraje
+        if cita.color and not vehiculo.color:
+            vehiculo.color = cita.color
     
     # Generar código de ticket
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")

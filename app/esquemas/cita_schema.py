@@ -5,9 +5,19 @@ from pydantic import BaseModel
 
 
 class CitaCrear(BaseModel):
-    placa: Optional[str] = None
+    # Datos del vehículo (obligatorios)
+    placa: str
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    cilindraje: Optional[str] = None
+    color: Optional[str] = None
+    
+    # Datos del cliente
     nombre_cliente: str
     telefono_cliente: str
+    
+    # Datos de la cita
     fecha_cita: datetime
     motivo: str
     observaciones: Optional[str] = None
@@ -25,6 +35,14 @@ class CitaRespuesta(BaseModel):
     id: int
     vehiculo_id: Optional[int]
     placa: Optional[str]
+    
+    # Datos del vehículo (si están disponibles)
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    cilindraje: Optional[str] = None
+    color: Optional[str] = None
+    
     nombre_cliente: str
     telefono_cliente: str
     fecha_cita: datetime

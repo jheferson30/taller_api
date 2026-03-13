@@ -9,7 +9,14 @@ class Cita(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     vehiculo_id = Column(Integer, ForeignKey("vehiculos.id"), nullable=True, index=True)
-    placa = Column(String(20), nullable=True, index=True)
+    placa = Column(String(20), nullable=False, index=True)
+    
+    # Datos del vehículo (guardados en la cita para referencia)
+    marca = Column(String(100), nullable=True)
+    modelo = Column(String(100), nullable=True)
+    anio = Column(Integer, nullable=True)
+    cilindraje = Column(String(50), nullable=True)
+    color = Column(String(50), nullable=True)
     
     # Datos del cliente (si no tiene vehículo registrado)
     nombre_cliente = Column(String(150), nullable=False)

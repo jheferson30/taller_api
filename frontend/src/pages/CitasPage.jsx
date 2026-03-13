@@ -9,10 +9,16 @@ export default function CitasPage() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("TODAS");
+  const [vistaActual, setVistaActual] = useState("lista"); // "lista" o "calendario"
   
   // Formulario
   const [form, setForm] = useState({
     placa: "",
+    marca: "",
+    modelo: "",
+    anio: new Date().getFullYear(),
+    cilindraje: "",
+    color: "",
     nombre_cliente: "",
     telefono_cliente: "",
     fecha_cita: "",
@@ -22,6 +28,46 @@ export default function CitasPage() {
 
   // Mini calendario
   const [mesActual, setMesActual] = useState(new Date());
+
+  // Funciones para el calendario
+  function obtenerDiasDelMes(fecha) {
+    const year = fecha.getFullYear();
+    const month = fecha.getMonth();
+    const primerDia = new Date(year, month, 1);
+    const ultimoDia = new Date(year, month + 1, 0);
+    const diasEnMes = ultimoDia.getDate();
+    const primerDiaSemana = primerDia.getDay();
+    
+    const dias = [];
+    
+    // Días vacíos al inicio
+    for (let i = 0; i < primerDiaSemana; i++) {
+      dias.push(null);
+    }
+    
+    // Días del mes
+    for (let dia = 1; dia <= diasEnMes; dia++) {
+      dias.push(new Date(year, month, dia));
+    }
+    
+    return dias;
+  }
+
+  function obtenerCitasDelDia(fecha) {
+    if (!fecha) return [];
+    return citasFiltradas.filter(cita => {
+      const fechaCita = new Date(cita.fecha_cita);
+      return fechaCita.toDateString() === fecha.toDateString();
+    });
+  }
+
+  function cambiarMes(direccion) {
+    setMesActual(prev => {
+      const nuevaFecha = new Date(prev);
+      nuevaFecha.setMonth(prev.getMonth() + direccion);
+      return nuevaFecha;
+    });
+  }
 
   async function loadCitas() {
     setLoading(true);
@@ -43,17 +89,26 @@ export default function CitasPage() {
     if (!form.placa) return;
     try {
       const vehiculo = await api.buscarVehiculo(form.placa);
-      if (vehiculo) {
+      if (vehiculo.existe) {
+        const v = vehiculo.vehiculo;
         setForm({
           ...form,
-          nombre_cliente: vehiculo.nombre_propietario || "",
-          telefono_cliente: vehiculo.telefono_propietario || "",
+          marca: v.marca || "",
+          modelo: v.modelo || "",
+          anio: v.anio || new Date().getFullYear(),
+          cilindraje: v.cilindraje || "",
+          color: v.color || "",
+          nombre_cliente: v.nombre_propietario || "",
+          telefono_cliente: v.telefono_propietario || "",
         });
-        setMsg("✓ Vehículo encontrado");
+        setMsg("✓ Vehículo encontrado - Datos cargados");
         setTimeout(() => setMsg(""), 2000);
+      } else {
+        setMsg("Vehículo no encontrado, ingresa los datos completos");
+        setTimeout(() => setMsg(""), 3000);
       }
     } catch (e) {
-      setMsg("Vehículo no encontrado, ingresa los datos del cliente");
+      setMsg("Vehículo no encontrado, ingresa los datos completos");
       setTimeout(() => setMsg(""), 3000);
     }
   }
@@ -68,6 +123,11 @@ export default function CitasPage() {
       });
       setForm({
         placa: "",
+        marca: "",
+        modelo: "",
+        anio: new Date().getFullYear(),
+        cilindraje: "",
+        color: "",
         nombre_cliente: "",
         telefono_cliente: "",
         fecha_cita: "",
@@ -95,6 +155,21 @@ export default function CitasPage() {
       setTimeout(() => {
         navigate("/tickets");
       }, 1500);
+    } catch (e) {
+      setMsg("✗ Error: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onConfirmarCita(citaId) {
+    if (!confirm("¿Confirmar esta cita?")) return;
+    setLoading(true);
+    try {
+      await api.actualizarCita(citaId, { estado: "CONFIRMADA" });
+      await loadCitas();
+      setMsg("✓ Cita confirmada");
+      setTimeout(() => setMsg(""), 2000);
     } catch (e) {
       setMsg("✗ Error: " + e.message);
     } finally {
@@ -154,15 +229,19 @@ export default function CitasPage() {
         <div className="form-cita-card">
           <h3>Agendar Nueva Cita</h3>
           <form onSubmit={onCrearCita}>
+            {/* Datos del Vehículo */}
+            <div className="form-section-title">🚗 Datos del Vehículo</div>
+            
             <div className="form-row">
               <div className="form-group-inline">
                 <label>
-                  <span>Placa</span>
+                  <span>Placa *</span>
                   <input
                     type="text"
                     value={form.placa}
                     onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase() })}
                     placeholder="ABC123"
+                    required
                   />
                 </label>
                 <button
@@ -175,6 +254,63 @@ export default function CitasPage() {
                 </button>
               </div>
             </div>
+
+            <div className="form-row">
+              <label>
+                <span>Marca</span>
+                <input
+                  type="text"
+                  value={form.marca}
+                  onChange={(e) => setForm({ ...form, marca: e.target.value })}
+                  placeholder="Ej: Yamaha"
+                />
+              </label>
+              <label>
+                <span>Modelo</span>
+                <input
+                  type="text"
+                  value={form.modelo}
+                  onChange={(e) => setForm({ ...form, modelo: e.target.value })}
+                  placeholder="Ej: FZ-16"
+                />
+              </label>
+            </div>
+
+            <div className="form-row">
+              <label>
+                <span>Año</span>
+                <input
+                  type="number"
+                  value={form.anio}
+                  onChange={(e) => setForm({ ...form, anio: Number(e.target.value) })}
+                  placeholder="2024"
+                />
+              </label>
+              <label>
+                <span>Cilindraje</span>
+                <input
+                  type="text"
+                  value={form.cilindraje}
+                  onChange={(e) => setForm({ ...form, cilindraje: e.target.value })}
+                  placeholder="Ej: 150cc"
+                />
+              </label>
+            </div>
+
+            <div className="form-row">
+              <label>
+                <span>Color</span>
+                <input
+                  type="text"
+                  value={form.color}
+                  onChange={(e) => setForm({ ...form, color: e.target.value })}
+                  placeholder="Ej: Negro"
+                />
+              </label>
+            </div>
+
+            {/* Datos del Cliente */}
+            <div className="form-section-title">👤 Datos del Cliente</div>
 
             <div className="form-row">
               <label>
@@ -198,6 +334,9 @@ export default function CitasPage() {
                 />
               </label>
             </div>
+
+            {/* Datos de la Cita */}
+            <div className="form-section-title">📅 Datos de la Cita</div>
 
             <div className="form-row">
               <label>
@@ -240,71 +379,168 @@ export default function CitasPage() {
 
       {/* Filtros */}
       <div className="filtros-citas">
-        <button
-          className={`filtro-btn ${filtroEstado === "TODAS" ? "active" : ""}`}
-          onClick={() => setFiltroEstado("TODAS")}
-        >
-          Todas ({citasFiltradas.length})
-        </button>
-        <button
-          className={`filtro-btn ${filtroEstado === "PENDIENTE" ? "active" : ""}`}
-          onClick={() => setFiltroEstado("PENDIENTE")}
-        >
-          Pendientes
-        </button>
-        <button
-          className={`filtro-btn ${filtroEstado === "CONFIRMADA" ? "active" : ""}`}
-          onClick={() => setFiltroEstado("CONFIRMADA")}
-        >
-          Confirmadas
-        </button>
+        <div className="filtros-grupo">
+          <button
+            className={`filtro-btn ${filtroEstado === "TODAS" ? "active" : ""}`}
+            onClick={() => setFiltroEstado("TODAS")}
+          >
+            Todas ({citasFiltradas.length})
+          </button>
+          <button
+            className={`filtro-btn ${filtroEstado === "PENDIENTE" ? "active" : ""}`}
+            onClick={() => setFiltroEstado("PENDIENTE")}
+          >
+            Pendientes
+          </button>
+          <button
+            className={`filtro-btn ${filtroEstado === "CONFIRMADA" ? "active" : ""}`}
+            onClick={() => setFiltroEstado("CONFIRMADA")}
+          >
+            Confirmadas
+          </button>
+        </div>
+        
+        <div className="vista-toggle">
+          <button
+            className={`vista-btn ${vistaActual === "lista" ? "active" : ""}`}
+            onClick={() => setVistaActual("lista")}
+            title="Vista de lista"
+          >
+            📋 Lista
+          </button>
+          <button
+            className={`vista-btn ${vistaActual === "calendario" ? "active" : ""}`}
+            onClick={() => setVistaActual("calendario")}
+            title="Vista de calendario"
+          >
+            📅 Calendario
+          </button>
+        </div>
       </div>
 
       {loading && <p className="loading">Cargando citas...</p>}
 
-      {/* Citas de hoy */}
-      {citasHoy.length > 0 && (
-        <div className="seccion-citas">
-          <h3 className="seccion-titulo">🔥 Citas de Hoy</h3>
-          <div className="citas-grid">
-            {citasHoy.map((c) => (
-              <CitaCard
-                key={c.id}
-                cita={c}
-                onGenerarTicket={onGenerarTicket}
-                onCancelar={onCancelarCita}
-                loading={loading}
-              />
-            ))}
+      {/* Vista de Calendario */}
+      {vistaActual === "calendario" && (
+        <div className="calendario-container">
+          <div className="calendario-header">
+            <button className="calendario-nav" onClick={() => cambiarMes(-1)}>
+              ← Anterior
+            </button>
+            <h3 className="calendario-titulo">
+              {mesActual.toLocaleDateString("es-CO", { month: "long", year: "numeric" })}
+            </h3>
+            <button className="calendario-nav" onClick={() => cambiarMes(1)}>
+              Siguiente →
+            </button>
+          </div>
+
+          <div className="calendario-grid">
+            <div className="calendario-dia-nombre">Dom</div>
+            <div className="calendario-dia-nombre">Lun</div>
+            <div className="calendario-dia-nombre">Mar</div>
+            <div className="calendario-dia-nombre">Mié</div>
+            <div className="calendario-dia-nombre">Jue</div>
+            <div className="calendario-dia-nombre">Vie</div>
+            <div className="calendario-dia-nombre">Sáb</div>
+
+            {obtenerDiasDelMes(mesActual).map((fecha, index) => {
+              if (!fecha) {
+                return <div key={`empty-${index}`} className="calendario-dia-vacio" />;
+              }
+
+              const citasDelDia = obtenerCitasDelDia(fecha);
+              const esHoy = fecha.toDateString() === new Date().toDateString();
+              const tieneCitas = citasDelDia.length > 0;
+
+              return (
+                <div
+                  key={index}
+                  className={`calendario-dia ${esHoy ? "hoy" : ""} ${tieneCitas ? "con-citas" : ""}`}
+                >
+                  <div className="calendario-dia-numero">{fecha.getDate()}</div>
+                  {tieneCitas && (
+                    <div className="calendario-citas-badge">
+                      {citasDelDia.length} cita{citasDelDia.length > 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {citasDelDia.length > 0 && (
+                    <div className="calendario-citas-mini">
+                      {citasDelDia.slice(0, 2).map((cita) => (
+                        <div key={cita.id} className="calendario-cita-mini">
+                          <span className="cita-hora-mini">
+                            {new Date(cita.fecha_cita).toLocaleTimeString("es-CO", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <span className="cita-cliente-mini">{cita.nombre_cliente}</span>
+                        </div>
+                      ))}
+                      {citasDelDia.length > 2 && (
+                        <div className="calendario-cita-mas">
+                          +{citasDelDia.length - 2} más
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Próximas citas */}
-      {citasProximas.length > 0 && (
-        <div className="seccion-citas">
-          <h3 className="seccion-titulo">📆 Próximas Citas</h3>
-          <div className="citas-grid">
-            {citasProximas.map((c) => (
-              <CitaCard
-                key={c.id}
-                cita={c}
-                onGenerarTicket={onGenerarTicket}
-                onCancelar={onCancelarCita}
-                loading={loading}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Vista de Lista */}
+      {vistaActual === "lista" && (
+        <>
+          {/* Citas de hoy */}
+          {citasHoy.length > 0 && (
+            <div className="seccion-citas">
+              <h3 className="seccion-titulo">🔥 Citas de Hoy</h3>
+              <div className="citas-grid">
+                {citasHoy.map((c) => (
+                  <CitaCard
+                    key={c.id}
+                    cita={c}
+                    onGenerarTicket={onGenerarTicket}
+                    onConfirmar={onConfirmarCita}
+                    onCancelar={onCancelarCita}
+                    loading={loading}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
-      {citasFiltradas.length === 0 && !loading && (
-        <div className="empty-state-citas">
-          <p>📭 No hay citas programadas</p>
-          <button className="btn-primary" onClick={() => setMostrarForm(true)}>
-            Agendar Primera Cita
-          </button>
-        </div>
+          {/* Próximas citas */}
+          {citasProximas.length > 0 && (
+            <div className="seccion-citas">
+              <h3 className="seccion-titulo">📆 Próximas Citas</h3>
+              <div className="citas-grid">
+                {citasProximas.map((c) => (
+                  <CitaCard
+                    key={c.id}
+                    cita={c}
+                    onGenerarTicket={onGenerarTicket}
+                    onConfirmar={onConfirmarCita}
+                    onCancelar={onCancelarCita}
+                    loading={loading}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {citasFiltradas.length === 0 && !loading && (
+            <div className="empty-state-citas">
+              <p>📭 No hay citas programadas</p>
+              <button className="btn-primary" onClick={() => setMostrarForm(true)}>
+                Agendar Primera Cita
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {msg && <p className={`status ${msg.startsWith("✓") ? "success" : "error"}`}>{msg}</p>}
@@ -313,7 +549,7 @@ export default function CitasPage() {
 }
 
 // Componente para cada cita
-function CitaCard({ cita, onGenerarTicket, onCancelar, loading }) {
+function CitaCard({ cita, onGenerarTicket, onConfirmar, onCancelar, loading }) {
   const fechaCita = new Date(cita.fecha_cita);
   const esHoy = fechaCita.toDateString() === new Date().toDateString();
   const esPasada = fechaCita < new Date();
@@ -355,6 +591,16 @@ function CitaCard({ cita, onGenerarTicket, onCancelar, loading }) {
 
       {cita.estado !== "CONVERTIDA" && cita.estado !== "CANCELADA" && (
         <div className="cita-actions">
+          {cita.estado === "PENDIENTE" && (
+            <button
+              className="btn-confirmar-cita"
+              onClick={() => onConfirmar(cita.id)}
+              disabled={loading}
+              title="Confirmar cita"
+            >
+              ✓ Confirmar
+            </button>
+          )}
           <button
             className="btn-generar-ticket"
             onClick={() => onGenerarTicket(cita.id)}
@@ -366,6 +612,7 @@ function CitaCard({ cita, onGenerarTicket, onCancelar, loading }) {
             className="btn-cancelar-cita"
             onClick={() => onCancelar(cita.id)}
             disabled={loading}
+            title="Cancelar cita"
           >
             ✕
           </button>
