@@ -46,13 +46,29 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Environment
+# Environment - NUNCA subir al repo
 .env
 .env.local
+.env.production
+frontend/.env
+frontend/.env.local
+frontend/.env.production
 
-# Build
-dist/
-build/
+# Build del frontend (se genera con npm run build)
+frontend/dist/
 
-# Uploads (opcional - comentar si quieres versionar los archivos)
-# uploads/
+# Uploads (archivos del taller - no van al repo)
+uploads/
+
+# Base de datos local de tests
+*.db
+test_temp.db
+
+# Hypothesis (tests)
+.hypothesis/
+
+# Pytest
+.pytest_cache/
+
+# Expo
+mobile_app/.expo/

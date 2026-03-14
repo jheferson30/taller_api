@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import os
 from dotenv import load_dotenv
 
@@ -12,20 +13,22 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API Taller Mecanico")
 
-# Crear directorio de uploads si no existe
+# Crear directorios necesarios
 os.makedirs("uploads", exist_ok=True)
+os.makedirs("uploads/fotos", exist_ok=True)
+os.makedirs("uploads/compras", exist_ok=True)
 
-# Montar directorio de uploads como archivos estáticos
+# Archivos estáticos de uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# Servir el frontend compilado si existe
+FRONTEND_DIST = os.path.join("frontend", "dist")
+if os.path.isdir(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="frontend-assets")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,4 +55,23 @@ def validar_variables_entorno():
 
 @app.get("/")
 def inicio():
+    # Si existe el frontend compilado, servirlo
+    index_path = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    return {"mensaje": "API del Taller funcionando correctamente"}
+
+
+# Catch-all para rutas del frontend (React Router)
+@app.get("/{full_path:path}")
+def servir_frontend(full_path: str):
+    # No interceptar rutas de la API
+    api_prefixes = ("tickets", "vehiculos", "economia-dia", "movimientos", "upload",
+                    "seguridad", "citas", "api", "uploads")
+    if any(full_path.startswith(p) for p in api_prefixes):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
+    index_path = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
     return {"mensaje": "API del Taller funcionando correctamente"}
