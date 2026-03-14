@@ -1,11 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
+
+import hmac
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
+from app.seguridad.dependencias import requerir_password_admin
 from app.esquemas.ticket_schema import (
     TicketCompraCrear,
     TicketCompraRespuesta,
@@ -30,14 +34,19 @@ from app.modelos.movimiento_caja import (
     TipoMovimiento,
 )
 from app.modelos.ticket import Ticket
+from app.modelos.vehiculo import Vehiculo
 from app.modelos.ticket_cobro import TicketCobro
 from app.modelos.ticket_compra import TicketCompra
 from app.modelos.ticket_foto import TicketFoto
 from app.modelos.ticket_proceso import TicketProceso
 from app.modelos.ticket_repuesto import TicketRepuesto
+from app.servicios.ticket_service import finalizar_ticket as _svc_finalizar_ticket
 from app.utils.pdf_generator import generar_pdf_ticket_completo
 
-router = APIRouter(prefix="/tickets", tags=["Tickets"])
+router = APIRouter(prefix="/tickets", tags=["Tickets"], dependencies=[Depends(requerir_password_admin)])
+
+# Router separado para el PDF del ticket (acepta auth por query param para compatibilidad móvil)
+router_pdf = APIRouter(prefix="/tickets", tags=["Tickets"])
 
 PROCESOS_RAPIDOS = [
     "Cambio de aceite",
@@ -67,51 +76,6 @@ def _actualizar_estado_ticket(ticket: Ticket):
         ticket.estado = "EN_PROCESO"
 
 
-def _escape_pdf_text(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-def _crear_pdf_simple(lineas: List[str]) -> bytes:
-    contenido = ["BT", "/F1 11 Tf", "50 760 Td"]
-    for idx, linea in enumerate(lineas):
-        if idx > 0:
-            contenido.append("0 -16 Td")
-        contenido.append(f"({_escape_pdf_text(linea)}) Tj")
-    contenido.append("ET")
-
-    stream = "\n".join(contenido).encode("latin-1", errors="replace")
-    objetos = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        (
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
-        ),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
-    ]
-
-    partes = [b"%PDF-1.4\n"]
-    offsets = [0]
-    for i, obj in enumerate(objetos, start=1):
-        offsets.append(sum(len(x) for x in partes))
-        partes.append(f"{i} 0 obj\n".encode("ascii"))
-        partes.append(obj)
-        partes.append(b"\nendobj\n")
-    xref_offset = sum(len(x) for x in partes)
-    partes.append(f"xref\n0 {len(objetos) + 1}\n".encode("ascii"))
-    partes.append(b"0000000000 65535 f \n")
-    for offset in offsets[1:]:
-        partes.append(f"{offset:010d} 00000 n \n".encode("ascii"))
-    partes.append(
-        (
-            f"trailer\n<< /Size {len(objetos) + 1} /Root 1 0 R >>\n"
-            f"startxref\n{xref_offset}\n%%EOF\n"
-        ).encode("ascii")
-    )
-    return b"".join(partes)
-
-
 @router.get("/procesos-rapidos")
 def listar_procesos_rapidos():
     return {"items": PROCESOS_RAPIDOS}
@@ -136,15 +100,23 @@ def buscar_tickets(
     ticket_codigo: Optional[str] = Query(None),
     placa: Optional[str] = Query(None),
     estado: Optional[str] = Query(None),
+    fecha_desde: Optional[str] = Query(None),
+    fecha_hasta: Optional[str] = Query(None),
 ):
     query = db.query(Ticket)
     if ticket_codigo:
         query = query.filter(Ticket.ticket_codigo == ticket_codigo.strip().upper())
     if placa:
-        query = query.filter(Ticket.placa == placa.strip().upper())
+        query = query.filter(Ticket.placa.ilike(f"%{placa.strip()}%"))
     if estado:
         query = query.filter(Ticket.estado == estado.upper())
-    return query.order_by(Ticket.fecha_ingreso.desc()).limit(100).all()
+    if fecha_desde:
+        query = query.filter(Ticket.fecha_ingreso >= datetime.fromisoformat(fecha_desde))
+    if fecha_hasta:
+        # incluir todo el día hasta
+        hasta = datetime.fromisoformat(fecha_hasta).replace(hour=23, minute=59, second=59)
+        query = query.filter(Ticket.fecha_ingreso <= hasta)
+    return query.order_by(Ticket.fecha_ingreso.desc()).limit(200).all()
 
 
 @router.get("/{ticket_id}", response_model=TicketRespuesta)
@@ -377,40 +349,27 @@ def finalizar_ticket(
     ticket = _obtener_ticket_o_404(db, ticket_id)
     if ticket.estado in ("FINALIZADO", "ENTREGADO"):
         return ticket
-    if not ticket.total_servicio:
-        raise HTTPException(status_code=400, detail="Debes definir total del servicio antes de finalizar")
-
-    saldo = ticket.total_servicio - (ticket.anticipo_recibido or 0)
-    if saldo < 0:
-        saldo = 0
-    ticket.saldo_pendiente = saldo
-    ticket.estado = "FINALIZADO"
-    ticket.fecha_cierre = datetime.utcnow()
-
-    if saldo > 0:
-        movimiento = MovimientoCaja(
-            tipo=TipoMovimiento.INGRESO_FINAL,
-            ticket_id=ticket.id,
-            ticket_codigo=ticket.ticket_codigo,
-            placa=ticket.placa,
-            estado_ticket=EstadoTicket.FINALIZADO,
-            valor=saldo,
-            metodo_pago=ticket.metodo_pago_final,
-            responsable=ticket.recepcionado_por,
-            concepto=f"Cobro final ticket {ticket.ticket_codigo}",
-            observacion=ticket.observaciones_finales,
-            creado_por=ticket.recepcionado_por,
-        )
-        db.add(movimiento)
-
+    _svc_finalizar_ticket(ticket, db)
     db.commit()
     db.refresh(ticket)
     return ticket
 
 
-@router.get("/{ticket_id}/pdf")
-def generar_pdf_cliente(ticket_id: int, db: Session = Depends(obtener_db)):
+@router_pdf.get("/{ticket_id}/pdf")
+def generar_pdf_cliente(
+    ticket_id: int,
+    token: Optional[str] = Query(None),
+    db: Session = Depends(obtener_db),
+):
+    # Autenticación: acepta header X-Admin-Password o query param ?token=
+    password_esperada = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD")
+    admin_token = token
+    if not admin_token:
+        raise HTTPException(status_code=401, detail="Se requiere autenticacion")
+    if not hmac.compare_digest(admin_token.encode("utf-8"), password_esperada.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Contrasena incorrecta")
     ticket = _obtener_ticket_o_404(db, ticket_id)
+    vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
     procesos = db.query(TicketProceso).filter(TicketProceso.ticket_id == ticket_id).order_by(TicketProceso.fecha_creacion.asc()).all()
     repuestos = db.query(TicketRepuesto).filter(TicketRepuesto.ticket_id == ticket_id).order_by(TicketRepuesto.fecha_creacion.asc()).all()
     fotos = db.query(TicketFoto).filter(TicketFoto.ticket_id == ticket_id).order_by(TicketFoto.fecha_creacion.asc()).all()
@@ -427,8 +386,8 @@ def generar_pdf_cliente(ticket_id: int, db: Session = Depends(obtener_db)):
         'observaciones_recepcion': ticket.observaciones_recepcion,
         'kilometraje': ticket.kilometraje,
         'estado_inicial': ticket.estado_inicial,
-        'nombre_propietario': ticket.nombre_propietario if hasattr(ticket, 'nombre_propietario') else None,
-        'telefono_propietario': ticket.telefono_propietario if hasattr(ticket, 'telefono_propietario') else None,
+        'nombre_propietario': vehiculo.nombre_propietario if vehiculo else None,
+        'telefono_propietario': vehiculo.telefono_propietario if vehiculo else None,
         'total_servicio': ticket.total_servicio or 0,
         'anticipo_recibido': ticket.anticipo_recibido or 0,
         'saldo_pendiente': ticket.saldo_pendiente or 0,
@@ -464,7 +423,7 @@ def marcar_entregado(
     if ticket.estado != "FINALIZADO":
         raise HTTPException(status_code=400, detail="Solo puedes entregar tickets finalizados")
     ticket.estado = "ENTREGADO"
-    ticket.fecha_entrega = datetime.utcnow()
+    ticket.fecha_entrega = datetime.now(timezone.utc)
     ticket.confirmado_entrega_por = datos.confirmado_entrega_por
     ticket.firma_entrega_url = datos.firma_entrega_url
     db.commit()

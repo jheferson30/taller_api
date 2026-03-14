@@ -130,10 +130,21 @@ async def subir_firma(file: UploadFile = File(...)):
     }
 
 
+def _safe_filepath(base_dir: str, filename: str) -> str:
+    """Valida que el path resultante esté dentro del directorio base (previene path traversal)"""
+    # Solo permitir nombre de archivo simple, sin separadores de directorio
+    safe_name = os.path.basename(filename)
+    filepath = os.path.realpath(os.path.join(base_dir, safe_name))
+    base_real = os.path.realpath(base_dir)
+    if not filepath.startswith(base_real + os.sep) and filepath != base_real:
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+    return filepath
+
+
 @router.get("/fotos/{filename}")
 async def obtener_foto(filename: str):
     """Sirve una foto"""
-    filepath = os.path.join(FOTOS_DIR, filename)
+    filepath = _safe_filepath(FOTOS_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(filepath)
@@ -142,7 +153,7 @@ async def obtener_foto(filename: str):
 @router.get("/compras/{filename}")
 async def obtener_compra(filename: str):
     """Sirve un soporte de compra"""
-    filepath = os.path.join(COMPRAS_DIR, filename)
+    filepath = _safe_filepath(COMPRAS_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(filepath)
@@ -151,7 +162,7 @@ async def obtener_compra(filename: str):
 @router.get("/firmas/{filename}")
 async def obtener_firma(filename: str):
     """Sirve una firma"""
-    filepath = os.path.join(FIRMAS_DIR, filename)
+    filepath = _safe_filepath(FIRMAS_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(filepath)

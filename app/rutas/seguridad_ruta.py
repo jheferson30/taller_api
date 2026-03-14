@@ -51,7 +51,6 @@ def _guardar_config(db: Session, clave: str, valor: str):
     return config
 
 
-
 @router.get("/economia/tiene-password")
 def verificar_tiene_password(db: Session = Depends(obtener_db)):
     """Verifica si ya existe una contraseña configurada para economía"""

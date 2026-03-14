@@ -1,4 +1,10 @@
-# 📘 Manual de Usuario - Sistema de Gestión de Taller Mecánico
+# 📘 Manual de Usuario - PULGA Mecánica Fi
+
+## Sistema de Gestión de Taller Mecánico
+
+![Logo PULGA Mecánica Fi](https://via.placeholder.com/300x100/D97706/FFFFFF?text=PULGA+Mec%C3%A1nica+Fi)
+
+---
 
 ## 📋 Tabla de Contenidos
 
@@ -16,7 +22,7 @@
 
 ## 🎯 Introducción
 
-Sistema completo de gestión para talleres mecánicos que incluye:
+Sistema completo de gestión para PULGA Mecánica Fi que incluye:
 - Gestión de vehículos y clientes
 - Sistema de citas con calendario
 - Control de tickets de servicio
@@ -599,4 +605,5 @@ Para soporte técnico o consultas:
 
 **Versión del Manual**: 1.0  
 **Última actualización**: Marzo 2026  
-**Sistema**: Gestión de Taller Mecánico v1.0
+**Sistema**: PULGA Mecánica Fi - Sistema de Gestión v1.0  
+**Colores de marca**: Azul Corporativo (#1e40af) y Grises Profesionales

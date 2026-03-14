@@ -1,0 +1,4 @@
+# file: C:\taller_api\app\seguridad\dependencias.py
+# hypothesis_version: 6.151.9
+
+['ADMIN_PASSWORD', 'PDF_PASSWORD', 'X-Admin-Password', 'X-PDF-Password']

@@ -1,7 +1,10 @@
 const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, options);
+  const headers = { ...(options.headers || {}) };
+  if (ADMIN_PASSWORD) headers["X-Admin-Password"] = ADMIN_PASSWORD;
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const contentType = res.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
   const payload = isJson ? await res.json() : await res.text();
@@ -34,6 +37,14 @@ export const api = {
       body: JSON.stringify(body),
     }),
   ticketsAbiertos: () => request("/tickets/abiertos"),
+  buscarTickets: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.placa) q.append('placa', params.placa);
+    if (params.estado) q.append('estado', params.estado);
+    if (params.fecha_desde) q.append('fecha_desde', params.fecha_desde);
+    if (params.fecha_hasta) q.append('fecha_hasta', params.fecha_hasta);
+    return request(`/tickets/buscar?${q.toString()}`);
+  },
   ticketResumen: (ticketId) => request(`/tickets/${ticketId}/resumen`),
   agregarProceso: (ticketId, body) =>
     request(`/tickets/${ticketId}/procesos`, {
@@ -121,10 +132,10 @@ export const api = {
     const params = fecha ? `?fecha=${fecha}` : '';
     return request(`/economia-dia/egresos${params}`);
   },
-  descargarPdfEconomia: async (password, fecha) => {
+  descargarPdfEconomia: async (fecha) => {
     const params = fecha ? `?fecha=${fecha}` : '';
     const res = await fetch(`${API_BASE}/economia-dia/pdf${params}`, {
-      headers: { "X-PDF-Password": password },
+      headers: { "X-Admin-Password": ADMIN_PASSWORD },
     });
     if (!res.ok) {
       throw new Error("No se pudo descargar el PDF");

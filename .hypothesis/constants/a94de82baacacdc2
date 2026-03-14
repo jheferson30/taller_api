@@ -1,0 +1,4 @@
+# file: C:\taller_api\app\modelos\ticket_repuesto.py
+# hypothesis_version: 6.151.9
+
+[120, 150, 'ticket_procesos.id', 'ticket_repuestos', 'tickets.id']

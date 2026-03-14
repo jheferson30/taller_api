@@ -1,0 +1,4 @@
+# file: C:\taller_api\app\modelos\movimiento_caja.py
+# hypothesis_version: 6.151.9
+
+[120, 200, 255, 'ABIERTO', 'EGRESO', 'ENTREGADO', 'EN_PROCESO', 'FINALIZADO', 'HERRAMIENTA', 'INGRESO_ANTICIPO', 'INGRESO_FINAL', 'INSUMO', 'OTRO', 'PARTE', 'REPUESTO', 'movimientos_caja']

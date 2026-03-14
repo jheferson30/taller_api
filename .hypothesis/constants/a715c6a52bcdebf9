@@ -1,0 +1,4 @@
+# file: C:\taller_api\app\modelos\cita.py
+# hypothesis_version: 6.151.9
+
+[100, 120, 150, 250, 500, 'PENDIENTE', 'citas', 'tickets.id', 'vehiculos.id']

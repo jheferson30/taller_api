@@ -9,7 +9,6 @@ export default function EconomiaPage() {
   const [resumen, setResumen] = useState(null);
   const [ingresos, setIngresos] = useState(null);
   const [egresos, setEgresos] = useState(null);
-  const [pass, setPass] = useState("1234");
   const [msg, setMsg] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(false);
@@ -75,7 +74,7 @@ export default function EconomiaPage() {
   async function onPdf() {
     setMsg("");
     try {
-      const blob = await api.descargarPdfEconomia(pass, fecha);
+      const blob = await api.descargarPdfEconomia(fecha);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -306,17 +305,9 @@ export default function EconomiaPage() {
           <div className="pdf-info">
             <h3>📄 Generar Reporte PDF</h3>
             <p>Descarga el informe completo del día con todos los movimientos</p>
-            <small className="pdf-hint">💡 Contraseña por defecto: 1234</small>
           </div>
           <div className="pdf-actions">
-            <input
-              type="password"
-              placeholder="Contraseña PDF"
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              className="pdf-password-input"
-            />
-            <button onClick={onPdf} className="btn-pdf" disabled={!pass}>
+            <button onClick={onPdf} className="btn-pdf">
               📥 Descargar PDF
             </button>
           </div>

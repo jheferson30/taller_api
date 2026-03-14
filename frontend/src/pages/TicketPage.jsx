@@ -244,6 +244,12 @@ export default function TicketPage() {
   }
 
   async function onFinalizar() {
+    if (!resumen?.ticket.total_servicio) {
+      setMsg("✗ Por favor define el total del servicio antes de finalizar");
+      setTimeout(() => setMsg(""), 4000);
+      setActiveTab("finanzas");
+      return;
+    }
     if (!confirm("¿Finalizar este ticket?")) return;
     setLoading(true);
     try {
@@ -253,7 +259,7 @@ export default function TicketPage() {
       setMsg("✓ Ticket finalizado");
       setTimeout(() => setMsg(""), 2000);
     } catch (e) {
-      setMsg("✗ Error: " + e.message);
+      setMsg("✗ " + e.message);
     } finally {
       setLoading(false);
     }
@@ -1015,7 +1021,7 @@ export default function TicketPage() {
                       </p>
                       <button
                         className="button-download-pdf"
-                        onClick={() => window.open(`http://127.0.0.1:8000/tickets/${selectedId}/pdf`, '_blank')}
+                        onClick={() => window.open(`http://127.0.0.1:8000/tickets/${selectedId}/pdf?token=${encodeURIComponent(import.meta.env.VITE_ADMIN_PASSWORD || '')}`, '_blank')}
                       >
                         📄 Descargar PDF Completo
                       </button>

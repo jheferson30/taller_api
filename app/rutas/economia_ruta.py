@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
-from app.seguridad.dependencias import requerir_password_admin, requerir_password_pdf
+from app.seguridad.dependencias import requerir_password_admin
 from app.utils.pdf_economia import generar_pdf_economia_profesional
 
 router = APIRouter(prefix="/economia-dia", tags=["Economia"])
@@ -140,7 +140,7 @@ def _detalle_egresos(db: Session, fecha_objetivo: date):
 def generar_pdf_economia_dia(
     fecha: date = Query(default_factory=date.today),
     db: Session = Depends(obtener_db),
-    _: bool = Depends(requerir_password_pdf),
+    _: bool = Depends(requerir_password_admin),
 ):
     resumen = _resumen_economia(db, fecha)
     ingresos = _detalle_ingresos(db, fecha)

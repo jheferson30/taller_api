@@ -1,0 +1,4 @@
+# file: C:\taller_api\app\modelos\ticket.py
+# hypothesis_version: 6.151.9
+
+[120, 200, 250, 255, 300, 500, 800, 'ABIERTO', 'tickets', 'vehiculos.id']
