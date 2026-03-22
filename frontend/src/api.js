@@ -1,18 +1,36 @@
 const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
+const TIMEOUT_MS = 15000; // 15 segundos
 
 async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (ADMIN_PASSWORD) headers["X-Admin-Password"] = ADMIN_PASSWORD;
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-  const payload = isJson ? await res.json() : await res.text();
-  if (!res.ok) {
-    const detail = isJson ? payload.detail || JSON.stringify(payload) : payload;
-    throw new Error(detail || "Error de servidor");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    const contentType = res.headers.get("content-type") || "";
+    const isJson = contentType.includes("application/json");
+    const payload = isJson ? await res.json() : await res.text();
+    if (!res.ok) {
+      const detail = isJson ? payload.detail || JSON.stringify(payload) : payload;
+      throw new Error(detail || "Error de servidor");
+    }
+    return payload;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("El servidor no respondió. Verifica la conexión.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return payload;
 }
 
 export const api = {
@@ -191,5 +209,39 @@ export const api = {
   generarTicketDesdeCita: (citaId) =>
     request(`/citas/${citaId}/generar-ticket`, {
       method: "POST",
+    }),
+  infoSistema: () => request("/info"),
+  // Configuración
+  listarMecanicos: () => request("/configuracion/mecanicos"),
+  crearMecanico: (body) =>
+    request("/configuracion/mecanicos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  toggleMecanico: (id) =>
+    request(`/configuracion/mecanicos/${id}`, { method: "PUT" }),
+  eliminarMecanico: (id) =>
+    request(`/configuracion/mecanicos/${id}`, { method: "DELETE" }),
+  obtenerConfigTaller: () => request("/configuracion/taller"),
+  actualizarConfigTaller: (body) =>
+    request("/configuracion/taller", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  obtenerProcesosRapidos: () => request("/configuracion/procesos-rapidos"),
+  actualizarProcesosRapidos: (procesos) =>
+    request("/configuracion/procesos-rapidos", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ procesos }),
+    }),
+  obtenerCobrosRapidos: () => request("/configuracion/cobros-rapidos"),
+  actualizarCobrosRapidos: (cobros) =>
+    request("/configuracion/cobros-rapidos", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cobros }),
     }),
 };

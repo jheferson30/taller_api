@@ -9,10 +9,18 @@ from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db as get_db
 from app.seguridad.dependencias import requerir_password_admin
+from app.servicios.ticket_service import finalizar_ticket as svc_finalizar_ticket
+from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento, CategoriaEgreso, EstadoTicket
 
 FOTOS_DIR = os.path.join("uploads", "fotos")
 os.makedirs(FOTOS_DIR, exist_ok=True)
 from app.modelos.ticket import Ticket
+from app.modelos.vehiculo import Vehiculo
+from app.modelos.ticket_proceso import TicketProceso
+from app.modelos.ticket_repuesto import TicketRepuesto
+from app.modelos.ticket_foto import TicketFoto
+from app.modelos.ticket_compra import TicketCompra
+from app.modelos.ticket_cobro import TicketCobro
 
 router = APIRouter(prefix="/api/mobile", tags=["Mobile API"], dependencies=[Depends(requerir_password_admin)])
 
@@ -58,6 +66,7 @@ class ProcesoResponse(BaseModel):
     nombre: str
     descripcion: Optional[str] = None
     mecanico: Optional[str] = None
+    foto_url: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -168,13 +177,16 @@ def listar_procesos_mobile(ticket_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/tickets/{ticket_id}/procesos", response_model=ProcesoResponse)
-def crear_proceso_mobile(
+async def crear_proceso_mobile(
     ticket_id: int,
-    proceso: ProcesoCreate,
+    nombre: str = Form(...),
+    descripcion: Optional[str] = Form(default=None),
+    mecanico: Optional[str] = Form(default=None),
+    file: Optional[UploadFile] = File(default=None),
     db: Session = Depends(get_db)
 ):
     """
-    Crea un nuevo proceso para un ticket
+    Crea un nuevo proceso para un ticket, con foto opcional
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
@@ -182,12 +194,25 @@ def crear_proceso_mobile(
     
     if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
         raise HTTPException(status_code=400, detail="No se pueden agregar procesos a un ticket finalizado")
-    
+
+    foto_url = None
+    if file and file.filename:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+            raise HTTPException(status_code=400, detail="Solo se permiten imágenes jpg, png o webp")
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}{ext}"
+        filepath = os.path.join(FOTOS_DIR, filename)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+        foto_url = f"/uploads/fotos/{filename}"
+
     nuevo_proceso = TicketProceso(
         ticket_id=ticket_id,
-        nombre=proceso.nombre,
-        descripcion=proceso.descripcion,
-        mecanico=proceso.mecanico
+        nombre=nombre,
+        descripcion=descripcion,
+        mecanico=mecanico,
+        foto_url=foto_url,
     )
     
     db.add(nuevo_proceso)
@@ -276,9 +301,8 @@ def actualizar_estado_mobile(
     ticket.estado = data.estado
     ticket.fecha_actualizacion = datetime.now()
 
-    # Al finalizar: delegar a la función compartida
+    # Al finalizar: usar el servicio compartido que calcula saldo y registra movimiento
     if data.estado == "FINALIZADO" and estado_anterior != "FINALIZADO":
-        ticket.estado = estado_anterior  # revert so service sets it
         svc_finalizar_ticket(ticket, db)
 
     db.commit()
@@ -623,3 +647,39 @@ def actualizar_finanzas_mobile(ticket_id: int, data: ActualizarFinanzasData, db:
     ticket.saldo_pendiente = data.total_servicio - (ticket.anticipo_recibido or 0) - total_cobros
     db.commit()
     return {"ok": True, "saldo_pendiente": ticket.saldo_pendiente}
+
+
+# ── Mecánicos y Procesos Rápidos (para la app móvil) ─────────────────────────
+
+import json as _json
+from app.modelos.mecanico import Mecanico
+from app.modelos.configuracion_taller import ConfiguracionTaller
+
+
+@router.get("/mecanicos")
+def listar_mecanicos_mobile(db: Session = Depends(get_db)):
+    return db.query(Mecanico).filter(Mecanico.activo == True).order_by(Mecanico.nombre).all()
+
+
+@router.get("/procesos-rapidos")
+def listar_procesos_rapidos_mobile(db: Session = Depends(get_db)):
+    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+    if not cfg:
+        return {"procesos": []}
+    try:
+        procesos = _json.loads(cfg.procesos_rapidos or "[]")
+    except Exception:
+        procesos = []
+    return {"procesos": procesos}
+
+
+@router.get("/cobros-rapidos")
+def listar_cobros_rapidos_mobile(db: Session = Depends(get_db)):
+    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+    if not cfg:
+        return {"cobros": []}
+    try:
+        cobros = _json.loads(cfg.cobros_rapidos or "[]")
+    except Exception:
+        cobros = []
+    return {"cobros": cobros}

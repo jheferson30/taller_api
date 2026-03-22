@@ -18,6 +18,7 @@ def generar_pdf_ticket_completo(
     fotos: List[dict],
     cobros: List[dict],
     compras: List[dict] = None,
+    taller: dict = None,
 ) -> bytes:
     """
     Genera un PDF completo del ticket con diseño limpio y profesional en gris
@@ -83,10 +84,94 @@ def generar_pdf_ticket_completo(
     GRAY_BORDER = colors.HexColor('#bdc3c7')
     
     story = []
-    
-    # ===== ENCABEZADO =====
-    story.append(Paragraph("COMPROBANTE DE SERVICIO", title_style))
-    story.append(Paragraph("Taller Mecánico", normal_style))
+
+    # ===== ENCABEZADO PROFESIONAL =====
+    nombre_taller = (taller or {}).get('nombre_taller') or 'Taller Mecánico'
+    direccion = (taller or {}).get('direccion') or ''
+    telefono = (taller or {}).get('telefono') or ''
+    nit = (taller or {}).get('nit') or ''
+
+    nombre_style = ParagraphStyle(
+        'NombreTaller',
+        parent=styles['Normal'],
+        fontSize=14,
+        fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#2c3e50'),
+        leading=17,
+        spaceAfter=2,
+    )
+    dato_taller_style = ParagraphStyle(
+        'DatoTaller',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.HexColor('#555555'),
+        leading=11,
+    )
+    comprobante_style = ParagraphStyle(
+        'Comprobante',
+        parent=styles['Normal'],
+        fontSize=18,
+        fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#2c3e50'),
+        alignment=TA_RIGHT,
+        leading=22,
+        spaceAfter=2,
+    )
+    fecha_gen_style = ParagraphStyle(
+        'FechaGen',
+        parent=styles['Normal'],
+        fontSize=7,
+        textColor=colors.HexColor('#888888'),
+        alignment=TA_RIGHT,
+        leading=10,
+    )
+
+    # Columna izquierda: logo + nombre taller
+    logo_path = os.path.join("frontend", "public", "assets", "logo.png")
+    col_izq = []
+    if os.path.exists(logo_path):
+        try:
+            col_izq.append(Image(logo_path, width=0.7*inch, height=0.7*inch))
+        except Exception:
+            pass
+    col_izq.append(Spacer(1, 4))
+    col_izq.append(Paragraph(nombre_taller, nombre_style))
+    if direccion:
+        col_izq.append(Paragraph(f"Dir: {direccion}", dato_taller_style))
+    if telefono:
+        col_izq.append(Paragraph(f"Tel: {telefono}", dato_taller_style))
+    if nit:
+        col_izq.append(Paragraph(f"NIT: {nit}", dato_taller_style))
+
+    # Columna derecha: título + fecha generación
+    fecha_gen = datetime.now().strftime("%d/%m/%Y %H:%M")
+    col_der = [
+        Paragraph("COMPROBANTE DE SERVICIO", comprobante_style),
+        Paragraph(f"Generado: {fecha_gen}", fecha_gen_style),
+    ]
+
+    from reportlab.platypus import KeepInFrame
+    header_table = Table(
+        [[col_izq, col_der]],
+        colWidths=[3.5*inch, 4.0*inch],
+    )
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(header_table)
+
+    # Línea separadora
+    sep_table = Table([[''] * 1], colWidths=[7.5*inch])
+    sep_table.setStyle(TableStyle([
+        ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.HexColor('#2c3e50')),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    story.append(sep_table)
     story.append(Spacer(1, 0.15*inch))
     
     # ===== DATOS DEL VEHÍCULO Y TICKET (TODOS LOS CAMPOS) =====

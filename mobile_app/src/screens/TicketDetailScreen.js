@@ -1,8 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   RefreshControl, ActivityIndicator, Alert, Image, TextInput, Linking, Share,
+  Platform, Keyboard,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { colors, estadoConfig } from '../theme';
@@ -31,6 +33,7 @@ export default function TicketDetailScreen({ route, navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState('info');
   const [updatingEstado, setUpdatingEstado] = useState(false);
+  const scrollRef = useRef(null);
 
   const loadData = async () => {
     try {
@@ -168,9 +171,13 @@ export default function TicketDetailScreen({ route, navigation }) {
       </View>
 
       <View style={styles.contentWrapper}>
-      <ScrollView
+      <KeyboardAwareScrollView
+        ref={scrollRef}
         style={styles.content}
         contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={20}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
       >
         {tab === 'info' && <InfoTab ticket={ticket} fecha={fecha} />}
@@ -186,11 +193,11 @@ export default function TicketDetailScreen({ route, navigation }) {
         {tab === 'compras' && (
           <ComprasTab compras={compras} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} />
         )}
-        {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} />}
+        {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} />}
         {tab === 'entrega' && (
-          <EntregaTab ticketId={ticketId} onSuccess={() => { loadData(); setTab('info'); }} />
+          <EntregaTab ticketId={ticketId} onSuccess={() => { loadData(); setTab('info'); }} scrollRef={scrollRef} />
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       </View>
     </View>
   );
@@ -224,6 +231,13 @@ function ProcesosTab({ procesos, ticketId, editable, navigation }) {
         ? <Text style={styles.emptyText}>No hay procesos registrados</Text>
         : procesos.map((p) => (
           <View key={p.id} style={styles.itemCard}>
+            {p.foto_url ? (
+              <Image
+                source={{ uri: `http://192.168.100.163:8000${p.foto_url}` }}
+                style={{ width: '100%', height: 180, borderRadius: 8, marginBottom: 8 }}
+                resizeMode="cover"
+              />
+            ) : null}
             <Text style={styles.itemTitle}>{p.nombre}</Text>
             {p.mecanico && <Text style={styles.itemSub}>🔧 {p.mecanico}</Text>}
             {p.descripcion && <Text style={styles.itemDesc}>{p.descripcion}</Text>}
@@ -305,7 +319,7 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
               )}
             </View>
             <Image
-              source={{ uri: `http://10.0.2.2:8000${f.archivo_url}` }}
+              source={{ uri: `http://192.168.100.163:8000${f.archivo_url}` }}
               style={styles.fotoImg}
               resizeMode="cover"
             />
@@ -350,7 +364,7 @@ function ComprasTab({ compras, ticketId, editable, navigation, onRefresh }) {
           <View key={c.id} style={styles.itemCard}>
             {c.soporte_url ? (
               <Image
-                source={{ uri: `http://10.0.2.2:8000${c.soporte_url}` }}
+                source={{ uri: `http://192.168.100.163:8000${c.soporte_url}` }}
                 style={{ width: '100%', height: 160, borderRadius: 0 }}
                 resizeMode="cover"
               />
@@ -377,23 +391,34 @@ function ComprasTab({ compras, ticketId, editable, navigation, onRefresh }) {
   );
 }
 
-function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [] }) {
+function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scrollRef }) {
   const [cobros, setCobros] = useState([]);
   const [concepto, setConcepto] = useState('');
   const [valorCobro, setValorCobro] = useState('');
-  const [totalServicio, setTotalServicio] = useState('');
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [savingFinanzas, setSavingFinanzas] = useState(false);
   const [addingCobro, setAddingCobro] = useState(false);
+  const [cobrosRapidos, setCobrosRapidos] = useState([]);
 
   const METODOS = ['Efectivo', 'Transferencia', 'Tarjeta', 'Nequi', 'Daviplata'];
 
+  // Formatea número con separadores de miles
+  const fmtInput = (v) => {
+    const n = String(v).replace(/\D/g, '');
+    return n ? Number(n).toLocaleString('es-CO') : '';
+  };
+  const parseInput = (v) => v.replace(/\D/g, '');
+
   useEffect(() => {
     api.getCobros(ticketId).then(setCobros).catch(() => {});
-    if (resumen?.finanzas?.total_servicio != null) {
-      setTotalServicio(String(resumen.finanzas.total_servicio));
+    if (resumen?.finanzas?.metodo_pago_final) {
+      setMetodoPago(resumen.finanzas.metodo_pago_final);
     }
   }, [ticketId, resumen]);
+
+  useEffect(() => {
+    api.getCobrosRapidos().then((r) => { if (r?.cobros) setCobrosRapidos(r.cobros); }).catch(() => {});
+  }, []);
 
   if (!resumen) return null;
   const f = resumen.finanzas;
@@ -442,15 +467,31 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [] }) {
     ]);
   };
 
+  const handleAgregarEgresoComoCobro = async (descripcion, valor) => {
+    try {
+      await api.createCobro(ticketId, { concepto: descripcion, valor });
+      const c = await api.getCobros(ticketId);
+      setCobros(c || []);
+      onRefresh();
+      Alert.alert('✓ Agregado', `"${descripcion}" agregado como cobro por ${valor.toLocaleString('es-CO')}`);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
   const handleActualizarFinanzas = async () => {
+    if (totalCobros <= 0) {
+      Alert.alert('Sin cobros', 'Agrega al menos un cobro antes de guardar');
+      return;
+    }
     setSavingFinanzas(true);
     try {
       await api.actualizarFinanzas(ticketId, {
-        total_servicio: parseInt(totalServicio) || 0,
+        total_servicio: totalCobros,
         metodo_pago_final: metodoPago,
       });
       await onRefresh();
-      Alert.alert('✓', 'Finanzas actualizadas');
+      Alert.alert('✓', 'Finanzas guardadas');
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -495,24 +536,50 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [] }) {
         <View style={styles.finSection}>
           <Text style={styles.finSectionTitle}>Detalle de Egresos</Text>
           {compras.map((c, i) => (
-            <View key={i} style={styles.finDetalleRow}>
+            <TouchableOpacity
+              key={i}
+              style={styles.finDetalleRow}
+              onPress={editable ? () => handleAgregarEgresoComoCobro(c.descripcion, c.valor) : undefined}
+              activeOpacity={editable ? 0.5 : 1}
+            >
               <Text style={styles.finDetalleLabel}>{c.descripcion}</Text>
               <Text style={[styles.finDetalleValue, { color: colors.error }]}>{fmt(c.valor)}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
           <View style={styles.divider} />
           <View style={styles.finDetalleRow}>
             <Text style={[styles.finDetalleLabel, { fontWeight: '700' }]}>Total Egresos</Text>
             <Text style={[styles.finDetalleValue, { fontWeight: '700' }]}>{fmt(f.total_egresos)}</Text>
           </View>
+          {editable && (
+            <Text style={styles.egresoHint}>Toca un egreso para agregarlo como cobro</Text>
+          )}
         </View>
       )}
 
-      {/* Items de cobro */}
+      {/* Cobros y cierre */}
       {editable && (
         <View style={styles.finSection}>
-          <Text style={styles.finSectionTitle}>Items de Cobro</Text>
+          <Text style={styles.finSectionTitle}>Cobros y Cierre</Text>
+
+          {/* Formulario agregar cobro */}
           <View style={styles.finForm}>
+            {cobrosRapidos.length > 0 && (
+              <View style={{ marginBottom: 10 }}>
+                <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>Acceso rápido</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {cobrosRapidos.map((c, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.quickChip}
+                      onPress={() => setConcepto(c)}
+                    >
+                      <Text style={styles.quickChipText}>{c}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
             <Text style={styles.fieldLabel}>Concepto *</Text>
             <TextInput
               style={styles.fieldInput}
@@ -526,8 +593,8 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [] }) {
               style={styles.fieldInput}
               placeholder="0"
               placeholderTextColor={colors.textMuted}
-              value={valorCobro}
-              onChangeText={(t) => setValorCobro(t.replace(/[^0-9]/g, ''))}
+              value={fmtInput(valorCobro)}
+              onChangeText={(t) => setValorCobro(parseInput(t))}
               keyboardType="numeric"
             />
             <TouchableOpacity
@@ -537,10 +604,12 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [] }) {
             >
               {addingCobro
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={styles.addBtnText}>Agregar Cobro</Text>
+                : <Text style={styles.addBtnText}>+ Agregar Cobro</Text>
               }
             </TouchableOpacity>
           </View>
+
+          {/* Lista de cobros */}
           {cobros.length === 0
             ? <Text style={[styles.emptyText, { marginTop: 8 }]}>No hay cobros definidos</Text>
             : cobros.map((c) => (
@@ -555,57 +624,48 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [] }) {
               </View>
             ))
           }
-          {cobros.length > 0 && (
-            <View style={styles.finDetalleRow}>
-              <Text style={[styles.finDetalleLabel, { fontWeight: '700' }]}>Total Cobros</Text>
-              <Text style={[styles.finDetalleValue, { fontWeight: '700', color: colors.primary }]}>{fmt(totalCobros)}</Text>
-            </View>
-          )}
-        </View>
-      )}
 
-      {/* Definir finanzas */}
-      {editable && (
-        <View style={styles.finSection}>
-          <Text style={styles.finSectionTitle}>Definir Finanzas</Text>
-          <Text style={styles.fieldLabel}>Total del Servicio *</Text>
-          <TextInput
-            style={styles.fieldInput}
-            placeholder="0"
-            placeholderTextColor={colors.textMuted}
-            value={totalServicio}
-            onChangeText={(t) => setTotalServicio(t.replace(/[^0-9]/g, ''))}
-            keyboardType="numeric"
-          />
-          <Text style={styles.fieldLabel}>Método de Pago Final</Text>
-          <View style={styles.finMetodosRow}>
-            {METODOS.map((m) => (
+          {/* Total calculado automáticamente */}
+          {cobros.length > 0 && (
+            <>
+              <View style={[styles.finDetalleRow, { marginTop: 4 }]}>
+                <Text style={[styles.finDetalleLabel, { fontWeight: '700' }]}>Total del Servicio</Text>
+                <Text style={[styles.finDetalleValue, { fontWeight: '700', color: colors.primary }]}>{fmt(totalCobros)}</Text>
+              </View>
+
+              {/* Método de pago */}
+              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Método de Pago</Text>
+              <View style={styles.finMetodosRow}>
+                {METODOS.map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.finMetodoBtn, metodoPago === m && styles.finMetodoBtnActive]}
+                    onPress={() => setMetodoPago(m)}
+                  >
+                    <Text style={[styles.finMetodoBtnText, metodoPago === m && styles.finMetodoBtnTextActive]}>{m}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TouchableOpacity
-                key={m}
-                style={[styles.finMetodoBtn, metodoPago === m && styles.finMetodoBtnActive]}
-                onPress={() => setMetodoPago(m)}
+                style={[styles.addBtn, { marginTop: 12 }, savingFinanzas && styles.btnDisabled]}
+                onPress={handleActualizarFinanzas}
+                disabled={savingFinanzas}
               >
-                <Text style={[styles.finMetodoBtnText, metodoPago === m && styles.finMetodoBtnTextActive]}>{m}</Text>
+                {savingFinanzas
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.addBtnText}>💾 Guardar Finanzas</Text>
+                }
               </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity
-            style={[styles.addBtn, savingFinanzas && styles.btnDisabled]}
-            onPress={handleActualizarFinanzas}
-            disabled={savingFinanzas}
-          >
-            {savingFinanzas
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={styles.addBtnText}>Actualizar Finanzas</Text>
-            }
-          </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
     </View>
   );
 }
 
-function EntregaTab({ ticketId, onSuccess, ticketCodigo }) {
+function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
   const [confirmadoPor, setConfirmadoPor] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [recomendaciones, setRecomendaciones] = useState('');
@@ -708,7 +768,10 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo }) {
 
       <TouchableOpacity
         style={styles.pdfBtn}
-        onPress={() => Linking.openURL(api.getPdfUrl(ticketId))}
+        onPress={async () => {
+          const url = await api.getPdfUrl(ticketId);
+          Linking.openURL(url);
+        }}
       >
         <Text style={styles.pdfBtnText}>📄 Ver / Descargar PDF del cliente</Text>
       </TouchableOpacity>
@@ -717,7 +780,8 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo }) {
         style={styles.pdfShareBtn}
         onPress={async () => {
           try {
-            await Share.share({ message: `PDF del ticket: ${api.getPdfUrl(ticketId)}` });
+            const url = await api.getPdfUrl(ticketId);
+            await Share.share({ message: `PDF del ticket: ${url}` });
           } catch (e) {
             Alert.alert('Error', e.message);
           }
@@ -853,6 +917,7 @@ const styles = StyleSheet.create({
   finDetalleRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   finDetalleLabel: { fontSize: 13, color: colors.text, flex: 1 },
   finDetalleValue: { fontSize: 13, color: colors.text },
+  egresoHint: { fontSize: 11, color: colors.textMuted, textAlign: 'center', marginTop: 6, fontStyle: 'italic' },
   finForm: { backgroundColor: colors.background, borderRadius: 8, padding: 10, marginBottom: 10 },
   finCobroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   finMetodosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
@@ -903,4 +968,6 @@ const styles = StyleSheet.create({
   pdfBtnText: { color: '#0369a1', fontWeight: '600', fontSize: 14 },
   pdfShareBtn: { marginTop: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 14, alignItems: 'center' },
   pdfShareBtnText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
+  quickChip: { backgroundColor: colors.primaryLight, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  quickChipText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 });

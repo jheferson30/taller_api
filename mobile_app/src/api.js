@@ -1,14 +1,15 @@
-// Cambia esta IP por la IP local de tu servidor
-// Para encontrarla: en Windows ejecuta "ipconfig" en la terminal
-// 10.0.2.2 es la IP del host (tu PC) desde el emulador de Android
-const API_BASE_URL = 'http://10.0.2.2:8000/api/mobile';
-const ADMIN_PASSWORD = 'la_pulga_fi';
+import { getApiBaseUrl, getPdfBaseUrl, getAdminPassword } from './config';
 
 async function request(path, options = {}) {
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
+    const response = await fetch(`${baseUrl}${path}`, {
       ...options,
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': ADMIN_PASSWORD, ...(options.headers || {}) },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Password': password,
+        ...(options.headers || {}),
+      },
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
@@ -48,11 +49,29 @@ export const api = {
       body: JSON.stringify({ estado }),
     }),
 
-  createProceso: (id, data) =>
-    request(`/tickets/${id}/procesos`, {
+  createProceso: async (ticketId, data, uri = null) => {
+    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
+    const formData = new FormData();
+    formData.append('nombre', data.nombre);
+    if (data.descripcion) formData.append('descripcion', data.descripcion);
+    if (data.mecanico) formData.append('mecanico', data.mecanico);
+    if (uri) {
+      const filename = uri.split('/').pop();
+      const ext = filename.split('.').pop().toLowerCase();
+      const type = ext === 'png' ? 'image/png' : 'image/jpeg';
+      formData.append('file', { uri, name: filename, type });
+    }
+    const response = await fetch(`${baseUrl}/tickets/${ticketId}/procesos`, {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      body: formData,
+      headers: { 'X-Admin-Password': password },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${response.status}`);
+    }
+    return await response.json();
+  },
 
   createRepuesto: (id, data) =>
     request(`/tickets/${id}/repuestos`, {
@@ -61,6 +80,7 @@ export const api = {
     }),
 
   subirFoto: async (ticketId, uri, descripcion = null, tipo = 'OTRA') => {
+    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
     const filename = uri.split('/').pop();
     const ext = filename.split('.').pop().toLowerCase();
     const type = ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -71,8 +91,8 @@ export const api = {
     if (descripcion) formData.append('descripcion', descripcion);
 
     const response = await fetch(
-      `${API_BASE_URL}/tickets/${ticketId}/fotos`,
-      { method: 'POST', body: formData, headers: { 'X-Admin-Password': ADMIN_PASSWORD } }
+      `${baseUrl}/tickets/${ticketId}/fotos`,
+      { method: 'POST', body: formData, headers: { 'X-Admin-Password': password } }
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
@@ -112,14 +132,49 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  getPdfUrl: (ticketId) => `http://10.0.2.2:8000/tickets/${ticketId}/pdf?token=${encodeURIComponent(ADMIN_PASSWORD)}`,
+  getPdfUrl: async (ticketId) => {
+    const [base, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
+    return `${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(password)}`;
+  },
 
   descargarPdf: async (ticketId) => {
-    const response = await fetch(`http://10.0.2.2:8000/tickets/${ticketId}/pdf?token=${encodeURIComponent(ADMIN_PASSWORD)}`);
+    const [base, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
+    const response = await fetch(`${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(password)}`);
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Error ${response.status}`);
     }
     return response;
+  },
+
+  getMecanicos: () => request('/mecanicos'),
+
+  getProcesosRapidos: () => request('/procesos-rapidos'),
+
+  getCobrosRapidos: () => request('/cobros-rapidos'),
+
+  createCompra: async (ticketId, data, uri = null) => {
+    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
+    const formData = new FormData();
+    formData.append('descripcion', data.descripcion);
+    formData.append('valor', String(data.valor));
+    if (data.responsable) formData.append('responsable', data.responsable);
+    if (data.nota) formData.append('nota', data.nota);
+    if (uri) {
+      const filename = uri.split('/').pop();
+      const ext = filename.split('.').pop().toLowerCase();
+      const type = ext === 'png' ? 'image/png' : 'image/jpeg';
+      formData.append('file', { uri, name: filename, type });
+    }
+    const response = await fetch(`${baseUrl}/tickets/${ticketId}/compras`, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Admin-Password': password },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${response.status}`);
+    }
+    return await response.json();
   },
 };

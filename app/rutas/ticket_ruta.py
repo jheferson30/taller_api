@@ -42,6 +42,7 @@ from app.modelos.ticket_proceso import TicketProceso
 from app.modelos.ticket_repuesto import TicketRepuesto
 from app.servicios.ticket_service import finalizar_ticket as _svc_finalizar_ticket
 from app.utils.pdf_generator import generar_pdf_ticket_completo
+from app.modelos.configuracion_taller import ConfiguracionTaller
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"], dependencies=[Depends(requerir_password_admin)])
 
@@ -402,9 +403,18 @@ def generar_pdf_cliente(
     fotos_list = [{'tipo': f.tipo, 'archivo_url': f.archivo_url, 'descripcion': f.descripcion} for f in fotos]
     cobros_list = [{'concepto': c.concepto, 'valor': c.valor} for c in cobros]
     compras_list = [{'descripcion': c.descripcion, 'valor': c.valor, 'soporte_url': c.soporte_url, 'responsable': c.responsable} for c in compras]
-    
+
+    # Datos del taller
+    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+    taller_data = {
+        'nombre_taller': cfg.nombre_taller if cfg else 'Taller Mecánico',
+        'direccion': cfg.direccion if cfg else '',
+        'telefono': cfg.telefono if cfg else '',
+        'nit': cfg.nit if cfg else '',
+    }
+
     # Generar PDF con el nuevo generador
-    pdf_bytes = generar_pdf_ticket_completo(ticket_dict, procesos_list, repuestos_list, fotos_list, cobros_list, compras_list)
+    pdf_bytes = generar_pdf_ticket_completo(ticket_dict, procesos_list, repuestos_list, fotos_list, cobros_list, compras_list, taller_data)
     
     return Response(
         content=pdf_bytes,

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
+from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.seguridad.dependencias import requerir_password_admin
 from app.utils.pdf_economia import generar_pdf_economia_profesional
 
@@ -146,12 +147,20 @@ def generar_pdf_economia_dia(
     ingresos = _detalle_ingresos(db, fecha)
     egresos_list = _detalle_egresos(db, fecha)
 
-    # Usar el nuevo generador profesional
+    config_taller = db.query(ConfiguracionTaller).first()
+    datos_taller = {
+        "nombre": config_taller.nombre_taller if config_taller else "Taller Mecánico",
+        "direccion": config_taller.direccion if config_taller else "",
+        "telefono": config_taller.telefono if config_taller else "",
+        "nit": config_taller.nit if config_taller else "",
+    }
+
     pdf_bytes = generar_pdf_economia_profesional(
         fecha=fecha.isoformat(),
         resumen=resumen,
         ingresos=ingresos,
-        egresos=egresos_list
+        egresos=egresos_list,
+        datos_taller=datos_taller,
     )
     
     nombre_archivo = f"economia_{fecha.isoformat()}.pdf"

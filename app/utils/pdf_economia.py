@@ -1,12 +1,13 @@
 from io import BytesIO
 from datetime import datetime
 from typing import List, Dict
+import os
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.units import inch, mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
@@ -14,7 +15,8 @@ def generar_pdf_economia_profesional(
     fecha: str,
     resumen: Dict,
     ingresos: Dict,
-    egresos: List[Dict]
+    egresos: List[Dict],
+    datos_taller: Dict = None,
 ) -> bytes:
     """
     Genera un PDF profesional del reporte de economía diaria
@@ -70,25 +72,86 @@ def generar_pdf_economia_profesional(
     GRAY_LIGHT = colors.HexColor('#d5dbdb')
     GRAY_LIGHTER = colors.HexColor('#ecf0f1')
     GRAY_BORDER = colors.HexColor('#bdc3c7')
-    GREEN = colors.HexColor('#27ae60')
+    GREEN = colors.HexColor('#059669')
     RED = colors.HexColor('#e74c3c')
-    BLUE = colors.HexColor('#3498db')
+    BLUE = colors.HexColor('#1e40af')
     
     story = []
 
-    # ===== ENCABEZADO =====
-    story.append(Paragraph("REPORTE DE ECONOMÍA DIARIA", title_style))
-    story.append(Paragraph("Taller Mecánico", normal_style))
-    story.append(Spacer(1, 0.15*inch))
-    
-    # ===== INFORMACIÓN DE LA FECHA =====
-    fecha_formateada = datetime.strptime(fecha, '%Y-%m-%d').strftime('%d de %B de %Y')
-    story.append(Paragraph(f"<b>Fecha del Reporte:</b> {fecha_formateada}", normal_style))
+    # ===== ENCABEZADO PROFESIONAL (igual que PDF de tickets) =====
+    nombre_taller = (datos_taller or {}).get('nombre') or 'Taller Mecánico'
+    direccion     = (datos_taller or {}).get('direccion') or ''
+    telefono      = (datos_taller or {}).get('telefono') or ''
+    nit           = (datos_taller or {}).get('nit') or ''
+
+    nombre_style = ParagraphStyle(
+        'NombreTaller', parent=styles['Normal'],
+        fontSize=14, fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#2c3e50'), leading=17, spaceAfter=2,
+    )
+    dato_taller_style = ParagraphStyle(
+        'DatoTaller', parent=styles['Normal'],
+        fontSize=8, textColor=colors.HexColor('#555555'), leading=11,
+    )
+    comprobante_style = ParagraphStyle(
+        'Comprobante', parent=styles['Normal'],
+        fontSize=16, fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#2c3e50'),
+        alignment=TA_RIGHT, leading=20, spaceAfter=2,
+    )
+    fecha_gen_style = ParagraphStyle(
+        'FechaGen', parent=styles['Normal'],
+        fontSize=7, textColor=colors.HexColor('#888888'),
+        alignment=TA_RIGHT, leading=10,
+    )
+
+    logo_path = os.path.join("frontend", "public", "assets", "logo.png")
+    col_izq = []
+    if os.path.exists(logo_path):
+        try:
+            col_izq.append(Image(logo_path, width=0.7*inch, height=0.7*inch))
+        except Exception:
+            pass
+    col_izq.append(Spacer(1, 4))
+    col_izq.append(Paragraph(nombre_taller, nombre_style))
+    if direccion:
+        col_izq.append(Paragraph(f"Dir: {direccion}", dato_taller_style))
+    if telefono:
+        col_izq.append(Paragraph(f"Tel: {telefono}", dato_taller_style))
+    if nit:
+        col_izq.append(Paragraph(f"NIT: {nit}", dato_taller_style))
+
+    fecha_gen = datetime.now().strftime("%d/%m/%Y %H:%M")
+    fecha_formateada = datetime.strptime(fecha, '%Y-%m-%d').strftime('%d/%m/%Y')
+    col_der = [
+        Paragraph("REPORTE DE ECONOMÍA DIARIA", comprobante_style),
+        Paragraph(f"Fecha: {fecha_formateada}", fecha_gen_style),
+        Paragraph(f"Generado: {fecha_gen}", fecha_gen_style),
+    ]
+
+    header_table = Table([[col_izq, col_der]], colWidths=[3.5*inch, 4.0*inch])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(header_table)
+
+    # Línea separadora azul
+    sep_table = Table([['']], colWidths=[7.5*inch])
+    sep_table.setStyle(TableStyle([
+        ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.HexColor('#2c3e50')),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    story.append(sep_table)
     story.append(Spacer(1, 0.15*inch))
     
     # ===== RESUMEN EJECUTIVO =====
     story.append(Paragraph("RESUMEN EJECUTIVO", section_style))
-    
+
     resumen_data = [
         ['Concepto', 'Valor'],
         ['Ingresos por Anticipos', f"${resumen.get('ingreso_anticipo', 0):,}"],
@@ -109,10 +172,19 @@ def generar_pdf_economia_profesional(
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('GRID', (0, 0), (-1, -1), 0.5, GRAY_BORDER),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, GRAY_LIGHTER]),
-        ('BACKGROUND', (0, -1), (-1, -1), GRAY_DARK),
-        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -3), [colors.white, GRAY_LIGHTER]),
+        # Total Ingresos (fila 3) → azul
+        ('BACKGROUND', (0, 3), (-1, 3), BLUE),
+        ('TEXTCOLOR', (0, 3), (-1, 3), colors.white),
+        ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'),
+        # Total Egresos (fila 4) → rojo
+        ('BACKGROUND', (0, 4), (-1, 4), RED),
+        ('TEXTCOLOR', (0, 4), (-1, 4), colors.white),
+        ('FONTNAME', (0, 4), (-1, 4), 'Helvetica-Bold'),
+        # Balance (fila 5) → verde
+        ('BACKGROUND', (0, 5), (-1, 5), GREEN),
+        ('TEXTCOLOR', (0, 5), (-1, 5), colors.white),
+        ('FONTNAME', (0, 5), (-1, 5), 'Helvetica-Bold'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
     story.append(tabla_resumen)

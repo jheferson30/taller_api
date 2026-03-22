@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
+import InputDinero from "../components/InputDinero";
+import SelectMecanico from "../components/SelectMecanico";
 
 const emptyVehiculo = {
   placa: "",
@@ -208,7 +210,7 @@ export default function RecepcionPage() {
     return (
       <section className="recepcion-container">
         <div className="recepcion-header">
-          <button onClick={resetForm} className="back-button">← Volver a búsqueda</button>
+          <button onClick={resetForm} className="back-button">Volver a búsqueda</button>
           <h2>Nuevo Vehículo - {vehiculo.placa}</h2>
           <p className="subtitle">Completa los datos del vehículo y el motivo de la visita</p>
         </div>
@@ -339,12 +341,7 @@ export default function RecepcionPage() {
               </label>
               <label>
                 <span className="label-text">Anticipo Recibido</span>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={ticket.anticipo_recibido}
-                  onChange={(e) => setTicket({ ...ticket, anticipo_recibido: e.target.value })}
-                />
+                <InputDinero value={ticket.anticipo_recibido} onChange={(v) => setTicket({ ...ticket, anticipo_recibido: v })} />
               </label>
               <label>
                 <span className="label-text">Método de Pago</span>
@@ -361,11 +358,10 @@ export default function RecepcionPage() {
               </label>
               <label className="full-width">
                 <span className="label-text">Recepcionado Por</span>
-                <input
-                  type="text"
-                  placeholder="Tu nombre"
+                <SelectMecanico
                   value={ticket.recepcionado_por}
-                  onChange={(e) => setTicket({ ...ticket, recepcionado_por: e.target.value })}
+                  onChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
+                  placeholder="Sin asignar"
                 />
               </label>
             </div>
@@ -395,7 +391,7 @@ export default function RecepcionPage() {
     return (
       <section className="recepcion-container">
         <div className="recepcion-header">
-          <button onClick={resetForm} className="back-button">← Volver a búsqueda</button>
+          <button onClick={resetForm} className="back-button">Volver a búsqueda</button>
           <h2>Completar Datos - {vehiculo.placa}</h2>
           <p className="subtitle">Este vehículo fue creado desde una cita. Completa los datos faltantes.</p>
         </div>
@@ -526,12 +522,7 @@ export default function RecepcionPage() {
               </label>
               <label>
                 <span className="label-text">Anticipo Recibido</span>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={ticket.anticipo_recibido}
-                  onChange={(e) => setTicket({ ...ticket, anticipo_recibido: e.target.value })}
-                />
+                <InputDinero value={ticket.anticipo_recibido} onChange={(v) => setTicket({ ...ticket, anticipo_recibido: v })} />
               </label>
               <label>
                 <span className="label-text">Método de Pago</span>
@@ -548,11 +539,10 @@ export default function RecepcionPage() {
               </label>
               <label className="full-width">
                 <span className="label-text">Recepcionado Por</span>
-                <input
-                  type="text"
-                  placeholder="Tu nombre"
+                <SelectMecanico
                   value={ticket.recepcionado_por}
-                  onChange={(e) => setTicket({ ...ticket, recepcionado_por: e.target.value })}
+                  onChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
+                  placeholder="Sin asignar"
                 />
               </label>
             </div>
@@ -582,7 +572,7 @@ export default function RecepcionPage() {
     return (
       <section className="recepcion-container">
         <div className="recepcion-header">
-          <button onClick={resetForm} className="back-button">← Volver a búsqueda</button>
+          <button onClick={resetForm} className="back-button">Volver a búsqueda</button>
           <h2>Vehículo Registrado - {vehiculo.placa}</h2>
           <p className="subtitle">Crea un nuevo ticket de ingreso</p>
         </div>
@@ -677,12 +667,7 @@ export default function RecepcionPage() {
               </label>
               <label>
                 <span className="label-text">Anticipo Recibido</span>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={ticket.anticipo_recibido}
-                  onChange={(e) => setTicket({ ...ticket, anticipo_recibido: e.target.value })}
-                />
+                <InputDinero value={ticket.anticipo_recibido} onChange={(v) => setTicket({ ...ticket, anticipo_recibido: v })} />
               </label>
               <label>
                 <span className="label-text">Método de Pago</span>
@@ -699,11 +684,10 @@ export default function RecepcionPage() {
               </label>
               <label className="full-width">
                 <span className="label-text">Recepcionado Por</span>
-                <input
-                  type="text"
-                  placeholder="Tu nombre"
+                <SelectMecanico
                   value={ticket.recepcionado_por}
-                  onChange={(e) => setTicket({ ...ticket, recepcionado_por: e.target.value })}
+                  onChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
+                  placeholder="Sin asignar"
                 />
               </label>
             </div>

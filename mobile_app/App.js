@@ -17,50 +17,18 @@ export default function App() {
       <Stack.Navigator
         initialRouteName="Home"
         screenOptions={{
-          headerStyle: {
-            backgroundColor: '#1e40af',
-          },
+          headerStyle: { backgroundColor: '#1e40af' },
           headerTintColor: '#fff',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          headerTitleStyle: { fontWeight: 'bold' },
         }}
       >
-        <Stack.Screen 
-          name="Home" 
-          component={HomeScreen}
-          options={{ title: 'PULGA Mecánica Fi' }}
-        />
-        <Stack.Screen 
-          name="TicketList" 
-          component={TicketListScreen}
-          options={{ title: 'Tickets' }}
-        />
-        <Stack.Screen 
-          name="TicketDetail" 
-          component={TicketDetailScreen}
-          options={{ title: 'Detalle del Ticket' }}
-        />
-        <Stack.Screen 
-          name="AddProceso" 
-          component={AddProcesoScreen}
-          options={{ title: 'Agregar Proceso' }}
-        />
-        <Stack.Screen 
-          name="AddRepuesto" 
-          component={AddRepuestoScreen}
-          options={{ title: 'Agregar Repuesto' }}
-        />
-        <Stack.Screen 
-          name="AddFoto" 
-          component={AddFotoScreen}
-          options={{ title: 'Agregar Foto' }}
-        />
-        <Stack.Screen 
-          name="AddCompra" 
-          component={AddCompraScreen}
-          options={{ title: 'Registrar Compra' }}
-        />
+        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'PULGA Mecánica Fi' }} />
+        <Stack.Screen name="TicketList" component={TicketListScreen} options={{ title: 'Tickets' }} />
+        <Stack.Screen name="TicketDetail" component={TicketDetailScreen} options={{ title: 'Detalle del Ticket' }} />
+        <Stack.Screen name="AddProceso" component={AddProcesoScreen} options={{ title: 'Agregar Proceso' }} />
+        <Stack.Screen name="AddRepuesto" component={AddRepuestoScreen} options={{ title: 'Agregar Repuesto' }} />
+        <Stack.Screen name="AddFoto" component={AddFotoScreen} options={{ title: 'Agregar Foto' }} />
+        <Stack.Screen name="AddCompra" component={AddCompraScreen} options={{ title: 'Registrar Compra' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

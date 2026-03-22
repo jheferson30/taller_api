@@ -7,7 +7,10 @@ const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
 const fmt = (v) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v || 0);
 
-function hoy() { return new Date().toISOString().slice(0, 10); }
+function hoyLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function primerDiaMes() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
@@ -19,7 +22,8 @@ export default function EntregadosPage() {
   const [error, setError] = useState("");
   const [placa, setPlaca] = useState("");
   const [fechaDesde, setFechaDesde] = useState(primerDiaMes());
-  const [fechaHasta, setFechaHasta] = useState(hoy());
+  const [fechaHasta, setFechaHasta] = useState(hoyLocal());
+  const [estado, setEstado] = useState("TODOS");
   const [selected, setSelected] = useState(null);
 
   const buscar = async () => {
@@ -27,12 +31,22 @@ export default function EntregadosPage() {
     setError("");
     setSelected(null);
     try {
-      const data = await api.buscarTickets({
-        estado: "ENTREGADO",
-        placa: placa.trim() || undefined,
-        fecha_desde: fechaDesde || undefined,
-        fecha_hasta: fechaHasta || undefined,
-      });
+      let data;
+      if (estado === "TODOS") {
+        // Buscar entregados y finalizados por separado y combinar
+        const [entregados, finalizados] = await Promise.all([
+          api.buscarTickets({ estado: "ENTREGADO", placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
+          api.buscarTickets({ estado: "FINALIZADO", placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
+        ]);
+        data = [...entregados, ...finalizados].sort((a, b) => new Date(b.fecha_ingreso) - new Date(a.fecha_ingreso));
+      } else {
+        data = await api.buscarTickets({
+          estado,
+          placa: placa.trim() || undefined,
+          fecha_desde: fechaDesde || undefined,
+          fecha_hasta: fechaHasta || undefined,
+        });
+      }
       setTickets(data);
     } catch (e) {
       setError(e.message);
@@ -48,7 +62,7 @@ export default function EntregadosPage() {
       {/* Header */}
       <div className="ent-hero">
         <div>
-          <h1 className="ent-hero-title">📦 Tickets Entregados</h1>
+          <h1 className="ent-hero-title">Tickets Entregados</h1>
           <p className="ent-hero-sub">Historial completo de vehículos entregados al cliente</p>
         </div>
         <div className="ent-hero-badge">{tickets.length} registros</div>
@@ -58,7 +72,7 @@ export default function EntregadosPage() {
       <div className="ent-filtros-card">
         <div className="ent-filtros-row">
           <div className="ent-field">
-            <label className="ent-label">🔍 Placa</label>
+            <label className="ent-label">Placa</label>
             <input
               className="ent-input"
               type="text"
@@ -69,11 +83,19 @@ export default function EntregadosPage() {
             />
           </div>
           <div className="ent-field">
-            <label className="ent-label">📅 Desde</label>
+            <label className="ent-label">Estado</label>
+            <select className="ent-input" value={estado} onChange={(e) => setEstado(e.target.value)}>
+              <option value="TODOS">Todos (Finalizados + Entregados)</option>
+              <option value="FINALIZADO">Solo Finalizados</option>
+              <option value="ENTREGADO">Solo Entregados</option>
+            </select>
+          </div>
+          <div className="ent-field">
+            <label className="ent-label">Desde</label>
             <input className="ent-input" type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
           </div>
           <div className="ent-field">
-            <label className="ent-label">📅 Hasta</label>
+            <label className="ent-label">Hasta</label>
             <input className="ent-input" type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
           </div>
           <button className="ent-btn-buscar" onClick={buscar} disabled={loading}>
@@ -90,7 +112,7 @@ export default function EntregadosPage() {
           {loading && <div className="ent-loading">Cargando...</div>}
           {!loading && tickets.length === 0 && (
             <div className="ent-empty">
-              <span className="ent-empty-icon">📭</span>
+              <span className="ent-empty-icon">—</span>
               <p>No hay tickets entregados en este rango</p>
             </div>
           )}
@@ -105,7 +127,7 @@ export default function EntregadosPage() {
               >
                 <div className="ent-card-top">
                   <span className="ent-placa">{t.placa}</span>
-                  <span className="ent-chip">ENTREGADO</span>
+                  <span className={`ent-chip ent-chip--${t.estado.toLowerCase()}`}>{t.estado}</span>
                 </div>
                 <p className="ent-codigo">{t.ticket_codigo}</p>
                 <p className="ent-motivo">{t.motivo_visita}</p>
@@ -129,7 +151,7 @@ export default function EntregadosPage() {
                 <h2 className="ent-detalle-placa">{selected.placa}</h2>
                 <p className="ent-detalle-codigo">{selected.ticket_codigo}</p>
               </div>
-              <span className="ent-chip ent-chip--lg">ENTREGADO</span>
+              <span className={`ent-chip ent-chip--lg ent-chip--${selected.estado.toLowerCase()}`}>{selected.estado}</span>
             </div>
 
             {/* Info vehículo */}
@@ -187,12 +209,12 @@ export default function EntregadosPage() {
               target="_blank"
               rel="noreferrer"
             >
-              📄 Descargar PDF del cliente
+              Descargar PDF del cliente
             </a>
           </div>
         ) : (
           <div className="ent-detalle-empty">
-            <span>👈</span>
+            <span>←</span>
             <p>Selecciona un ticket para ver el detalle</p>
           </div>
         )}

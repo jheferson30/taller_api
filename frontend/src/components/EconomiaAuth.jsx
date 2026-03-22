@@ -70,7 +70,7 @@ export default function EconomiaAuth({ onAutenticado, modoInicial = "login" }) {
   return (
     <div className="economia-auth-container">
       <div className="economia-auth-card">
-        <div className="auth-icon">🔒</div>
+        <div className="auth-icon"></div>
         <h2>Acceso a Economía</h2>
         <p className="auth-subtitle">
           Esta sección contiene información financiera sensible

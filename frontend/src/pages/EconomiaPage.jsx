@@ -10,7 +10,11 @@ export default function EconomiaPage() {
   const [ingresos, setIngresos] = useState(null);
   const [egresos, setEgresos] = useState(null);
   const [msg, setMsg] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const hoyLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+  const [fecha, setFecha] = useState(hoyLocal());
   const [loading, setLoading] = useState(false);
 
   // Formatear moneda
@@ -136,7 +140,7 @@ export default function EconomiaPage() {
       {/* KPIs principales */}
       <div className="kpis-economia">
         <article className="kpi-card ingreso">
-          <div className="kpi-icon">💰</div>
+          <div className="kpi-icon">$</div>
           <div className="kpi-content">
             <span className="kpi-label">Ingresos</span>
             <strong className="kpi-value">{formatMoney(resumen?.ingresos)}</strong>
@@ -148,7 +152,7 @@ export default function EconomiaPage() {
         </article>
 
         <article className="kpi-card egreso">
-          <div className="kpi-icon">💸</div>
+          <div className="kpi-icon">-$</div>
           <div className="kpi-content">
             <span className="kpi-label">Egresos</span>
             <strong className="kpi-value">{formatMoney(resumen?.egresos)}</strong>
@@ -159,12 +163,11 @@ export default function EconomiaPage() {
         </article>
 
         <article className={`kpi-card balance ${(resumen?.balance || 0) >= 0 ? 'positivo' : 'negativo'}`}>
-          <div className="kpi-icon">{(resumen?.balance || 0) >= 0 ? '📈' : '📉'}</div>
           <div className="kpi-content">
-            <span className="kpi-label">Balance</span>
+            <span className="kpi-label">GANANCIA DEL DÍA</span>
             <strong className="kpi-value">{formatMoney(resumen?.balance)}</strong>
             <small className="kpi-detail">
-              Tickets cerrados: {resumen?.tickets_cerrados_hoy || 0}
+              Ingresos - Egresos | {resumen?.tickets_cerrados_hoy || 0} tickets cerrados
             </small>
           </div>
         </article>
@@ -174,39 +177,47 @@ export default function EconomiaPage() {
       <div className="grafico-simple">
         <h3>Comparación Visual</h3>
         <div className="barras">
-          <div className="barra-container">
-            <div className="barra-label">Ingresos</div>
-            <div className="barra-wrapper">
-              <div 
-                className="barra ingreso-bar" 
-                style={{
-                  width: `${Math.min(100, ((resumen?.ingresos || 0) / Math.max(resumen?.ingresos || 1, resumen?.egresos || 1)) * 100)}%`
-                }}
-              >
-                {formatMoney(resumen?.ingresos)}
-              </div>
-            </div>
-          </div>
-          <div className="barra-container">
-            <div className="barra-label">Egresos</div>
-            <div className="barra-wrapper">
-              <div 
-                className="barra egreso-bar" 
-                style={{
-                  width: `${Math.min(100, ((resumen?.egresos || 0) / Math.max(resumen?.ingresos || 1, resumen?.egresos || 1)) * 100)}%`
-                }}
-              >
-                {formatMoney(resumen?.egresos)}
-              </div>
-            </div>
-          </div>
+          {(() => {
+            const ing = resumen?.ingresos || 0;
+            const egr = resumen?.egresos || 0;
+            const gan = Math.max(0, ing - egr);
+            const maxVal = Math.max(ing, egr, gan, 1);
+            return (
+              <>
+                <div className="barra-container">
+                  <div className="barra-label">Ingresos</div>
+                  <div className="barra-wrapper">
+                    <div className="barra ingreso-bar" style={{ width: `${Math.min(100, (ing / maxVal) * 100)}%` }}>
+                      {formatMoney(ing)}
+                    </div>
+                  </div>
+                </div>
+                <div className="barra-container">
+                  <div className="barra-label">Egresos</div>
+                  <div className="barra-wrapper">
+                    <div className="barra egreso-bar" style={{ width: `${Math.min(100, (egr / maxVal) * 100)}%` }}>
+                      {formatMoney(egr)}
+                    </div>
+                  </div>
+                </div>
+                <div className="barra-container">
+                  <div className="barra-label">Ganancia</div>
+                  <div className="barra-wrapper">
+                    <div className="barra ganancia-bar" style={{ width: `${Math.min(100, (gan / maxVal) * 100)}%` }}>
+                      {formatMoney(gan)}
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 
       {/* Detalle de movimientos */}
       <div className="grid two top-gap">
         <article className="card detalle-ingresos">
-          <h3>📥 Detalle de Ingresos</h3>
+          <h3>Detalle de Ingresos</h3>
           
           <div className="seccion-movimientos">
             <h4>Anticipos Recibidos ({ingresos?.anticipos?.length || 0})</h4>
@@ -256,7 +267,7 @@ export default function EconomiaPage() {
         </article>
 
         <article className="card detalle-egresos">
-          <h3>📤 Detalle de Egresos</h3>
+          <h3>Detalle de Egresos</h3>
           
           {/* Totales por categoría */}
           <div className="categorias-resumen">
@@ -303,12 +314,12 @@ export default function EconomiaPage() {
       <div className="pdf-section">
         <div className="pdf-card">
           <div className="pdf-info">
-            <h3>📄 Generar Reporte PDF</h3>
+            <h3>Generar Reporte PDF</h3>
             <p>Descarga el informe completo del día con todos los movimientos</p>
           </div>
           <div className="pdf-actions">
             <button onClick={onPdf} className="btn-pdf">
-              📥 Descargar PDF
+              Descargar PDF
             </button>
           </div>
         </div>

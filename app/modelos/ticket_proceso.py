@@ -12,4 +12,5 @@ class TicketProceso(Base):
     nombre = Column(String(120), nullable=False)
     descripcion = Column(String(400), nullable=True)
     mecanico = Column(String(120), nullable=True)
+    foto_url = Column(String(500), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())

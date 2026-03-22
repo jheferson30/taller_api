@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, Image,
-  KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, Image,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
+import { Picker } from '@react-native-picker/picker';
 import { colors } from '../theme';
-
-const API_BASE_URL = 'http://10.0.2.2:8000/api/mobile';
+import { api } from '../api';
 
 export default function AddCompraScreen({ route, navigation }) {
   const { ticketId } = route.params;
@@ -17,6 +17,11 @@ export default function AddCompraScreen({ route, navigation }) {
   const [nota, setNota] = useState('');
   const [uri, setUri] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [mecanicos, setMecanicos] = useState([]);
+
+  useEffect(() => {
+    api.getMecanicos().then((data) => setMecanicos(data)).catch(() => {});
+  }, []);
 
   const seleccionarSoporte = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -66,15 +71,13 @@ export default function AddCompraScreen({ route, navigation }) {
         formData.append('file', { uri, name: filename, type });
       }
 
-      const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/compras`, {
-        method: 'POST',
-        body: formData,
-        headers: { 'X-Admin-Password': 'la_pulga_fi' },
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || `Error ${response.status}`);
-      }
+      await api.createCompra(ticketId, {
+        descripcion: descripcion.trim(),
+        valor: valorNum,
+        responsable: responsable.trim() || null,
+        nota: nota.trim() || null,
+        file: uri ? { uri, name: uri.split('/').pop(), type: 'image/jpeg' } : undefined,
+      }, uri);
       navigation.goBack();
     } catch (e) {
       Alert.alert('Error', e.message);
@@ -84,9 +87,13 @@ export default function AddCompraScreen({ route, navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.form}>
+    <KeyboardAwareScrollView
+      style={styles.container}
+      keyboardShouldPersistTaps="handled"
+      enableOnAndroid={true}
+      extraScrollHeight={20}
+    >
+      <View style={styles.form}>
 
           <Text style={styles.label}>Descripción *</Text>
           <TextInput
@@ -103,19 +110,39 @@ export default function AddCompraScreen({ route, navigation }) {
             style={styles.input}
             placeholder="0"
             placeholderTextColor={colors.textMuted}
-            value={valor}
-            onChangeText={(t) => setValor(t.replace(/[^0-9]/g, ''))}
+            value={valor ? Number(valor).toLocaleString('es-CO') : ''}
+            onChangeText={(t) => {
+              const raw = t.replace(/\D/g, '');
+              setValor(raw);
+            }}
             keyboardType="numeric"
+            selection={undefined}
           />
 
           <Text style={styles.label}>Responsable</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nombre del responsable"
-            placeholderTextColor={colors.textMuted}
-            value={responsable}
-            onChangeText={setResponsable}
-          />
+          {mecanicos.length > 0 ? (
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={responsable}
+                onValueChange={(v) => setResponsable(v)}
+                style={styles.picker}
+                dropdownIconColor={colors.textMuted}
+              >
+                <Picker.Item label="— Sin asignar —" value="" />
+                {mecanicos.filter(m => m.activo).map((m) => (
+                  <Picker.Item key={m.id} label={m.nombre} value={m.nombre} />
+                ))}
+              </Picker>
+            </View>
+          ) : (
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre del responsable"
+              placeholderTextColor={colors.textMuted}
+              value={responsable}
+              onChangeText={setResponsable}
+            />
+          )}
 
           <Text style={styles.label}>Nota</Text>
           <TextInput
@@ -167,8 +194,7 @@ export default function AddCompraScreen({ route, navigation }) {
             <Text style={styles.cancelText}>Cancelar</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -208,4 +234,12 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   cancelBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   cancelText: { color: colors.textMuted, fontSize: 15 },
+  pickerWrapper: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  picker: { color: colors.text, height: 50 },
 });

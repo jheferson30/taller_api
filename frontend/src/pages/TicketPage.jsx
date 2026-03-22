@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import InputDinero from "../components/InputDinero";
+import SelectMecanico from "../components/SelectMecanico";
 
-const PROCESOS_RAPIDOS = [
+const PROCESOS_RAPIDOS_DEFAULT = [
   "Cambio de aceite",
   "Mantenimiento de frenos",
   "Cambio de cunas de diracion",
@@ -21,6 +23,8 @@ export default function TicketPage() {
   const [activeTab, setActiveTab] = useState("procesos");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [procesosRapidos, setProcesosRapidos] = useState(PROCESOS_RAPIDOS_DEFAULT);
+  const [cobrosRapidos, setCobrosRapidos] = useState([]);
 
   // Forms
   const [proceso, setProceso] = useState({ nombre: "", descripcion: "", mecanico: "" });
@@ -66,6 +70,8 @@ export default function TicketPage() {
 
   useEffect(() => {
     loadTickets();
+    api.obtenerProcesosRapidos().then((r) => { if (r.procesos?.length) setProcesosRapidos(r.procesos); }).catch(() => {});
+    api.obtenerCobrosRapidos().then((r) => { if (r.cobros?.length) setCobrosRapidos(r.cobros); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -79,6 +85,15 @@ export default function TicketPage() {
     setLoading(true);
     try {
       await api.agregarProceso(selectedId, proceso);
+      // Si hay foto seleccionada, subirla junto con el proceso
+      if (fotoFile) {
+        const uploadResult = await api.subirFoto(fotoFile);
+        const fotoUrl = `http://127.0.0.1:8000${uploadResult.url}`;
+        await api.agregarFoto(selectedId, { ...foto, archivo_url: fotoUrl });
+        setFotoFile(null);
+        setFotoPreview("");
+        setFoto({ tipo: "OTRA", archivo_url: "", descripcion: "" });
+      }
       setProceso({ nombre: "", descripcion: "", mecanico: "" });
       await loadResumen(selectedId);
       setMsg("✓ Proceso agregado");
@@ -192,16 +207,18 @@ export default function TicketPage() {
     }
   }
 
-  async function onAddCobro() {
-    if (!cobro.concepto || !cobro.valor) return;
+  async function onAddCobro(conceptoOverride, valorOverride) {
+    const concepto = conceptoOverride ?? cobro.concepto;
+    const valor = valorOverride ?? cobro.valor;
+    if (!concepto || !valor) return;
     setLoading(true);
     try {
-      await api.agregarCobro(selectedId, { ...cobro, valor: Number(cobro.valor) });
-      setCobro({ concepto: "", valor: 0 });
+      await api.agregarCobro(selectedId, { concepto, valor: Number(valor) });
+      if (!conceptoOverride) setCobro({ concepto: "", valor: 0 });
       await loadResumen(selectedId);
       
       // Actualizar el total automáticamente
-      const totalCobros = [...resumen.cobros, { valor: Number(cobro.valor) }].reduce((sum, c) => sum + c.valor, 0);
+      const totalCobros = [...resumen.cobros, { valor: Number(valor) }].reduce((sum, c) => sum + c.valor, 0);
       setFinanzas({ ...finanzas, total_servicio: totalCobros });
       
       setMsg("✓ Cobro agregado");
@@ -320,13 +337,13 @@ export default function TicketPage() {
                 </div>
                 <div className="ticket-item-fecha">
                   <span className="fecha-hora">
-                    📅 {new Date(t.fecha_ingreso).toLocaleDateString('es-CO', { 
+                    {new Date(t.fecha_ingreso).toLocaleDateString('es-CO', { 
                       day: '2-digit', 
                       month: '2-digit', 
                       year: 'numeric' 
                     })}
                     {' '}
-                    🕐 {new Date(t.fecha_ingreso).toLocaleTimeString('es-CO', { 
+                    {new Date(t.fecha_ingreso).toLocaleTimeString('es-CO', { 
                       hour: '2-digit', 
                       minute: '2-digit' 
                     })}
@@ -429,7 +446,7 @@ export default function TicketPage() {
                       <div className="form-section">
                         <h4 className="section-title">Agregar Proceso</h4>
                         <div className="quick-actions">
-                          {PROCESOS_RAPIDOS.map((p) => (
+                          {procesosRapidos.map((p) => (
                             <button
                               key={p}
                               className="quick-button"
@@ -450,6 +467,20 @@ export default function TicketPage() {
                             />
                           </label>
                           <label className="full-width">
+                            <span className="label-text">Foto (opcional)</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={onFotoFileChange}
+                              className="file-input"
+                            />
+                            {fotoPreview && (
+                              <div className="image-preview">
+                                <img src={fotoPreview} alt="Preview" />
+                              </div>
+                            )}
+                          </label>
+                          <label className="full-width">
                             <span className="label-text">Descripción</span>
                             <textarea
                               placeholder="Detalles del proceso..."
@@ -460,11 +491,10 @@ export default function TicketPage() {
                           </label>
                           <label>
                             <span className="label-text">Mecánico</span>
-                            <input
-                              type="text"
-                              placeholder="Nombre del mecánico"
+                            <SelectMecanico
                               value={proceso.mecanico}
-                              onChange={(e) => setProceso({ ...proceso, mecanico: e.target.value })}
+                              onChange={(v) => setProceso({ ...proceso, mecanico: v })}
+                              placeholder="— Sin asignar —"
                             />
                           </label>
                         </div>
@@ -670,21 +700,17 @@ export default function TicketPage() {
                           </label>
                           <label>
                             <span className="label-text">Valor *</span>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="0"
+                            <InputDinero
                               value={compra.valor}
-                              onChange={(e) => setCompra({ ...compra, valor: e.target.value })}
+                              onChange={(v) => setCompra({ ...compra, valor: v })}
                             />
                           </label>
                           <label>
                             <span className="label-text">Responsable</span>
-                            <input
-                              type="text"
-                              placeholder="Nombre"
+                            <SelectMecanico
                               value={compra.responsable}
-                              onChange={(e) => setCompra({ ...compra, responsable: e.target.value })}
+                              onChange={(v) => setCompra({ ...compra, responsable: v })}
+                              placeholder="— Sin asignar —"
                             />
                           </label>
                           <label className="full-width">
@@ -741,7 +767,7 @@ export default function TicketPage() {
                                 <div className="compra-soporte">
                                   {c.soporte_url.endsWith('.pdf') ? (
                                     <div className="pdf-preview">
-                                      <span className="pdf-icon">📄</span>
+                                      <span className="pdf-icon">PDF</span>
                                       <a href={c.soporte_url} target="_blank" rel="noopener noreferrer">
                                         Ver PDF
                                       </a>
@@ -792,7 +818,7 @@ export default function TicketPage() {
                           {/* Alerta de egresos */}
                           {totalEgresos > 0 && (
                             <div className="finanzas-alert">
-                              <div className="alert-icon">💰</div>
+                              <div className="alert-icon">$</div>
                               <div className="alert-content">
                                 <strong>Egresos del Ticket: ${totalEgresos.toLocaleString()}</strong>
                                 <p>Has gastado ${totalEgresos.toLocaleString()} en compras para este ticket.</p>
@@ -833,7 +859,12 @@ export default function TicketPage() {
                               <h4 className="section-title">Detalle de Egresos</h4>
                               <div className="egresos-list">
                                 {resumen.compras.map((c) => (
-                                  <div key={c.id} className="egreso-item">
+                                  <div
+                                    key={c.id}
+                                    className={`egreso-item ${isEditable ? "egreso-item-clickable" : ""}`}
+                                    onClick={isEditable ? () => onAddCobro(c.descripcion, c.valor) : undefined}
+                                    title={isEditable ? "Clic para agregar como cobro" : undefined}
+                                  >
                                     <span className="egreso-desc">{c.descripcion}</span>
                                     <span className="egreso-valor">${c.valor.toLocaleString()}</span>
                                   </div>
@@ -848,13 +879,27 @@ export default function TicketPage() {
 
                           {/* Sección de Cobros */}
                           <div className="form-section">
-                            <h4 className="section-title">Items de Cobro</h4>
-                            
+                            <h4 className="section-title">Cobros y Cierre</h4>
+
                             {isEditable && (
                               <div className="cobros-form">
                                 <div className="form-grid">
                                   <label className="full-width">
                                     <span className="label-text">Concepto *</span>
+                                    {cobrosRapidos.length > 0 && (
+                                      <div className="quick-actions" style={{ marginBottom: 6 }}>
+                                        {cobrosRapidos.map((c) => (
+                                          <button
+                                            key={c}
+                                            className="quick-button"
+                                            type="button"
+                                            onClick={() => setCobro({ ...cobro, concepto: c })}
+                                          >
+                                            {c}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                     <input
                                       type="text"
                                       placeholder="Ej: Mantenimiento, Mano de obra, Diagnóstico"
@@ -864,18 +909,15 @@ export default function TicketPage() {
                                   </label>
                                   <label>
                                     <span className="label-text">Valor *</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      placeholder="0"
+                                    <InputDinero
                                       value={cobro.valor}
-                                      onChange={(e) => setCobro({ ...cobro, valor: e.target.value })}
+                                      onChange={(v) => setCobro({ ...cobro, valor: v })}
                                     />
                                   </label>
                                 </div>
                                 <button
                                   className="button-primary"
-                                  onClick={onAddCobro}
+                                  onClick={() => onAddCobro()}
                                   disabled={loading || !cobro.concepto || !cobro.valor}
                                 >
                                   {loading ? "Agregando..." : "Agregar Cobro"}
@@ -907,55 +949,44 @@ export default function TicketPage() {
                                     </div>
                                   ))}
                                   <div className="cobro-item total">
-                                    <span className="cobro-concepto"><strong>Total a Cobrar</strong></span>
+                                    <span className="cobro-concepto"><strong>Total del Servicio</strong></span>
                                     <span className="cobro-valor"><strong>${totalCobros.toLocaleString()}</strong></span>
                                   </div>
                                 </>
                               )}
                             </div>
+
+                            {/* Método de pago y guardar — solo si hay cobros */}
+                            {isEditable && resumen.cobros.length > 0 && (
+                              <div className="form-grid" style={{ marginTop: 16 }}>
+                                <label>
+                                  <span className="label-text">Método de Pago Final</span>
+                                  <select
+                                    value={finanzas.metodo_pago_final}
+                                    onChange={(e) => setFinanzas({ ...finanzas, metodo_pago_final: e.target.value })}
+                                  >
+                                    <option value="EFECTIVO">Efectivo</option>
+                                    <option value="NEQUI">Nequi</option>
+                                    <option value="DAVIPLATA">Daviplata</option>
+                                    <option value="TRANSFERENCIA">Transferencia</option>
+                                    <option value="TARJETA">Tarjeta</option>
+                                  </select>
+                                </label>
+                                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                  <button
+                                    className="button-primary"
+                                    onClick={onUpdateFinanzas}
+                                    disabled={loading || !totalCobros}
+                                  >
+                                    {loading ? "Guardando..." : "Guardar Finanzas"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </>
                       );
                     })()}
-                    
-
-                    {isEditable && (
-                      <div className="form-section">
-                        <h4 className="section-title">Definir Finanzas</h4>
-                        <div className="form-grid">
-                          <label>
-                            <span className="label-text">Total del Servicio *</span>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="0"
-                              value={finanzas.total_servicio}
-                              onChange={(e) => setFinanzas({ ...finanzas, total_servicio: e.target.value })}
-                            />
-                          </label>
-                          <label>
-                            <span className="label-text">Método de Pago Final</span>
-                            <select
-                              value={finanzas.metodo_pago_final}
-                              onChange={(e) => setFinanzas({ ...finanzas, metodo_pago_final: e.target.value })}
-                            >
-                              <option value="EFECTIVO">Efectivo</option>
-                              <option value="NEQUI">Nequi</option>
-                              <option value="DAVIPLATA">Daviplata</option>
-                              <option value="TRANSFERENCIA">Transferencia</option>
-                              <option value="TARJETA">Tarjeta</option>
-                            </select>
-                          </label>
-                        </div>
-                        <button
-                          className="button-primary"
-                          onClick={onUpdateFinanzas}
-                          disabled={loading || !finanzas.total_servicio}
-                        >
-                          {loading ? "Actualizando..." : "Actualizar Finanzas"}
-                        </button>
-                      </div>
-                    )}
 
                     <div className="form-section">
                       <h4 className="section-title">Observaciones Finales</h4>
@@ -1023,7 +1054,7 @@ export default function TicketPage() {
                         className="button-download-pdf"
                         onClick={() => window.open(`http://127.0.0.1:8000/tickets/${selectedId}/pdf?token=${encodeURIComponent(import.meta.env.VITE_ADMIN_PASSWORD || '')}`, '_blank')}
                       >
-                        📄 Descargar PDF Completo
+                        Descargar PDF Completo
                       </button>
                     </div>
 

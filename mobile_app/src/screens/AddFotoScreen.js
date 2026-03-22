@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, Image,
-  KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, Image,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../api';
 import { colors } from '../theme';
@@ -61,9 +61,13 @@ export default function AddFotoScreen({ route, navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.form}>
+    <KeyboardAwareScrollView
+      style={styles.container}
+      keyboardShouldPersistTaps="handled"
+      enableOnAndroid={true}
+      extraScrollHeight={20}
+    >
+      <View style={styles.form}>
 
           {/* Tipo de foto */}
           <Text style={styles.label}>Tipo de foto</Text>
@@ -129,8 +133,7 @@ export default function AddFotoScreen({ route, navigation }) {
             <Text style={styles.cancelText}>Cancelar</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 

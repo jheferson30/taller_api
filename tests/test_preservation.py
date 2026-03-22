@@ -2,7 +2,7 @@
 Preservation Property Tests
 ============================
 Estos tests DEBEN PASAR en el código sin corregir.
-Documentan el comportamiento base que NO debe romperse con el fix.
+Documentan el 
 
 Propiedades verificadas:
   - Para todo ticket con total_servicio > 0, después de finalizar:

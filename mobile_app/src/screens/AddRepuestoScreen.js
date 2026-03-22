@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { api } from '../api';
 import { colors } from '../theme';
 
@@ -47,12 +48,13 @@ export default function AddRepuestoScreen({ route, navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAwareScrollView
+      style={styles.container}
+      keyboardShouldPersistTaps="handled"
+      enableOnAndroid={true}
+      extraScrollHeight={20}
     >
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.form}>
+      <View style={styles.form}>
           <Text style={styles.label}>Nombre del repuesto *</Text>
           <TextInput
             style={styles.input}
@@ -104,8 +106,7 @@ export default function AddRepuestoScreen({ route, navigation }) {
             <Text style={styles.cancelText}>Cancelar</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 

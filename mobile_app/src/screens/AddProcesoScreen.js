@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform, Wrap,
+  StyleSheet, ActivityIndicator, Alert,
+  Image,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import * as ImagePicker from 'expo-image-picker';
+import { Picker } from '@react-native-picker/picker';
 import { api } from '../api';
 import { colors } from '../theme';
 
-const PROCESOS_RAPIDOS = [
+const PROCESOS_RAPIDOS_DEFAULT = [
   'Cambio de aceite',
   'Mantenimiento de frenos',
   'Cambio de cunas de diracion',
@@ -25,7 +28,31 @@ export default function AddProcesoScreen({ route, navigation }) {
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [mecanico, setMecanico] = useState('');
+  const [fotoUri, setFotoUri] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [mecanicos, setMecanicos] = useState([]);
+  const [procesosRapidos, setProcesosRapidos] = useState(PROCESOS_RAPIDOS_DEFAULT);
+
+  useEffect(() => {
+    api.getMecanicos().then((data) => setMecanicos(data)).catch(() => {});
+    api.getProcesosRapidos().then((data) => {
+      if (data.procesos && data.procesos.length > 0) setProcesosRapidos(data.procesos);
+    }).catch(() => {});
+  }, []);
+
+  const tomarFoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled) setFotoUri(result.assets[0].uri);
+  };
+
+  const seleccionarFoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permiso requerido', 'Necesitamos acceso a la galería'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (!result.canceled) setFotoUri(result.assets[0].uri);
+  };
 
   const handleGuardar = async () => {
     if (!nombre.trim()) {
@@ -38,7 +65,7 @@ export default function AddProcesoScreen({ route, navigation }) {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || null,
         mecanico: mecanico.trim() || null,
-      });
+      }, fotoUri);
       navigation.goBack();
     } catch (e) {
       Alert.alert('Error', e.message);
@@ -48,17 +75,18 @@ export default function AddProcesoScreen({ route, navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAwareScrollView
+      style={styles.container}
+      keyboardShouldPersistTaps="handled"
+      enableOnAndroid={true}
+      extraScrollHeight={20}
     >
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.form}>
+      <View style={styles.form}>
 
           {/* Chips de procesos rápidos */}
           <Text style={styles.label}>Procesos frecuentes</Text>
           <View style={styles.chipsContainer}>
-            {PROCESOS_RAPIDOS.map((p) => (
+            {procesosRapidos.map((p) => (
               <TouchableOpacity
                 key={p}
                 style={[styles.chip, nombre === p && styles.chipActive]}
@@ -78,14 +106,48 @@ export default function AddProcesoScreen({ route, navigation }) {
             onChangeText={setNombre}
           />
 
+          <Text style={styles.label}>📷 Foto (opcional)</Text>
+          <View style={styles.botonesRow}>
+            <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
+              <Text style={styles.btnFotoText}>📷 Cámara</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnFoto} onPress={seleccionarFoto}>
+              <Text style={styles.btnFotoText}>🖼 Galería</Text>
+            </TouchableOpacity>
+          </View>
+          {fotoUri && (
+            <View style={styles.previewContainer}>
+              <Image source={{ uri: fotoUri }} style={styles.preview} resizeMode="cover" />
+              <TouchableOpacity style={styles.removeBtn} onPress={() => setFotoUri(null)}>
+                <Text style={styles.removeBtnText}>✕ Quitar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <Text style={styles.label}>Mecánico responsable</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nombre del mecánico"
-            placeholderTextColor={colors.textMuted}
-            value={mecanico}
-            onChangeText={setMecanico}
-          />
+          {mecanicos.length > 0 ? (
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={mecanico}
+                onValueChange={(v) => setMecanico(v)}
+                style={styles.picker}
+                dropdownIconColor={colors.textMuted}
+              >
+                <Picker.Item label="— Sin asignar —" value="" />
+                {mecanicos.filter(m => m.activo).map((m) => (
+                  <Picker.Item key={m.id} label={m.nombre} value={m.nombre} />
+                ))}
+              </Picker>
+            </View>
+          ) : (
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre del mecánico"
+              placeholderTextColor={colors.textMuted}
+              value={mecanico}
+              onChangeText={setMecanico}
+            />
+          )}
 
           <Text style={styles.label}>Descripción</Text>
           <TextInput
@@ -114,8 +176,7 @@ export default function AddProcesoScreen({ route, navigation }) {
             <Text style={styles.cancelText}>Cancelar</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -173,4 +234,22 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   cancelBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   cancelText: { color: colors.textMuted, fontSize: 15 },
+  botonesRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  btnFoto: {
+    flex: 1, backgroundColor: colors.surface, borderWidth: 1,
+    borderColor: colors.border, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+  },
+  btnFotoText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  previewContainer: { borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+  preview: { width: '100%', height: 180 },
+  removeBtn: { backgroundColor: colors.error, padding: 8, alignItems: 'center' },
+  removeBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  pickerWrapper: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  picker: { color: colors.text, height: 50 },
 });

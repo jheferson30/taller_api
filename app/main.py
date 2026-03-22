@@ -3,12 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+import socket
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from app.configuracion.base_datos import Base, engine
-from app.rutas import economia_ruta, movimiento_caja_ruta, ticket_ruta, upload_ruta, vehiculo_ruta, seguridad_ruta, citas_ruta, mobile_api_ruta
+from app.rutas import economia_ruta, movimiento_caja_ruta, ticket_ruta, upload_ruta, vehiculo_ruta, seguridad_ruta, citas_ruta, mobile_api_ruta, configuracion_ruta
+# Importar modelos para que SQLAlchemy los registre
+import app.modelos.mecanico  # noqa
+import app.modelos.configuracion_taller  # noqa
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API Taller Mecanico")
@@ -43,6 +47,7 @@ app.include_router(upload_ruta.router)
 app.include_router(seguridad_ruta.router)
 app.include_router(citas_ruta.router)
 app.include_router(mobile_api_ruta.router)
+app.include_router(configuracion_ruta.router)
 
 
 @app.on_event("startup")
@@ -51,6 +56,31 @@ def validar_variables_entorno():
         raise RuntimeError("PDF_PASSWORD env var is required")
     if not os.getenv("ADMIN_PASSWORD") and not os.getenv("PDF_PASSWORD"):
         raise RuntimeError("ADMIN_PASSWORD env var is required")
+
+
+@app.get("/info")
+def info_sistema():
+    # Obtener IP local de red
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip_local = s.getsockname()[0]
+        s.close()
+    except Exception:
+        ip_local = "127.0.0.1"
+    return {
+        "sistema": "Taller Manager",
+        "version": "1.1.0",
+        "ip_servidor": ip_local,
+        "puerto": 8000,
+        "url_app_movil": f"http://{ip_local}:8000",
+        "desarrollador": {
+            "nombre": "Jheferson Esney Cely Arango",
+            "whatsapp": "3145719752",
+            "telefono": "3145719752",
+            "correo": "jefersoncely0@gmail.com",
+        }
+    }
 
 
 @app.get("/")
@@ -67,7 +97,7 @@ def inicio():
 def servir_frontend(full_path: str):
     # No interceptar rutas de la API
     api_prefixes = ("tickets", "vehiculos", "economia-dia", "movimientos", "upload",
-                    "seguridad", "citas", "api", "uploads")
+                    "seguridad", "citas", "api", "uploads", "configuracion")
     if any(full_path.startswith(p) for p in api_prefixes):
         from fastapi import HTTPException
         raise HTTPException(status_code=404)

@@ -28,6 +28,7 @@ export default function CitasPage() {
 
   // Mini calendario
   const [mesActual, setMesActual] = useState(new Date());
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null);
 
   // Funciones para el calendario
   function obtenerDiasDelMes(fecha) {
@@ -213,14 +214,14 @@ export default function CitasPage() {
       {/* Header */}
       <div className="citas-header">
         <div>
-          <h2>📅 Agenda de Citas</h2>
+          <h2>Agenda de Citas</h2>
           <p className="subtitle">Gestiona las citas programadas del taller</p>
         </div>
         <button
           className="btn-nueva-cita"
           onClick={() => setMostrarForm(!mostrarForm)}
         >
-          {mostrarForm ? "✕ Cerrar" : "➕ Nueva Cita"}
+          {mostrarForm ? "Cerrar" : "+ Nueva Cita"}
         </button>
       </div>
 
@@ -230,7 +231,7 @@ export default function CitasPage() {
           <h3>Agendar Nueva Cita</h3>
           <form onSubmit={onCrearCita}>
             {/* Datos del Vehículo */}
-            <div className="form-section-title">🚗 Datos del Vehículo</div>
+            <div className="form-section-title">Datos del Vehículo</div>
             
             <div className="form-row">
               <div className="form-group-inline">
@@ -250,7 +251,7 @@ export default function CitasPage() {
                   onClick={onBuscarPlaca}
                   disabled={!form.placa}
                 >
-                  🔍 Buscar
+                  Buscar
                 </button>
               </div>
             </div>
@@ -310,7 +311,7 @@ export default function CitasPage() {
             </div>
 
             {/* Datos del Cliente */}
-            <div className="form-section-title">👤 Datos del Cliente</div>
+            <div className="form-section-title">Datos del Cliente</div>
 
             <div className="form-row">
               <label>
@@ -336,7 +337,7 @@ export default function CitasPage() {
             </div>
 
             {/* Datos de la Cita */}
-            <div className="form-section-title">📅 Datos de la Cita</div>
+            <div className="form-section-title">Datos de la Cita</div>
 
             <div className="form-row">
               <label>
@@ -406,14 +407,14 @@ export default function CitasPage() {
             onClick={() => setVistaActual("lista")}
             title="Vista de lista"
           >
-            📋 Lista
+            Lista
           </button>
           <button
             className={`vista-btn ${vistaActual === "calendario" ? "active" : ""}`}
             onClick={() => setVistaActual("calendario")}
             title="Vista de calendario"
           >
-            📅 Calendario
+            Calendario
           </button>
         </div>
       </div>
@@ -452,11 +453,14 @@ export default function CitasPage() {
               const citasDelDia = obtenerCitasDelDia(fecha);
               const esHoy = fecha.toDateString() === new Date().toDateString();
               const tieneCitas = citasDelDia.length > 0;
+              const esDiaSeleccionado = diaSeleccionado && fecha.toDateString() === diaSeleccionado.toDateString();
 
               return (
                 <div
                   key={index}
-                  className={`calendario-dia ${esHoy ? "hoy" : ""} ${tieneCitas ? "con-citas" : ""}`}
+                  className={`calendario-dia ${esHoy ? "hoy" : ""} ${tieneCitas ? "con-citas" : ""} ${esDiaSeleccionado ? "dia-seleccionado" : ""}`}
+                  onClick={() => tieneCitas && setDiaSeleccionado(esDiaSeleccionado ? null : fecha)}
+                  style={tieneCitas ? { cursor: "pointer" } : {}}
                 >
                   <div className="calendario-dia-numero">{fecha.getDate()}</div>
                   {tieneCitas && (
@@ -488,6 +492,56 @@ export default function CitasPage() {
               );
             })}
           </div>
+
+          {/* Panel agenda del día seleccionado */}
+          {diaSeleccionado && (() => {
+            const citasDelDia = obtenerCitasDelDia(diaSeleccionado);
+            return (
+              <div className="agenda-dia-panel">
+                <div className="agenda-dia-header">
+                  <h3 className="agenda-dia-titulo">
+                    {diaSeleccionado.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
+                    <span className="agenda-dia-count">{citasDelDia.length} cita{citasDelDia.length > 1 ? "s" : ""}</span>
+                  </h3>
+                  <button className="agenda-dia-cerrar" onClick={() => setDiaSeleccionado(null)}>✕</button>
+                </div>
+                <div className="agenda-dia-lista">
+                  {citasDelDia
+                    .sort((a, b) => new Date(a.fecha_cita) - new Date(b.fecha_cita))
+                    .map((cita) => (
+                      <div key={cita.id} className="agenda-dia-item">
+                        <div className="agenda-dia-hora">
+                          {new Date(cita.fecha_cita).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                        <div className="agenda-dia-info">
+                          <div className="agenda-dia-cliente">
+                            <strong>{cita.nombre_cliente}</strong>
+                            {cita.placa && <span className="placa-badge">{cita.placa}</span>}
+                            <span className={`badge-cita badge-${cita.estado.toLowerCase()}`}>{cita.estado}</span>
+                          </div>
+                          <div className="agenda-dia-motivo">{cita.motivo}</div>
+                          <div className="agenda-dia-tel">{cita.telefono_cliente}</div>
+                          {cita.observaciones && <div className="agenda-dia-obs">{cita.observaciones}</div>}
+                        </div>
+                        {cita.estado !== "CONVERTIDA" && cita.estado !== "CANCELADA" && (
+                          <div className="agenda-dia-actions">
+                            {cita.estado === "PENDIENTE" && (
+                              <button className="btn-confirmar-cita" onClick={() => onConfirmarCita(cita.id)} disabled={loading}>Confirmar</button>
+                            )}
+                            <button className="btn-generar-ticket" onClick={() => onGenerarTicket(cita.id)} disabled={loading}>Ticket</button>
+                            <button className="btn-cancelar-cita" onClick={() => onCancelarCita(cita.id)} disabled={loading}>Cancelar</button>
+                          </div>
+                        )}
+                        {cita.estado === "CONVERTIDA" && (
+                          <div className="cita-convertida" style={{ fontSize: "11px" }}>✓ {cita.ticket_codigo}</div>
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -497,7 +551,7 @@ export default function CitasPage() {
           {/* Citas de hoy */}
           {citasHoy.length > 0 && (
             <div className="seccion-citas">
-              <h3 className="seccion-titulo">🔥 Citas de Hoy</h3>
+              <h3 className="seccion-titulo">Citas de Hoy</h3>
               <div className="citas-grid">
                 {citasHoy.map((c) => (
                   <CitaCard
@@ -516,7 +570,7 @@ export default function CitasPage() {
           {/* Próximas citas */}
           {citasProximas.length > 0 && (
             <div className="seccion-citas">
-              <h3 className="seccion-titulo">📆 Próximas Citas</h3>
+              <h3 className="seccion-titulo">Proximas Citas</h3>
               <div className="citas-grid">
                 {citasProximas.map((c) => (
                   <CitaCard
@@ -534,7 +588,7 @@ export default function CitasPage() {
 
           {citasFiltradas.length === 0 && !loading && (
             <div className="empty-state-citas">
-              <p>📭 No hay citas programadas</p>
+              <p>No hay citas programadas</p>
               <button className="btn-primary" onClick={() => setMostrarForm(true)}>
                 Agendar Primera Cita
               </button>
@@ -583,9 +637,9 @@ function CitaCard({ cita, onGenerarTicket, onConfirmar, onCancelar, loading }) {
           {cita.placa && <span className="placa-badge">{cita.placa}</span>}
         </div>
         <p className="cita-motivo">{cita.motivo}</p>
-        <p className="cita-telefono">📞 {cita.telefono_cliente}</p>
+        <p className="cita-telefono">{cita.telefono_cliente}</p>
         {cita.observaciones && (
-          <p className="cita-obs">💬 {cita.observaciones}</p>
+          <p className="cita-obs">{cita.observaciones}</p>
         )}
       </div>
 
@@ -598,7 +652,7 @@ function CitaCard({ cita, onGenerarTicket, onConfirmar, onCancelar, loading }) {
               disabled={loading}
               title="Confirmar cita"
             >
-              ✓ Confirmar
+              Confirmar
             </button>
           )}
           <button
@@ -606,7 +660,7 @@ function CitaCard({ cita, onGenerarTicket, onConfirmar, onCancelar, loading }) {
             onClick={() => onGenerarTicket(cita.id)}
             disabled={loading}
           >
-            🎫 Generar Ticket
+            Generar Ticket
           </button>
           <button
             className="btn-cancelar-cita"
@@ -614,14 +668,14 @@ function CitaCard({ cita, onGenerarTicket, onConfirmar, onCancelar, loading }) {
             disabled={loading}
             title="Cancelar cita"
           >
-            ✕
+            Cancelar
           </button>
         </div>
       )}
 
       {cita.estado === "CONVERTIDA" && (
         <div className="cita-convertida">
-          ✓ Convertida en ticket: {cita.ticket_codigo}
+          Convertida en ticket: {cita.ticket_codigo}
         </div>
       )}
     </div>
