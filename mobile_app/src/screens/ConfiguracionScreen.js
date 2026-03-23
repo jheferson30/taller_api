@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import {
   getServerIp, getAdminPassword, saveServerIp, saveAdminPassword,
@@ -43,8 +43,11 @@ export default function ConfiguracionScreen({ navigation, route }) {
       clearTimeout(timer);
       if (res.ok) toast(`Servidor encontrado en ${ipPrueba}`, 'success');
       else toast(`El servidor respondio con error ${res.status}`, 'error');
-    } catch { toast(`No se pudo conectar a ${ipPrueba}:8000`, 'error'); }
-    finally { setProbando(false); }
+    } catch {
+      toast(`No se pudo conectar a ${ipPrueba}:8000`, 'error');
+    } finally {
+      setProbando(false);
+    }
   };
 
   const guardar = async () => {
@@ -58,8 +61,11 @@ export default function ConfiguracionScreen({ navigation, route }) {
         if (primeraVez) navigation.replace('Home');
         else navigation.goBack();
       }, 1200);
-    } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
-    finally { setGuardando(false); }
+    } catch (e) {
+      toast('No se pudo guardar: ' + e.message, 'error');
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const borrarIp = async (ipBorrar) => {
@@ -71,11 +77,19 @@ export default function ConfiguracionScreen({ navigation, route }) {
 
   const autoDetectar = async () => {
     setProbando(true);
+    toast('Buscando servidor en la red...', 'info', 15000);
     try {
       const found = await detectarIpActiva(password);
-      if (found) { setIp(found); toast(`IP activa: ${found}`, 'success'); }
-      else toast('Ninguna IP respondio. Agrega manualmente.', 'warning');
-    } finally { setProbando(false); }
+      if (found) {
+        setIp(found);
+        setIpsGuardadas(await getIpsGuardadas());
+        toast(`Servidor encontrado: ${found}`, 'success', 3000);
+      } else {
+        toast('No se encontro el servidor. Verifica que este encendido y en la misma red.', 'warning', 4000);
+      }
+    } finally {
+      setProbando(false);
+    }
   };
 
   return (
@@ -88,23 +102,27 @@ export default function ConfiguracionScreen({ navigation, route }) {
       <Text style={styles.label}>IP del servidor</Text>
       <TextInput style={styles.input} value={ip} onChangeText={setIp}
         placeholder="192.168.1.100" placeholderTextColor="#64748b"
-        keyboardType="numeric" autoCapitalize="none" />
+        keyboardType="decimal-pad" autoCapitalize="none" />
       <Text style={styles.label}>Contrasena de administrador</Text>
       <TextInput style={styles.input} value={password} onChangeText={setPassword}
         placeholder="Contrasena" placeholderTextColor="#64748b" secureTextEntry />
       <View style={styles.fila}>
         <TouchableOpacity style={[styles.btn, styles.btnSec, { flex: 1, marginRight: 6 }]}
           onPress={() => probarConexion()} disabled={probando}>
-          {probando ? <ActivityIndicator color="#3b82f6" size="small" />
+          {probando
+            ? <ActivityIndicator color="#3b82f6" size="small" />
             : <Text style={styles.btnSecTxt}>Probar</Text>}
         </TouchableOpacity>
         <TouchableOpacity style={[styles.btn, styles.btnSec, { flex: 1, marginLeft: 6 }]}
           onPress={autoDetectar} disabled={probando}>
-          <Text style={styles.btnSecTxt}>Auto-detectar</Text>
+          {probando
+            ? <ActivityIndicator color="#3b82f6" size="small" />
+            : <Text style={styles.btnSecTxt}>Auto-detectar</Text>}
         </TouchableOpacity>
       </View>
       <TouchableOpacity style={[styles.btn, styles.btnPri]} onPress={guardar} disabled={guardando}>
-        {guardando ? <ActivityIndicator color="#fff" size="small" />
+        {guardando
+          ? <ActivityIndicator color="#fff" size="small" />
           : <Text style={styles.btnPriTxt}>Guardar y conectar</Text>}
       </TouchableOpacity>
       {ipsGuardadas.length > 0 && (
