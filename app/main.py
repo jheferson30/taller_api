@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 import socket
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -56,6 +57,34 @@ def validar_variables_entorno():
         raise RuntimeError("PDF_PASSWORD env var is required")
     if not os.getenv("ADMIN_PASSWORD") and not os.getenv("PDF_PASSWORD"):
         raise RuntimeError("ADMIN_PASSWORD env var is required")
+    # Anunciar servidor en la red local via mDNS
+    threading.Thread(target=_anunciar_mdns, daemon=True).start()
+
+
+def _anunciar_mdns():
+    """Anuncia el servidor como 'taller-pulga.local' en la red WiFi."""
+    try:
+        from zeroconf import Zeroconf, ServiceInfo
+        import socket as _socket
+        zc = Zeroconf()
+        try:
+            s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip_local = s.getsockname()[0]
+            s.close()
+        except Exception:
+            ip_local = "127.0.0.1"
+        info = ServiceInfo(
+            "_http._tcp.local.",
+            "taller-pulga._http._tcp.local.",
+            addresses=[_socket.inet_aton(ip_local)],
+            port=8000,
+            properties={"path": "/api/mobile"},
+            server="taller-pulga.local.",
+        )
+        zc.register_service(info)
+    except Exception as e:
+        print(f"[mDNS] No se pudo anunciar: {e}")
 
 
 @app.get("/info")
