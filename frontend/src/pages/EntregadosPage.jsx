@@ -203,14 +203,24 @@ export default function EntregadosPage() {
               </div>
             )}
 
-            <a
+            <button
               className="ent-pdf-btn"
-              href={`${API_BASE}/tickets/${selected.id}/pdf?token=${encodeURIComponent(ADMIN_PASSWORD)}`}
-              target="_blank"
-              rel="noreferrer"
+              onClick={async () => {
+                try {
+                  const blob = await api.descargarPdfTicket(selected.id);
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `ticket-${selected.ticket_codigo || selected.id}.pdf`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  alert("Error al descargar PDF: " + err.message);
+                }
+              }}
             >
               Descargar PDF del cliente
-            </a>
+            </button>
           </div>
         ) : (
           <div className="ent-detalle-empty">

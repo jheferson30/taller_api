@@ -8,6 +8,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { colors, estadoConfig } from '../theme';
+import { useToast } from '../components/Toast';
 
 const ESTADOS_SIGUIENTES = {
   ABIERTO: 'EN_PROCESO',
@@ -23,6 +24,7 @@ const LABELS_SIGUIENTE = {
 
 export default function TicketDetailScreen({ route, navigation }) {
   const { ticketId } = route.params;
+  const toast = useToast();
   const [ticket, setTicket] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [procesos, setProcesos] = useState([]);
@@ -51,7 +53,7 @@ export default function TicketDetailScreen({ route, navigation }) {
       setRepuestos(rep);
       setFotos(f);
       setCompras(c);} catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -77,7 +79,7 @@ export default function TicketDetailScreen({ route, navigation }) {
               await api.updateEstado(ticketId, siguiente);
               await loadData();
             } catch (e) {
-              Alert.alert('Error', e.message);
+              toast(e.message, 'error');
             } finally {
               setUpdatingEstado(false);
             }
@@ -275,10 +277,11 @@ function RepuestosTab({ repuestos, ticketId, editable, navigation }) {
 }
 
 function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
+  const toast = useToast();
   const handleEliminar = (fotoId) => {
     Alert.alert(
       'Eliminar foto',
-      '¿Estás seguro de que quieres eliminar esta foto?',
+      '¿Estas seguro de que quieres eliminar esta foto?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -289,7 +292,7 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
               await api.eliminarFoto(ticketId, fotoId);
               onRefresh();
             } catch (e) {
-              Alert.alert('Error', e.message);
+              toast(e.message, 'error');
             }
           },
         },
@@ -332,6 +335,7 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
 }
 
 function ComprasTab({ compras, ticketId, editable, navigation, onRefresh }) {
+  const toast = useToast();
   const handleEliminar = (compraId) => {
     Alert.alert('Eliminar compra', '¿Eliminar esta compra?', [
       { text: 'Cancelar', style: 'cancel' },
@@ -342,7 +346,7 @@ function ComprasTab({ compras, ticketId, editable, navigation, onRefresh }) {
             await api.eliminarCompra(ticketId, compraId);
             onRefresh();
           } catch (e) {
-            Alert.alert('Error', e.message);
+            toast(e.message, 'error');
           }
         },
       },
@@ -392,6 +396,7 @@ function ComprasTab({ compras, ticketId, editable, navigation, onRefresh }) {
 }
 
 function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scrollRef }) {
+  const toast = useToast();
   const [cobros, setCobros] = useState([]);
   const [concepto, setConcepto] = useState('');
   const [valorCobro, setValorCobro] = useState('');
@@ -426,12 +431,12 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
 
   const handleAgregarCobro = async () => {
     if (!concepto.trim()) {
-      Alert.alert('Campo requerido', 'El concepto es obligatorio');
+      toast('El concepto es obligatorio', 'warning');
       return;
     }
     const valorNum = parseInt(valorCobro, 10);
     if (isNaN(valorNum) || valorNum <= 0) {
-      Alert.alert('Valor inválido', 'Ingresa un valor numérico mayor a 0');
+      toast('Ingresa un valor numerico mayor a 0', 'warning');
       return;
     }
     setAddingCobro(true);
@@ -442,7 +447,7 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
       const [c, r] = await Promise.all([api.getCobros(ticketId), onRefresh()]);
       setCobros(c || []);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     } finally {
       setAddingCobro(false);
     }
@@ -460,7 +465,7 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
             setCobros(c);
             onRefresh();
           } catch (e) {
-            Alert.alert('Error', e.message);
+            toast(e.message, 'error');
           }
         },
       },
@@ -473,15 +478,15 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
       const c = await api.getCobros(ticketId);
       setCobros(c || []);
       onRefresh();
-      Alert.alert('✓ Agregado', `"${descripcion}" agregado como cobro por ${valor.toLocaleString('es-CO')}`);
+      toast(`"${descripcion}" agregado como cobro`, 'success');
     } catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     }
   };
 
   const handleActualizarFinanzas = async () => {
     if (totalCobros <= 0) {
-      Alert.alert('Sin cobros', 'Agrega al menos un cobro antes de guardar');
+      toast('Agrega al menos un cobro antes de guardar', 'warning');
       return;
     }
     setSavingFinanzas(true);
@@ -491,9 +496,9 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
         metodo_pago_final: metodoPago,
       });
       await onRefresh();
-      Alert.alert('✓', 'Finanzas guardadas');
+      toast('Finanzas guardadas', 'success');
     } catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     } finally {
       setSavingFinanzas(false);
     }
@@ -666,6 +671,7 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
 }
 
 function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
+  const toast = useToast();
   const [confirmadoPor, setConfirmadoPor] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [recomendaciones, setRecomendaciones] = useState('');
@@ -674,7 +680,7 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
 
   const handleEntregar = async () => {
     if (!confirmadoPor.trim()) {
-      Alert.alert('Campo requerido', 'Ingresa quién confirma la entrega');
+      toast('Ingresa quien confirma la entrega', 'warning');
       return;
     }
     Alert.alert(
@@ -693,10 +699,10 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
                 recomendaciones: recomendaciones.trim() || null,
                 proximo_mantenimiento: proximoMantenimiento.trim() || null,
               });
-              Alert.alert('✓ Éxito', 'Ticket marcado como entregado');
+              toast('Ticket marcado como entregado', 'success');
               onSuccess();
             } catch (e) {
-              Alert.alert('Error', e.message);
+              toast(e.message, 'error');
             } finally {
               setLoading(false);
             }
@@ -783,7 +789,7 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
             const url = await api.getPdfUrl(ticketId);
             await Share.share({ message: `PDF del ticket: ${url}` });
           } catch (e) {
-            Alert.alert('Error', e.message);
+            toast(e.message, 'error');
           }
         }}
       >

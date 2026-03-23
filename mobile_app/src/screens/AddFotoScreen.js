@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, Image,
+  ActivityIndicator, Image,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../api';
 import { colors } from '../theme';
+import { useToast } from '../components/Toast';
 
 const TIPOS = ['ANTES', 'DESPUES', 'OTRA'];
 
 export default function AddFotoScreen({ route, navigation }) {
   const { ticketId } = route.params;
+  const toast = useToast();
   const [uri, setUri] = useState(null);
   const [descripcion, setDescripcion] = useState('');
   const [tipo, setTipo] = useState('OTRA');
@@ -20,7 +22,7 @@ export default function AddFotoScreen({ route, navigation }) {
   const seleccionarFoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para subir fotos');
+      toast('Necesitamos acceso a tu galeria para subir fotos', 'warning');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -35,7 +37,7 @@ export default function AddFotoScreen({ route, navigation }) {
   const tomarFoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara');
+      toast('Necesitamos acceso a la camara', 'warning');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
@@ -46,7 +48,7 @@ export default function AddFotoScreen({ route, navigation }) {
 
   const handleGuardar = async () => {
     if (!uri) {
-      Alert.alert('Sin foto', 'Selecciona o toma una foto primero');
+      toast('Selecciona o toma una foto primero', 'warning');
       return;
     }
     setLoading(true);
@@ -54,7 +56,7 @@ export default function AddFotoScreen({ route, navigation }) {
       await api.subirFoto(ticketId, uri, descripcion.trim() || null, tipo);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     } finally {
       setLoading(false);
     }

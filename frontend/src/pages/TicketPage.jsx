@@ -1052,7 +1052,19 @@ export default function TicketPage() {
                       </p>
                       <button
                         className="button-download-pdf"
-                        onClick={() => window.open(`http://127.0.0.1:8000/tickets/${selectedId}/pdf?token=${encodeURIComponent(import.meta.env.VITE_ADMIN_PASSWORD || '')}`, '_blank')}
+                        onClick={async () => {
+                          try {
+                            const blob = await api.descargarPdfTicket(selectedId);
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `ticket-${resumen?.ticket?.ticket_codigo || selectedId}.pdf`;
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                          } catch (err) {
+                            setMsg("Error al descargar PDF: " + err.message);
+                          }
+                        }}
                       >
                         Descargar PDF Completo
                       </button>

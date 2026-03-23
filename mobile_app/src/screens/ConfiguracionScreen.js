@@ -1,186 +1,154 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator, ScrollView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
-import { getServerIp, getAdminPassword, saveServerIp, saveAdminPassword, getApiBaseUrl } from '../config';
-import { colors } from '../theme';
+import {
+  getServerIp, getAdminPassword, saveServerIp, saveAdminPassword,
+  getIpsGuardadas, eliminarIp, detectarIpActiva,
+} from '../config';
+import { useToast } from '../components/Toast';
 
 export default function ConfiguracionScreen({ navigation, route }) {
+  const primeraVez = route?.params?.primeraVez ?? false;
+  const toast = useToast();
   const [ip, setIp] = useState('');
   const [password, setPassword] = useState('');
+  const [ipsGuardadas, setIpsGuardadas] = useState([]);
   const [probando, setProbando] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const esPrimeraVez = route?.params?.primeraVez === true;
 
-  useEffect(() => {
-    (async () => {
-      const [savedIp, savedPwd] = await Promise.all([getServerIp(), getAdminPassword()]);
-      setIp(savedIp);
-      setPassword(savedPwd);
-    })();
+  const cargarDatos = useCallback(async () => {
+    const [ipActual, pwd, lista] = await Promise.all([
+      getServerIp(), getAdminPassword(), getIpsGuardadas(),
+    ]);
+    setIp(ipActual);
+    setPassword(pwd);
+    setIpsGuardadas(lista);
   }, []);
 
-  const probarConexion = async () => {
-    if (!ip.trim()) {
-      Alert.alert('Error', 'Ingresa una IP válida');
-      return;
-    }
+  useEffect(() => { cargarDatos(); }, [cargarDatos]);
+
+  const probarConexion = async (ipTarget) => {
+    const ipPrueba = (ipTarget || ip).trim();
+    if (!ipPrueba) { toast('Ingresa una IP primero', 'warning'); return; }
     setProbando(true);
     try {
-      const url = `http://${ip.trim()}:8000/api/mobile/estadisticas`;
-      const response = await fetch(url, {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`http://${ipPrueba}:8000/api/mobile/estadisticas`, {
         headers: { 'X-Admin-Password': password },
+        signal: controller.signal,
       });
-      if (response.ok) {
-        await saveServerIp(ip.trim());
-        await saveAdminPassword(password);
-        Alert.alert('Conexión exitosa', 'IP y contraseña guardadas correctamente.', [
-          { text: 'OK', onPress: () => esPrimeraVez && navigation.replace('Main') },
-        ]);
-      } else if (response.status === 401 || response.status === 403) {
-        Alert.alert('Contraseña incorrecta', 'La IP es correcta pero la contraseña no coincide.');
-      } else {
-        Alert.alert('Error', `El servidor respondió con código ${response.status}`);
-      }
-    } catch {
-      Alert.alert('Sin conexión', 'No se pudo conectar. Verifica que la IP sea correcta y que el servidor esté encendido.');
-    } finally {
-      setProbando(false);
-    }
+      clearTimeout(timer);
+      if (res.ok) toast(`Servidor encontrado en ${ipPrueba}`, 'success');
+      else toast(`El servidor respondio con error ${res.status}`, 'error');
+    } catch { toast(`No se pudo conectar a ${ipPrueba}:8000`, 'error'); }
+    finally { setProbando(false); }
   };
 
-  const guardarSinProbar = async () => {
-    if (!ip.trim()) {
-      Alert.alert('Error', 'Ingresa una IP válida');
-      return;
-    }
+  const guardar = async () => {
+    if (!ip.trim()) { toast('La IP no puede estar vacia', 'warning'); return; }
     setGuardando(true);
     try {
-      await saveServerIp(ip.trim());
-      await saveAdminPassword(password);
-      Alert.alert('Guardado', 'Configuración guardada.', [
-        { text: 'OK', onPress: () => esPrimeraVez && navigation.replace('Main') },
-      ]);
-    } finally {
-      setGuardando(false);
-    }
+      await Promise.all([saveServerIp(ip.trim()), saveAdminPassword(password)]);
+      setIpsGuardadas(await getIpsGuardadas());
+      toast('Configuracion guardada correctamente', 'success', 2000);
+      setTimeout(() => {
+        if (primeraVez) navigation.replace('Home');
+        else navigation.goBack();
+      }, 1200);
+    } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
+    finally { setGuardando(false); }
+  };
+
+  const borrarIp = async (ipBorrar) => {
+    await eliminarIp(ipBorrar);
+    setIpsGuardadas(await getIpsGuardadas());
+    setIp(await getServerIp());
+    toast('IP eliminada', 'info');
+  };
+
+  const autoDetectar = async () => {
+    setProbando(true);
+    try {
+      const found = await detectarIpActiva(password);
+      if (found) { setIp(found); toast(`IP activa: ${found}`, 'success'); }
+      else toast('Ninguna IP respondio. Agrega manualmente.', 'warning');
+    } finally { setProbando(false); }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Configuración del Servidor</Text>
-
-        {esPrimeraVez && (
-          <View style={styles.welcomeBanner}>
-            <Text style={styles.welcomeText}>Bienvenido. Ingresa la IP del servidor para comenzar.</Text>
-          </View>
-        )}
-
-        <Text style={styles.subtitle}>
-          Ingresa la IP de la PC donde está instalado el sistema del taller.
-          {'\n'}(Ejecuta ipconfig en esa PC para verla)
-        </Text>
-
-        <Text style={styles.label}>IP del Servidor</Text>
-        <View style={styles.inputRow}>
-          <Text style={styles.prefix}>http://</Text>
-          <TextInput
-            style={styles.input}
-            value={ip}
-            onChangeText={setIp}
-            placeholder="192.168.1.100"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
-            autoCapitalize="none"
-          />
-          <Text style={styles.suffix}>:8000</Text>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      {primeraVez && (
+        <View style={styles.banner}>
+          <Text style={styles.bannerText}>No se encontro el servidor. Configura la IP.</Text>
         </View>
-
-        <Text style={styles.label}>Contraseña de Administrador</Text>
-        <TextInput
-          style={[styles.input, styles.inputFull]}
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Contraseña"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry
-          autoCapitalize="none"
-        />
-
-        <TouchableOpacity
-          style={[styles.btnPrimary, probando && styles.btnDisabled]}
-          onPress={probarConexion}
-          disabled={probando || guardando}
-        >
-          {probando
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>Probar y Guardar</Text>
-          }
+      )}
+      <Text style={styles.label}>IP del servidor</Text>
+      <TextInput style={styles.input} value={ip} onChangeText={setIp}
+        placeholder="192.168.1.100" placeholderTextColor="#64748b"
+        keyboardType="numeric" autoCapitalize="none" />
+      <Text style={styles.label}>Contrasena de administrador</Text>
+      <TextInput style={styles.input} value={password} onChangeText={setPassword}
+        placeholder="Contrasena" placeholderTextColor="#64748b" secureTextEntry />
+      <View style={styles.fila}>
+        <TouchableOpacity style={[styles.btn, styles.btnSec, { flex: 1, marginRight: 6 }]}
+          onPress={() => probarConexion()} disabled={probando}>
+          {probando ? <ActivityIndicator color="#3b82f6" size="small" />
+            : <Text style={styles.btnSecTxt}>Probar</Text>}
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.btnSecondary, guardando && styles.btnDisabled]}
-          onPress={guardarSinProbar}
-          disabled={probando || guardando}
-        >
-          {guardando
-            ? <ActivityIndicator color={colors.textMuted} />
-            : <Text style={styles.btnSecondaryText}>Guardar sin probar</Text>
-          }
+        <TouchableOpacity style={[styles.btn, styles.btnSec, { flex: 1, marginLeft: 6 }]}
+          onPress={autoDetectar} disabled={probando}>
+          <Text style={styles.btnSecTxt}>Auto-detectar</Text>
         </TouchableOpacity>
       </View>
-
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>¿Cómo encontrar la IP?</Text>
-        <Text style={styles.infoText}>1. En la PC del taller, abre la terminal</Text>
-        <Text style={styles.infoText}>2. Escribe: ipconfig</Text>
-        <Text style={styles.infoText}>3. Busca "Dirección IPv4"</Text>
-        <Text style={styles.infoText}>4. Ejemplo: 192.168.1.50</Text>
-      </View>
+      <TouchableOpacity style={[styles.btn, styles.btnPri]} onPress={guardar} disabled={guardando}>
+        {guardando ? <ActivityIndicator color="#fff" size="small" />
+          : <Text style={styles.btnPriTxt}>Guardar y conectar</Text>}
+      </TouchableOpacity>
+      {ipsGuardadas.length > 0 && (
+        <View style={{ marginTop: 24 }}>
+          <Text style={styles.label}>IPs guardadas</Text>
+          {ipsGuardadas.map((item) => (
+            <View key={item} style={styles.ipFila}>
+              <TouchableOpacity style={styles.ipBtn} onPress={() => setIp(item)}>
+                <Text style={[styles.ipTxt, item === ip && styles.ipActiva]}>
+                  {item === ip ? '* ' : '  '}{item}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.ipProbarBtn} onPress={() => probarConexion(item)}>
+                <Text style={styles.ipProbarTxt}>Probar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.ipBorrarBtn} onPress={() => borrarIp(item)}>
+                <Text style={styles.ipBorrarTxt}>X</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 20 },
-  card: {
-    backgroundColor: colors.surface, borderRadius: 12,
-    padding: 20, borderWidth: 1, borderColor: colors.border,
-  },
-  title: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  subtitle: { fontSize: 13, color: colors.textMuted, marginBottom: 20, lineHeight: 20 },
-  label: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' },
-  inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  prefix: { fontSize: 14, color: colors.textMuted, marginRight: 4 },
-  suffix: { fontSize: 14, color: colors.textMuted, marginLeft: 4 },
-  input: {
-    flex: 1, backgroundColor: colors.background, borderWidth: 1,
-    borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12,
-    paddingVertical: 10, fontSize: 16, color: colors.text, textAlign: 'center',
-  },
-  inputFull: {
-    flex: 0, width: '100%', marginBottom: 20, textAlign: 'left',
-  },
-  btnPrimary: {
-    backgroundColor: colors.primary, borderRadius: 10,
-    paddingVertical: 14, alignItems: 'center', marginBottom: 10,
-  },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  btnSecondary: { paddingVertical: 12, alignItems: 'center' },
-  btnSecondaryText: { color: colors.textMuted, fontSize: 14 },
-  infoCard: {
-    backgroundColor: colors.surface, borderRadius: 12, padding: 16,
-    borderWidth: 1, borderColor: colors.border, marginTop: 16,
-  },
-  infoTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 10 },
-  infoText: { fontSize: 13, color: colors.textMuted, marginBottom: 4 },
-  welcomeBanner: {
-    backgroundColor: '#dbeafe', borderRadius: 8, padding: 12, marginBottom: 16,
-    borderLeftWidth: 4, borderLeftColor: '#1e40af',
-  },
-  welcomeText: { fontSize: 13, color: '#1e40af', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
+  banner: { backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, marginBottom: 16 },
+  bannerText: { color: '#fff', fontSize: 14, textAlign: 'center' },
+  label: { color: '#94a3b8', fontSize: 13, marginBottom: 6, marginTop: 12 },
+  input: { backgroundColor: '#1e293b', color: '#f1f5f9', borderRadius: 8, padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#334155' },
+  fila: { flexDirection: 'row', marginTop: 12 },
+  btn: { borderRadius: 8, padding: 13, alignItems: 'center', marginTop: 10 },
+  btnPri: { backgroundColor: '#2563eb', marginTop: 16 },
+  btnPriTxt: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  btnSec: { backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155' },
+  btnSecTxt: { color: '#3b82f6', fontSize: 14 },
+  ipFila: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 8, marginBottom: 6, paddingLeft: 12 },
+  ipBtn: { flex: 1, paddingVertical: 12 },
+  ipTxt: { color: '#94a3b8', fontSize: 14 },
+  ipActiva: { color: '#3b82f6', fontWeight: 'bold' },
+  ipProbarBtn: { paddingHorizontal: 10, paddingVertical: 12 },
+  ipProbarTxt: { color: '#3b82f6', fontSize: 13 },
+  ipBorrarBtn: { paddingHorizontal: 14, paddingVertical: 12 },
+  ipBorrarTxt: { color: '#ef4444', fontSize: 16 },
 });

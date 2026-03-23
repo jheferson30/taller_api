@@ -139,7 +139,9 @@ export const api = {
 
   descargarPdf: async (ticketId) => {
     const [base, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(password)}`);
+    const response = await fetch(`${base}/tickets/${ticketId}/pdf`, {
+      headers: { 'X-Admin-Password': password },
+    });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Error ${response.status}`);

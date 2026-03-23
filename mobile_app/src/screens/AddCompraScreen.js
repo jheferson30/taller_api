@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, Image,
+  ActivityIndicator, Image,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { colors } from '../theme';
 import { api } from '../api';
+import { useToast } from '../components/Toast';
 
 export default function AddCompraScreen({ route, navigation }) {
   const { ticketId } = route.params;
+  const toast = useToast();
   const [descripcion, setDescripcion] = useState('');
   const [valor, setValor] = useState('');
   const [responsable, setResponsable] = useState('');
@@ -26,7 +28,7 @@ export default function AddCompraScreen({ route, navigation }) {
   const seleccionarSoporte = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería');
+      toast('Necesitamos acceso a tu galeria', 'warning');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -39,7 +41,7 @@ export default function AddCompraScreen({ route, navigation }) {
   const tomarFoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara');
+      toast('Necesitamos acceso a la camara', 'warning');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
@@ -48,15 +50,14 @@ export default function AddCompraScreen({ route, navigation }) {
 
   const handleGuardar = async () => {
     if (!descripcion.trim()) {
-      Alert.alert('Campo requerido', 'La descripción es obligatoria');
+      toast('La descripcion es obligatoria', 'warning');
       return;
     }
     const valorNum = parseInt(valor, 10);
     if (isNaN(valorNum) || valorNum <= 0) {
-      Alert.alert('Valor inválido', 'Ingresa un valor mayor a 0');
+      toast('Ingresa un valor mayor a 0', 'warning');
       return;
     }
-
     setLoading(true);
     try {
       const formData = new FormData();
@@ -80,7 +81,7 @@ export default function AddCompraScreen({ route, navigation }) {
       }, uri);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     } finally {
       setLoading(false);
     }

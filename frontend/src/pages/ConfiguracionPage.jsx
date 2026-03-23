@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import EconomiaAuth from "../components/EconomiaAuth";
+import { QRCodeSVG } from "qrcode.react";
 export default function ConfiguracionPage() {
   const [autenticado, setAutenticado] = useState(false);
   const [tienePassword, setTienePassword] = useState(null);
@@ -48,7 +49,9 @@ function ConfiguracionInterna() {
 
   // ── IP del servidor ──
   const [infoSistema, setInfoSistema] = useState(null);
+  const [qrData, setQrData] = useState(null);
   const [copiado, setCopiado] = useState(false);
+  const [mostrarQr, setMostrarQr] = useState(false);
 
   useEffect(() => {
     cargarMecanicos();
@@ -56,6 +59,7 @@ function ConfiguracionInterna() {
     api.obtenerProcesosRapidos().then((r) => setProcesos(r.procesos));
     api.obtenerCobrosRapidos().then((r) => setCobros(r.cobros));
     api.infoSistema().then(setInfoSistema).catch(() => {});
+    api.infoConexionQr().then((r) => setQrData(r.qr_data)).catch(() => {});
   }, []);
 
   const copiarIP = () => {
@@ -311,7 +315,8 @@ function ConfiguracionInterna() {
       {/* ── Conexión App Móvil ── */}
       <section className="config-section">
         <h2 className="config-section-title">Conexión App Móvil</h2>
-        <p className="config-section-desc">Usa esta IP en la app móvil para conectarla al sistema</p>
+        <p className="config-section-desc">Escanea el QR desde la app para configurarla automáticamente</p>
+
         <div className="ip-display" style={{ marginTop: 12 }}>
           <span className="ip-value">{infoSistema?.ip_servidor || "Cargando..."}</span>
           {infoSistema && <span className="ip-port">:{infoSistema.puerto}</span>}
@@ -321,9 +326,29 @@ function ConfiguracionInterna() {
             </button>
           )}
         </div>
-        <p className="ip-hint" style={{ marginTop: 10 }}>
-          En la app móvil: toca Configuracion → ingresa <strong>{infoSistema?.ip_servidor || "..."}</strong>
-        </p>
+
+        {qrData && (
+          <div style={{ marginTop: 16 }}>
+            <button
+              className="btn-primary"
+              style={{ marginBottom: 12 }}
+              onClick={() => setMostrarQr(!mostrarQr)}
+            >
+              {mostrarQr ? "Ocultar QR" : "Mostrar QR de conexión"}
+            </button>
+            {mostrarQr && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+                <div style={{ background: "#fff", padding: 16, borderRadius: 12, display: "inline-block", border: "1px solid #e2e8f0" }}>
+                  <QRCodeSVG value={qrData} size={200} />
+                </div>
+                <p className="ip-hint">
+                  En la app: toca <strong>Configuracion → Escanear QR</strong> y apunta la cámara aquí.
+                  Se configurará la IP y contraseña automáticamente.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
     </div>

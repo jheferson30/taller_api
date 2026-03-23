@@ -6,9 +6,41 @@ import os
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether
+)
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+
+
+# ── Paleta (misma que pdf_generator.py) ─────────────────────────────────────
+AZUL        = colors.HexColor('#1e3a5f')
+AZUL_MEDIO  = colors.HexColor('#2563eb')
+AZUL_CLARO  = colors.HexColor('#dbeafe')
+VERDE       = colors.HexColor('#166534')
+VERDE_MEDIO = colors.HexColor('#16a34a')
+VERDE_BG    = colors.HexColor('#dcfce7')
+ROJO        = colors.HexColor('#991b1b')
+ROJO_MEDIO  = colors.HexColor('#dc2626')
+ROJO_BG     = colors.HexColor('#fee2e2')
+GRIS_BORDE  = colors.HexColor('#cbd5e1')
+GRIS_FILA   = colors.HexColor('#f8fafc')
+TEXTO       = colors.HexColor('#1e293b')
+TEXTO_MUTED = colors.HexColor('#64748b')
+
+
+def fmt_cop(valor) -> str:
+    try:
+        return f"${int(valor):,}".replace(",", ".")
+    except Exception:
+        return "$0"
+
+
+def limpiar_categoria(cat) -> str:
+    s = str(cat)
+    if "CategoriaEgreso." in s:
+        s = s.replace("CategoriaEgreso.", "")
+    return s.strip()
 
 
 def generar_pdf_economia_profesional(
@@ -18,366 +50,363 @@ def generar_pdf_economia_profesional(
     egresos: List[Dict],
     datos_taller: Dict = None,
 ) -> bytes:
-    """
-    Genera un PDF profesional del reporte de economía diaria
-    """
     buffer = BytesIO()
     doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=letter, 
-        topMargin=0.5*inch, 
-        bottomMargin=0.5*inch,
-        leftMargin=0.5*inch,
-        rightMargin=0.5*inch
+        buffer,
+        pagesize=letter,
+        topMargin=0.45 * inch,
+        bottomMargin=0.5 * inch,
+        leftMargin=0.55 * inch,
+        rightMargin=0.55 * inch,
     )
-    
-    # Estilos
+
     styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle(
-        'Title',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceAfter=15,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    
-    section_style = ParagraphStyle(
-        'Section',
-        parent=styles['Heading2'],
-        fontSize=11,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceAfter=6,
-        spaceBefore=12,
-        fontName='Helvetica-Bold',
-        borderWidth=1,
-        borderColor=colors.HexColor('#95a5a6'),
-        borderPadding=4,
-        backColor=colors.HexColor('#d5dbdb')
-    )
-    
-    normal_style = ParagraphStyle(
-        'Normal',
-        parent=styles['Normal'],
-        fontSize=8,
-        spaceAfter=3,
-        leading=10
-    )
-    
-    # Colores grises profesionales
-    GRAY_DARK = colors.HexColor('#7f8c8d')
-    GRAY_MEDIUM = colors.HexColor('#95a5a6')
-    GRAY_LIGHT = colors.HexColor('#d5dbdb')
-    GRAY_LIGHTER = colors.HexColor('#ecf0f1')
-    GRAY_BORDER = colors.HexColor('#bdc3c7')
-    GREEN = colors.HexColor('#059669')
-    RED = colors.HexColor('#e74c3c')
-    BLUE = colors.HexColor('#1e40af')
-    
+    W = 7.4 * inch
+
+    def estilo(name, **kw):
+        base = kw.pop("parent", styles["Normal"])
+        return ParagraphStyle(name, parent=base, **kw)
+
+    s_titulo      = estilo("Titulo", fontSize=18, fontName="Helvetica-Bold",
+                           textColor=AZUL, alignment=TA_RIGHT, leading=22)
+    s_subtitulo   = estilo("Sub", fontSize=8, textColor=TEXTO_MUTED,
+                           alignment=TA_RIGHT, leading=11)
+    s_nombre      = estilo("Nombre", fontSize=13, fontName="Helvetica-Bold",
+                           textColor=AZUL, leading=16)
+    s_dato        = estilo("Dato", fontSize=8, textColor=TEXTO_MUTED, leading=11)
+    s_seccion     = estilo("Sec", fontSize=9, fontName="Helvetica-Bold",
+                           textColor=colors.white, leading=12)
+    s_label       = estilo("Lbl", fontSize=8, fontName="Helvetica-Bold",
+                           textColor=TEXTO, leading=11)
+    s_valor       = estilo("Val", fontSize=8, textColor=TEXTO, leading=11)
+    s_valor_r     = estilo("ValR", fontSize=8, textColor=TEXTO,
+                           alignment=TA_RIGHT, leading=11)
+    s_bold_r      = estilo("BoldR", fontSize=9, fontName="Helvetica-Bold",
+                           textColor=colors.white, alignment=TA_RIGHT, leading=12)
+    s_bold_l      = estilo("BoldL", fontSize=9, fontName="Helvetica-Bold",
+                           textColor=colors.white, leading=12)
+    s_footer      = estilo("Footer", fontSize=7, textColor=TEXTO_MUTED,
+                           alignment=TA_CENTER, leading=10)
+    s_small       = estilo("Small", fontSize=7, textColor=TEXTO_MUTED, leading=10)
+
     story = []
 
-    # ===== ENCABEZADO PROFESIONAL (igual que PDF de tickets) =====
-    nombre_taller = (datos_taller or {}).get('nombre') or 'Taller Mecánico'
-    direccion     = (datos_taller or {}).get('direccion') or ''
-    telefono      = (datos_taller or {}).get('telefono') or ''
-    nit           = (datos_taller or {}).get('nit') or ''
+    # ── Datos del taller ─────────────────────────────────────────────────────
+    dt = datos_taller or {}
+    nombre_taller = dt.get("nombre") or dt.get("nombre_taller") or "Taller Mecánico"
+    direccion     = dt.get("direccion") or ""
+    telefono      = dt.get("telefono") or ""
+    nit           = dt.get("nit") or ""
 
-    nombre_style = ParagraphStyle(
-        'NombreTaller', parent=styles['Normal'],
-        fontSize=14, fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#2c3e50'), leading=17, spaceAfter=2,
-    )
-    dato_taller_style = ParagraphStyle(
-        'DatoTaller', parent=styles['Normal'],
-        fontSize=8, textColor=colors.HexColor('#555555'), leading=11,
-    )
-    comprobante_style = ParagraphStyle(
-        'Comprobante', parent=styles['Normal'],
-        fontSize=16, fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#2c3e50'),
-        alignment=TA_RIGHT, leading=20, spaceAfter=2,
-    )
-    fecha_gen_style = ParagraphStyle(
-        'FechaGen', parent=styles['Normal'],
-        fontSize=7, textColor=colors.HexColor('#888888'),
-        alignment=TA_RIGHT, leading=10,
-    )
+    fecha_gen       = datetime.now().strftime("%d/%m/%Y %H:%M")
+    try:
+        fecha_fmt = datetime.strptime(fecha, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except Exception:
+        fecha_fmt = fecha
 
+    # ── ENCABEZADO ───────────────────────────────────────────────────────────
     logo_path = os.path.join("frontend", "public", "assets", "logo.png")
     col_izq = []
     if os.path.exists(logo_path):
         try:
-            col_izq.append(Image(logo_path, width=0.7*inch, height=0.7*inch))
+            col_izq.append(Image(logo_path, width=0.65 * inch, height=0.65 * inch))
+            col_izq.append(Spacer(1, 3))
         except Exception:
             pass
-    col_izq.append(Spacer(1, 4))
-    col_izq.append(Paragraph(nombre_taller, nombre_style))
-    if direccion:
-        col_izq.append(Paragraph(f"Dir: {direccion}", dato_taller_style))
-    if telefono:
-        col_izq.append(Paragraph(f"Tel: {telefono}", dato_taller_style))
-    if nit:
-        col_izq.append(Paragraph(f"NIT: {nit}", dato_taller_style))
+    col_izq.append(Paragraph(nombre_taller, s_nombre))
+    for txt, val in [("Dir", direccion), ("Tel", telefono), ("NIT", nit)]:
+        if val:
+            col_izq.append(Paragraph(f"{txt}: {val}", s_dato))
 
-    fecha_gen = datetime.now().strftime("%d/%m/%Y %H:%M")
-    fecha_formateada = datetime.strptime(fecha, '%Y-%m-%d').strftime('%d/%m/%Y')
     col_der = [
-        Paragraph("REPORTE DE ECONOMÍA DIARIA", comprobante_style),
-        Paragraph(f"Fecha: {fecha_formateada}", fecha_gen_style),
-        Paragraph(f"Generado: {fecha_gen}", fecha_gen_style),
+        Paragraph("REPORTE DE ECONOMÍA DIARIA", s_titulo),
+        Paragraph(f"Fecha del reporte: {fecha_fmt}", s_subtitulo),
+        Spacer(1, 3),
+        Paragraph(f"Generado: {fecha_gen}", s_subtitulo),
     ]
 
-    header_table = Table([[col_izq, col_der]], colWidths=[3.5*inch, 4.0*inch])
-    header_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    header = Table([[col_izq, col_der]], colWidths=[3.6 * inch, 3.8 * inch])
+    header.setStyle(TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",         (1, 0), (1, 0),   "RIGHT"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
-    story.append(header_table)
+    story.append(header)
 
-    # Línea separadora azul
-    sep_table = Table([['']], colWidths=[7.5*inch])
-    sep_table.setStyle(TableStyle([
-        ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.HexColor('#2c3e50')),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
+    sep = Table([[""]], colWidths=[W])
+    sep.setStyle(TableStyle([
+        ("LINEBELOW",     (0, 0), (-1, 0), 2, AZUL),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
     ]))
-    story.append(sep_table)
-    story.append(Spacer(1, 0.15*inch))
-    
-    # ===== RESUMEN EJECUTIVO =====
-    story.append(Paragraph("RESUMEN EJECUTIVO", section_style))
+    story.append(sep)
+    story.append(Spacer(1, 0.14 * inch))
 
-    resumen_data = [
-        ['Concepto', 'Valor'],
-        ['Ingresos por Anticipos', f"${resumen.get('ingreso_anticipo', 0):,}"],
-        ['Ingresos por Cobros Finales', f"${resumen.get('ingreso_final', 0):,}"],
-        ['Total Ingresos', f"${resumen.get('ingresos', 0):,}"],
-        ['Total Egresos', f"${resumen.get('egresos', 0):,}"],
-        ['Balance del Día', f"${resumen.get('balance', 0):,}"],
+    # ── Helpers ──────────────────────────────────────────────────────────────
+    def cab(titulo, color=AZUL):
+        t = Table([[Paragraph(titulo, s_seccion)]], colWidths=[W])
+        t.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), color),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+        ]))
+        return t
+
+    def tbl_base(rows, col_widths, header_color=AZUL_CLARO, align_last_right=True):
+        tbl = Table(rows, colWidths=col_widths)
+        n = len(rows)
+        cmds = [
+            ("FONTSIZE",      (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+            ("BACKGROUND",    (0, 0), (-1, 0),  header_color),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, GRIS_FILA]),
+            ("BOX",           (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+            ("LINEBELOW",     (0, 0), (-1, -1), 0.3, GRIS_BORDE),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ]
+        if align_last_right:
+            cmds.append(("ALIGN", (-1, 0), (-1, -1), "RIGHT"))
+        tbl.setStyle(TableStyle(cmds))
+        return tbl
+
+    # ── RESUMEN EJECUTIVO ────────────────────────────────────────────────────
+    ing_anticipo = resumen.get("ingreso_anticipo", 0) or 0
+    ing_final    = resumen.get("ingreso_final", 0) or 0
+    total_ing    = resumen.get("ingresos", 0) or 0
+    total_egr    = resumen.get("egresos", 0) or 0
+    balance      = resumen.get("balance", 0) or 0
+
+    # Tarjetas de resumen en una fila
+    def tarjeta(titulo, valor, bg, txt_color=colors.white):
+        inner = Table([
+            [Paragraph(titulo, estilo(f"CT{titulo}", fontSize=7, textColor=txt_color,
+                                     fontName="Helvetica-Bold", alignment=TA_CENTER))],
+            [Paragraph(fmt_cop(valor), estilo(f"CV{titulo}", fontSize=13,
+                                              fontName="Helvetica-Bold",
+                                              textColor=txt_color, alignment=TA_CENTER))],
+        ], colWidths=[1.7 * inch])
+        inner.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), bg),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+            ("ROUNDEDCORNERS", [6, 6, 6, 6]),
+        ]))
+        return inner
+
+    tarjetas = Table([[
+        tarjeta("Anticipos",       ing_anticipo, AZUL_MEDIO),
+        tarjeta("Cobros finales",  ing_final,    AZUL),
+        tarjeta("Total ingresos",  total_ing,    VERDE_MEDIO),
+        tarjeta("Total egresos",   total_egr,    ROJO_MEDIO),
+        tarjeta("Balance del día", balance,
+                VERDE_MEDIO if balance >= 0 else ROJO_MEDIO),
+    ]], colWidths=[1.48 * inch] * 5)
+    tarjetas.setStyle(TableStyle([
+        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+    ]))
+
+    story.append(KeepTogether([
+        cab("RESUMEN EJECUTIVO"),
+        Spacer(1, 6),
+        tarjetas,
+        Spacer(1, 0.14 * inch),
+    ]))
+
+    # ── ESTADÍSTICAS DEL DÍA ────────────────────────────────────────────────
+    stats = [
+        [Paragraph("Tickets cerrados hoy", s_label),
+         Paragraph(str(resumen.get("tickets_cerrados_hoy", 0)), s_valor)],
+        [Paragraph("Tickets con anticipo hoy", s_label),
+         Paragraph(str(resumen.get("tickets_abiertos_con_anticipo_hoy", 0)), s_valor)],
+        [Paragraph("Anticipos registrados", s_label),
+         Paragraph(str(len(ingresos.get("anticipos", []))), s_valor)],
+        [Paragraph("Cobros finales registrados", s_label),
+         Paragraph(str(len(ingresos.get("cobros_finales", []))), s_valor)],
+        [Paragraph("Egresos registrados", s_label),
+         Paragraph(str(len(egresos)), s_valor)],
     ]
-    
-    tabla_resumen = Table(resumen_data, colWidths=[4.5*inch, 2.5*inch])
-    tabla_resumen.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), GRAY_MEDIUM),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('GRID', (0, 0), (-1, -1), 0.5, GRAY_BORDER),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -3), [colors.white, GRAY_LIGHTER]),
-        # Total Ingresos (fila 3) → azul
-        ('BACKGROUND', (0, 3), (-1, 3), BLUE),
-        ('TEXTCOLOR', (0, 3), (-1, 3), colors.white),
-        ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'),
-        # Total Egresos (fila 4) → rojo
-        ('BACKGROUND', (0, 4), (-1, 4), RED),
-        ('TEXTCOLOR', (0, 4), (-1, 4), colors.white),
-        ('FONTNAME', (0, 4), (-1, 4), 'Helvetica-Bold'),
-        # Balance (fila 5) → verde
-        ('BACKGROUND', (0, 5), (-1, 5), GREEN),
-        ('TEXTCOLOR', (0, 5), (-1, 5), colors.white),
-        ('FONTNAME', (0, 5), (-1, 5), 'Helvetica-Bold'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    tbl_stats = Table(stats, colWidths=[5.4 * inch, 2.0 * inch])
+    tbl_stats.setStyle(TableStyle([
+        ("FONTSIZE",      (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+        ("ROWBACKGROUNDS",(0, 0), (-1, -1), [AZUL_CLARO, colors.white]),
+        ("BOX",           (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+        ("LINEBELOW",     (0, 0), (-1, -1), 0.3, GRIS_BORDE),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",         (1, 0), (1, -1),  "CENTER"),
     ]))
-    story.append(tabla_resumen)
-    story.append(Spacer(1, 0.12*inch))
-
-    # ===== ESTADÍSTICAS ADICIONALES =====
-    story.append(Paragraph("ESTADÍSTICAS DEL DÍA", section_style))
-    
-    stats_data = [
-        ['Tickets Cerrados', str(resumen.get('tickets_cerrados_hoy', 0))],
-        ['Tickets Abiertos con Anticipo', str(resumen.get('tickets_abiertos_con_anticipo_hoy', 0))],
-        ['Total Anticipos Recibidos', str(len(ingresos.get('anticipos', [])))],
-        ['Total Cobros Finales', str(len(ingresos.get('cobros_finales', [])))],
-        ['Total Egresos Registrados', str(len(egresos))],
-    ]
-    
-    tabla_stats = Table(stats_data, colWidths=[5*inch, 2*inch])
-    tabla_stats.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), GRAY_LIGHT),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('GRID', (0, 0), (-1, -1), 0.5, GRAY_BORDER),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    story.append(KeepTogether([
+        cab("ESTADÍSTICAS DEL DÍA"),
+        tbl_stats,
+        Spacer(1, 0.14 * inch),
     ]))
-    story.append(tabla_stats)
-    story.append(Spacer(1, 0.15*inch))
 
-    # ===== DETALLE DE ANTICIPOS =====
-    anticipos = ingresos.get('anticipos', [])
+    # ── ANTICIPOS ────────────────────────────────────────────────────────────
+    anticipos = ingresos.get("anticipos", [])
     if anticipos:
-        story.append(Paragraph("DETALLE DE ANTICIPOS RECIBIDOS", section_style))
-        
-        anticipos_data = [['Ticket', 'Placa', 'Método Pago', 'Responsable', 'Valor']]
+        rows = [[
+            Paragraph("Ticket",       s_label),
+            Paragraph("Placa",        s_label),
+            Paragraph("Método",       s_label),
+            Paragraph("Responsable",  s_label),
+            Paragraph("Valor",        estilo("LR", fontSize=8, fontName="Helvetica-Bold",
+                                             textColor=TEXTO, alignment=TA_RIGHT)),
+        ]]
         for a in anticipos:
-            anticipos_data.append([
-                a.get('ticket_codigo', 'N/A'),
-                a.get('placa', 'N/A'),
-                a.get('metodo_pago', 'N/A'),
-                a.get('responsable', 'N/A'),
-                f"${a.get('valor_anticipo', 0):,}"
+            rows.append([
+                Paragraph(a.get("ticket_codigo") or "—", s_small),
+                Paragraph(a.get("placa") or "—", s_valor),
+                Paragraph(a.get("metodo_pago") or "—", s_valor),
+                Paragraph(a.get("responsable") or "—", s_valor),
+                Paragraph(fmt_cop(a.get("valor_anticipo", 0)), s_valor_r),
             ])
-        
-        tabla_anticipos = Table(anticipos_data, colWidths=[2*inch, 0.8*inch, 1.2*inch, 1.3*inch, 1.7*inch])
-        tabla_anticipos.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), GREEN),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (4, 0), (4, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 6.5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('GRID', (0, 0), (-1, -1), 0.5, GRAY_BORDER),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, GRAY_LIGHTER]),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('WORDWRAP', (0, 0), (-1, -1), True),
+        tbl = tbl_base(rows, [2.2*inch, 0.9*inch, 1.2*inch, 1.5*inch, 1.6*inch])
+        story.append(KeepTogether([
+            cab("ANTICIPOS RECIBIDOS", VERDE_MEDIO),
+            tbl,
+            Spacer(1, 0.14 * inch),
         ]))
-        story.append(tabla_anticipos)
-        story.append(Spacer(1, 0.12*inch))
 
-    # ===== DETALLE DE COBROS FINALES =====
-    cobros_finales = ingresos.get('cobros_finales', [])
+    # ── COBROS FINALES ───────────────────────────────────────────────────────
+    cobros_finales = ingresos.get("cobros_finales", [])
     if cobros_finales:
-        story.append(Paragraph("DETALLE DE COBROS FINALES", section_style))
-        
-        cobros_data = [['Ticket', 'Placa', 'Método Pago', 'Responsable', 'Valor']]
+        rows = [[
+            Paragraph("Ticket",       s_label),
+            Paragraph("Placa",        s_label),
+            Paragraph("Método",       s_label),
+            Paragraph("Responsable",  s_label),
+            Paragraph("Valor",        estilo("LR2", fontSize=8, fontName="Helvetica-Bold",
+                                             textColor=TEXTO, alignment=TA_RIGHT)),
+        ]]
         for c in cobros_finales:
-            cobros_data.append([
-                c.get('ticket_codigo', 'N/A'),
-                c.get('placa', 'N/A'),
-                c.get('metodo_pago', 'N/A'),
-                c.get('responsable', 'N/A'),
-                f"${c.get('valor_final_cobrado', 0):,}"
+            rows.append([
+                Paragraph(c.get("ticket_codigo") or "—", s_small),
+                Paragraph(c.get("placa") or "—", s_valor),
+                Paragraph(c.get("metodo_pago") or "—", s_valor),
+                Paragraph(c.get("responsable") or "—", s_valor),
+                Paragraph(fmt_cop(c.get("valor_final_cobrado", 0)), s_valor_r),
             ])
-        
-        tabla_cobros = Table(cobros_data, colWidths=[2*inch, 0.8*inch, 1.2*inch, 1.3*inch, 1.7*inch])
-        tabla_cobros.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), GREEN),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (4, 0), (4, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 6.5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('GRID', (0, 0), (-1, -1), 0.5, GRAY_BORDER),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, GRAY_LIGHTER]),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('WORDWRAP', (0, 0), (-1, -1), True),
+        tbl = tbl_base(rows, [2.2*inch, 0.9*inch, 1.2*inch, 1.5*inch, 1.6*inch])
+        story.append(KeepTogether([
+            cab("COBROS FINALES", VERDE_MEDIO),
+            tbl,
+            Spacer(1, 0.14 * inch),
         ]))
-        story.append(tabla_cobros)
-        story.append(Spacer(1, 0.12*inch))
 
-    # ===== DETALLE DE EGRESOS =====
+    # ── EGRESOS ──────────────────────────────────────────────────────────────
     if egresos:
-        story.append(Paragraph("DETALLE DE EGRESOS", section_style))
-        
-        # Agrupar por categoría
-        egresos_por_cat = {}
+        # Resumen por categoría
+        por_cat: Dict[str, list] = {}
         for e in egresos:
-            cat = e.get('categoria', 'OTRO')
-            if cat not in egresos_por_cat:
-                egresos_por_cat[cat] = []
-            egresos_por_cat[cat].append(e)
-        
-        # Mostrar resumen por categoría
-        cat_resumen_data = [['Categoría', 'Cantidad', 'Total']]
-        for cat, items in egresos_por_cat.items():
-            # Limpiar nombre de categoría
-            cat_limpio = str(cat)
-            if 'CategoriaEgreso.' in cat_limpio:
-                cat_limpio = cat_limpio.replace('CategoriaEgreso.', '')
-            cat_limpio = cat_limpio[:15]
-            
-            total_cat = sum(item.get('valor', 0) for item in items)
-            cat_resumen_data.append([cat_limpio, str(len(items)), f"${total_cat:,}"])
-        
-        tabla_cat_resumen = Table(cat_resumen_data, colWidths=[3*inch, 2*inch, 2*inch])
-        tabla_cat_resumen.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), RED),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (1, -1), 'CENTER'),
-            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('GRID', (0, 0), (-1, -1), 0.5, GRAY_BORDER),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, GRAY_LIGHTER]),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('WORDWRAP', (0, 0), (-1, -1), True),
-        ]))
-        story.append(tabla_cat_resumen)
-        story.append(Spacer(1, 0.12*inch))
-        
-        # Detalle completo de egresos
-        story.append(Paragraph("Detalle Completo de Egresos", 
-            ParagraphStyle('SubSection', parent=normal_style, fontSize=9, fontName='Helvetica-Bold', spaceAfter=6)))
-        
-        egresos_data = [['Categoría', 'Concepto', 'Ticket', 'Responsable', 'Valor']]
-        for e in egresos:
-            # Limpiar y truncar categoría
-            categoria = e.get('categoria', 'OTRO')
-            if 'CategoriaEgreso.' in str(categoria):
-                categoria = str(categoria).replace('CategoriaEgreso.', '')
-            categoria = str(categoria)[:12]
-            
-            # Truncar otros campos
-            concepto = str(e.get('concepto', 'N/A'))[:40]
-            ticket = str(e.get('ticket_codigo', '-'))[:22] if e.get('ticket_codigo') else '-'
-            responsable = str(e.get('responsable', 'N/A'))[:18]
-            
-            egresos_data.append([
-                categoria,
-                concepto,
-                ticket,
-                responsable,
-                f"${e.get('valor', 0):,}"
-            ])
-        
-        tabla_egresos = Table(egresos_data, colWidths=[0.9*inch, 2.3*inch, 1.6*inch, 1.2*inch, 1*inch])
-        tabla_egresos.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), RED),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (4, 0), (4, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 6.5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('GRID', (0, 0), (-1, -1), 0.5, GRAY_BORDER),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, GRAY_LIGHTER]),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('WORDWRAP', (0, 0), (-1, -1), True),
-        ]))
-        story.append(tabla_egresos)
+            cat = limpiar_categoria(e.get("categoria", "OTRO"))
+            por_cat.setdefault(cat, []).append(e)
 
-    # ===== PIE DE PÁGINA =====
-    story.append(Spacer(1, 0.25*inch))
+        rows_cat = [[
+            Paragraph("Categoría",  s_label),
+            Paragraph("Cantidad",   estilo("CC", fontSize=8, fontName="Helvetica-Bold",
+                                           textColor=TEXTO, alignment=TA_CENTER)),
+            Paragraph("Total",      estilo("CT2", fontSize=8, fontName="Helvetica-Bold",
+                                           textColor=TEXTO, alignment=TA_RIGHT)),
+        ]]
+        for cat, items in por_cat.items():
+            total_cat = sum(i.get("valor", 0) for i in items)
+            rows_cat.append([
+                Paragraph(cat, s_valor),
+                Paragraph(str(len(items)),
+                          estilo("Cnt", fontSize=8, textColor=TEXTO, alignment=TA_CENTER)),
+                Paragraph(fmt_cop(total_cat), s_valor_r),
+            ])
+        # Fila total
+        rows_cat.append([
+            Paragraph("TOTAL EGRESOS", estilo("TE", fontSize=8, fontName="Helvetica-Bold",
+                                              textColor=colors.white)),
+            Paragraph("", s_label),
+            Paragraph(fmt_cop(total_egr),
+                      estilo("TEV", fontSize=8, fontName="Helvetica-Bold",
+                             textColor=colors.white, alignment=TA_RIGHT)),
+        ])
+        n_cat = len(rows_cat)
+        tbl_cat = Table(rows_cat, colWidths=[4.4*inch, 1.5*inch, 1.5*inch])
+        tbl_cat.setStyle(TableStyle([
+            ("FONTSIZE",      (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+            ("BACKGROUND",    (0, 0), (-1, 0),  AZUL_CLARO),
+            ("ROWBACKGROUNDS",(0, 1), (-1, n_cat-2), [colors.white, GRIS_FILA]),
+            ("BACKGROUND",    (0, n_cat-1), (-1, n_cat-1), ROJO_MEDIO),
+            ("BOX",           (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+            ("LINEBELOW",     (0, 0), (-1, -1), 0.3, GRIS_BORDE),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN",         (1, 0), (1, -1),  "CENTER"),
+            ("ALIGN",         (2, 0), (2, -1),  "RIGHT"),
+        ]))
+
+        # Detalle completo
+        rows_det = [[
+            Paragraph("Categoría",   s_label),
+            Paragraph("Concepto",    s_label),
+            Paragraph("Ticket",      s_label),
+            Paragraph("Responsable", s_label),
+            Paragraph("Valor",       estilo("LRD", fontSize=8, fontName="Helvetica-Bold",
+                                            textColor=TEXTO, alignment=TA_RIGHT)),
+        ]]
+        for e in egresos:
+            rows_det.append([
+                Paragraph(limpiar_categoria(e.get("categoria", "OTRO")), s_small),
+                Paragraph(str(e.get("concepto") or "—")[:45], s_valor),
+                Paragraph(str(e.get("ticket_codigo") or "—")[:22], s_small),
+                Paragraph(str(e.get("responsable") or "—")[:20], s_valor),
+                Paragraph(fmt_cop(e.get("valor", 0)), s_valor_r),
+            ])
+        tbl_det = tbl_base(rows_det, [1.0*inch, 2.5*inch, 1.5*inch, 1.2*inch, 1.2*inch])
+
+        story.append(KeepTogether([
+            cab("EGRESOS DEL DÍA", ROJO_MEDIO),
+            tbl_cat,
+            Spacer(1, 8),
+            Paragraph("Detalle completo",
+                      estilo("SubDet", fontSize=8, fontName="Helvetica-Bold",
+                             textColor=TEXTO_MUTED)),
+            Spacer(1, 4),
+            tbl_det,
+            Spacer(1, 0.14 * inch),
+        ]))
+
+    # ── PIE DE PÁGINA ────────────────────────────────────────────────────────
+    story.append(Spacer(1, 0.1 * inch))
+    sep2 = Table([[""]], colWidths=[W])
+    sep2.setStyle(TableStyle([
+        ("LINEABOVE",     (0, 0), (-1, 0), 1, AZUL),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+    ]))
+    story.append(sep2)
+    story.append(Spacer(1, 6))
     story.append(Paragraph(
-        f"Documento generado el {datetime.now().strftime('%d/%m/%Y a las %H:%M')}",
-        ParagraphStyle('Footer', parent=styles['Normal'], fontSize=7, textColor=colors.grey, alignment=TA_CENTER)
+        f"Reporte generado el {datetime.now().strftime('%d/%m/%Y a las %H:%M')}  •  "
+        f"Período: {fecha_fmt}  •  {nombre_taller}",
+        s_footer,
     ))
-    
-    # Construir PDF
+
     doc.build(story)
-    
     pdf_bytes = buffer.getvalue()
     buffer.close()
-    
     return pdf_bytes

@@ -279,6 +279,14 @@ def listar_fotos_mobile(ticket_id: int, db: Session = Depends(get_db)):
     return fotos
 
 
+TRANSICIONES_VALIDAS = {
+    "ABIERTO": ["EN_PROCESO"],
+    "EN_PROCESO": ["FINALIZADO"],
+    "FINALIZADO": ["ENTREGADO"],
+    "ENTREGADO": [],
+}
+
+
 @router.patch("/tickets/{ticket_id}/estado")
 def actualizar_estado_mobile(
     ticket_id: int,
@@ -287,27 +295,38 @@ def actualizar_estado_mobile(
 ):
     """
     Actualiza el estado de un ticket.
-    Estados válidos: ABIERTO, EN_PROCESO, FINALIZADO, ENTREGADO
+    Transiciones permitidas:
+      ABIERTO → EN_PROCESO
+      EN_PROCESO → FINALIZADO
+      FINALIZADO → ENTREGADO
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    
-    estados_validos = ["ABIERTO", "EN_PROCESO", "FINALIZADO", "ENTREGADO"]
-    if data.estado not in estados_validos:
-        raise HTTPException(status_code=400, detail=f"Estado inválido. Debe ser uno de: {', '.join(estados_validos)}")
 
-    estado_anterior = ticket.estado
-    ticket.estado = data.estado
+    nuevo_estado = data.estado.upper()
+    estado_actual = ticket.estado
+
+    if nuevo_estado == estado_actual:
+        return {"message": "Sin cambios", "nuevo_estado": ticket.estado}
+
+    permitidos = TRANSICIONES_VALIDAS.get(estado_actual, [])
+    if nuevo_estado not in permitidos:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Transición inválida: {estado_actual} → {nuevo_estado}. "
+                   f"Desde {estado_actual} solo se puede pasar a: {permitidos or ['ninguno']}",
+        )
+
+    ticket.estado = nuevo_estado
     ticket.fecha_actualizacion = datetime.now()
 
-    # Al finalizar: usar el servicio compartido que calcula saldo y registra movimiento
-    if data.estado == "FINALIZADO" and estado_anterior != "FINALIZADO":
+    if nuevo_estado == "FINALIZADO":
         svc_finalizar_ticket(ticket, db)
 
     db.commit()
     db.refresh(ticket)
-    
+
     return {"message": "Estado actualizado correctamente", "nuevo_estado": ticket.estado}
 
 

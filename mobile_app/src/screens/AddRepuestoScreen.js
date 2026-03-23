@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { api } from '../api';
 import { colors } from '../theme';
+import { useToast } from '../components/Toast';
 
 export default function AddRepuestoScreen({ route, navigation }) {
   const { ticketId } = route.params;
+  const toast = useToast();
   const [nombre, setNombre] = useState('');
   const [cantidad, setCantidad] = useState('1');
   const [marcaReferencia, setMarcaReferencia] = useState('');
@@ -16,16 +18,14 @@ export default function AddRepuestoScreen({ route, navigation }) {
 
   const handleGuardar = async () => {
     if (!nombre.trim()) {
-      Alert.alert('Campo requerido', 'El nombre del repuesto es obligatorio');
+      toast('El nombre del repuesto es obligatorio', 'warning');
       return;
     }
-
     const cantidadNum = parseInt(cantidad, 10);
     if (isNaN(cantidadNum) || cantidadNum < 1) {
-      Alert.alert('Cantidad inválida', 'La cantidad debe ser un número mayor a 0');
+      toast('La cantidad debe ser un numero mayor a 0', 'warning');
       return;
     }
-
     setLoading(true);
     try {
       await api.createRepuesto(ticketId, {
@@ -35,7 +35,7 @@ export default function AddRepuestoScreen({ route, navigation }) {
       });
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator,
   Image,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { api } from '../api';
 import { colors } from '../theme';
+import { useToast } from '../components/Toast';
 
 const PROCESOS_RAPIDOS_DEFAULT = [
   'Cambio de aceite',
@@ -25,6 +26,7 @@ const PROCESOS_RAPIDOS_DEFAULT = [
 
 export default function AddProcesoScreen({ route, navigation }) {
   const { ticketId } = route.params;
+  const toast = useToast();
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [mecanico, setMecanico] = useState('');
@@ -42,21 +44,21 @@ export default function AddProcesoScreen({ route, navigation }) {
 
   const tomarFoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara'); return; }
+    if (status !== 'granted') { toast('Necesitamos acceso a la camara', 'warning'); return; }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
     if (!result.canceled) setFotoUri(result.assets[0].uri);
   };
 
   const seleccionarFoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permiso requerido', 'Necesitamos acceso a la galería'); return; }
+    if (status !== 'granted') { toast('Necesitamos acceso a la galeria', 'warning'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
     if (!result.canceled) setFotoUri(result.assets[0].uri);
   };
 
   const handleGuardar = async () => {
     if (!nombre.trim()) {
-      Alert.alert('Campo requerido', 'El nombre del proceso es obligatorio');
+      toast('El nombre del proceso es obligatorio', 'warning');
       return;
     }
     setLoading(true);
@@ -68,7 +70,7 @@ export default function AddProcesoScreen({ route, navigation }) {
       }, fotoUri);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e.message);
+      toast(e.message, 'error');
     } finally {
       setLoading(false);
     }

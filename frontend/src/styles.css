@@ -147,10 +147,29 @@ body {
 
 .content {
   padding: 1.4rem;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(8px);
+  background-color: #f8fafc;
+  background-image: url('/assets/logo.png');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   height: 100vh;
   overflow-y: auto;
+  position: relative;
+}
+
+.content::after {
+  content: '';
+  position: fixed;
+  inset: 0 0 0 240px;
+  background: rgba(248, 250, 252, 0.88);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.content > * {
+  position: relative;
+  z-index: 1;
 }
 
 h2 {
@@ -269,8 +288,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .list-row {
-  background: var(--gray-soft);
-  border: 1px solid #dde1e6;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 10px;
   padding: 0.6rem;
   display: grid;
@@ -508,8 +528,9 @@ button.primary:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  background: var(--gray-soft);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 10px;
   padding: 0.7rem 0.9rem;
   align-items: flex-start;
@@ -553,8 +574,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .historial-item {
-  background: var(--gray-soft);
-  border: 1px solid #dde1e6;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 10px;
   padding: 0.8rem;
 }
@@ -761,7 +783,8 @@ button.primary:hover:not(:disabled) {
 }
 
 .ticket-item {
-  background: var(--gray-soft);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(6px);
   border: 2px solid transparent;
   border-radius: 12px;
   padding: 0.8rem;
@@ -772,12 +795,12 @@ button.primary:hover:not(:disabled) {
 }
 
 .ticket-item:hover {
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.85);
   border-color: var(--line);
 }
 
 .ticket-item.active {
-  background: white;
+  background: rgba(255, 255, 255, 0.95);
   border-color: var(--brand-primary);
   box-shadow: 0 2px 8px rgba(30, 64, 175, 0.15);
 }
@@ -967,8 +990,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .item-card {
-  background: var(--gray-soft);
-  border: 1px solid #dde1e6;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 10px;
   padding: 0.8rem;
   margin-bottom: 0.6rem;
@@ -1000,8 +1024,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .foto-card {
-  background: var(--gray-soft);
-  border: 1px solid #dde1e6;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 10px;
   overflow: hidden;
   position: relative;
@@ -1042,8 +1067,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .finanzas-card {
-  background: var(--gray-soft);
-  border: 1px solid #dde1e6;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 12px;
   padding: 1rem;
   display: flex;
@@ -1242,8 +1268,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .egresos-detalle {
-  background: var(--gray-soft);
-  border: 1px solid #dde1e6;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 12px;
   padding: 1.2rem;
   margin-bottom: 2rem;
@@ -1305,8 +1332,9 @@ button.primary:hover:not(:disabled) {
 /* ===== COBROS STYLES ===== */
 
 .cobros-form {
-  background: var(--gray-soft);
-  border: 1px solid #dde1e6;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 12px;
   padding: 1.2rem;
   margin-bottom: 1.5rem;
@@ -1323,8 +1351,8 @@ button.primary:hover:not(:disabled) {
   justify-content: space-between;
   align-items: center;
   padding: 0.8rem;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 10px;
   transition: all 0.2s;
 }
@@ -1485,8 +1513,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .compra-card {
-  background: white;
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s;
@@ -1500,7 +1529,7 @@ button.primary:hover:not(:disabled) {
 .compra-soporte {
   width: 100%;
   height: 180px;
-  background: var(--gray-soft);
+  background: rgba(241, 245, 249, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1637,10 +1666,12 @@ button.primary:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: white;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
   padding: 0.5rem 1rem;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 .fecha-selector label {
@@ -1671,10 +1702,12 @@ button.primary:hover:not(:disabled) {
 }
 
 .kpi-card {
-  background: white;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 12px;
   padding: 1.5rem;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.06);
   display: flex;
   gap: 1rem;
   align-items: center;
@@ -1736,10 +1769,12 @@ button.primary:hover:not(:disabled) {
 
 /* Gráfico simple */
 .grafico-simple {
-  background: white;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 12px;
   padding: 1.5rem;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.06);
   margin-bottom: 2rem;
 }
 

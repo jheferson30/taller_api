@@ -32,7 +32,7 @@ if os.path.isdir(FRONTEND_DIST):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -81,6 +81,23 @@ def info_sistema():
             "correo": "jefersoncely0@gmail.com",
         }
     }
+
+
+@app.get("/info/conexion-qr")
+def info_conexion_qr():
+    """Devuelve los datos de conexión para generar el QR en el frontend."""
+    from app.seguridad.dependencias import requerir_password_admin
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip_local = s.getsockname()[0]
+        s.close()
+    except Exception:
+        ip_local = "127.0.0.1"
+    import json, base64
+    payload = json.dumps({"ip": ip_local, "puerto": 8000, "password": os.getenv("ADMIN_PASSWORD", "")})
+    encoded = base64.b64encode(payload.encode()).decode()
+    return {"qr_data": encoded, "ip": ip_local, "puerto": 8000}
 
 
 @app.get("/")

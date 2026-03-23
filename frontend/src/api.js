@@ -150,6 +150,13 @@ export const api = {
     const params = fecha ? `?fecha=${fecha}` : '';
     return request(`/economia-dia/egresos${params}`);
   },
+  descargarPdfTicket: async (ticketId) => {
+    const res = await fetch(`${API_BASE}/tickets/${ticketId}/pdf`, {
+      headers: { "X-Admin-Password": ADMIN_PASSWORD },
+    });
+    if (!res.ok) throw new Error("No se pudo descargar el PDF");
+    return res.blob();
+  },
   descargarPdfEconomia: async (fecha) => {
     const params = fecha ? `?fecha=${fecha}` : '';
     const res = await fetch(`${API_BASE}/economia-dia/pdf${params}`, {
@@ -211,6 +218,7 @@ export const api = {
       method: "POST",
     }),
   infoSistema: () => request("/info"),
+  infoConexionQr: () => request("/info/conexion-qr"),
   // Configuración
   listarMecanicos: () => request("/configuracion/mecanicos"),
   crearMecanico: (body) =>

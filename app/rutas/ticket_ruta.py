@@ -4,7 +4,7 @@ from typing import List, Optional
 import hmac
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -315,7 +315,9 @@ def actualizar_finanzas_ticket(
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     total = datos.total_servicio
-    saldo = total - (ticket.anticipo_recibido or 0)
+    cobros = db.query(TicketCobro).filter(TicketCobro.ticket_id == ticket_id).all()
+    total_cobros = sum(c.valor for c in cobros)
+    saldo = total - (ticket.anticipo_recibido or 0) - total_cobros
     if saldo < 0:
         saldo = 0
     ticket.total_servicio = total
@@ -360,11 +362,12 @@ def finalizar_ticket(
 def generar_pdf_cliente(
     ticket_id: int,
     token: Optional[str] = Query(None),
+    x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
     db: Session = Depends(obtener_db),
 ):
-    # Autenticación: acepta header X-Admin-Password o query param ?token=
+    # Autenticación: acepta header X-Admin-Password o query param ?token= (compatibilidad)
     password_esperada = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD")
-    admin_token = token
+    admin_token = x_admin_password or token
     if not admin_token:
         raise HTTPException(status_code=401, detail="Se requiere autenticacion")
     if not hmac.compare_digest(admin_token.encode("utf-8"), password_esperada.encode("utf-8")):
