@@ -1,7 +1,6 @@
 ﻿import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEFAULT_PASSWORD = 'la_pulga_fi';
-const MDNS_HOST = 'taller-pulga.local';
 
 const KEY_IPS = '@taller_server_ips';
 const KEY_IP_ACTIVA = '@taller_server_ip';
@@ -10,9 +9,9 @@ const KEY_PASSWORD = '@taller_admin_password';
 export async function getServerIp() {
   try {
     const ip = await AsyncStorage.getItem(KEY_IP_ACTIVA);
-    return ip || MDNS_HOST;
+    return ip || '';
   } catch {
-    return MDNS_HOST;
+    return '';
   }
 }
 
@@ -51,21 +50,22 @@ export async function eliminarIp(ip) {
   const nueva = lista.filter(i => i !== ip);
   await AsyncStorage.setItem(KEY_IPS, JSON.stringify(nueva));
   const activa = await getServerIp();
-  if (activa === ip && nueva.length > 0) {
-    await AsyncStorage.setItem(KEY_IP_ACTIVA, nueva[0]);
+  if (activa === ip) {
+    await AsyncStorage.setItem(KEY_IP_ACTIVA, nueva.length > 0 ? nueva[0] : '');
   }
 }
 
-async function probarHost(host, pwd, timeout = 3000) {
+async function probarHost(ip, pwd, timeout) {
+  const t = timeout || 1500;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const timer = setTimeout(() => controller.abort(), t);
   try {
-    const res = await fetch(`http://${host}:8000/api/mobile/estadisticas`, {
+    const res = await fetch(`http://${ip}:8000/api/mobile/estadisticas`, {
       headers: { 'X-Admin-Password': pwd },
       signal: controller.signal,
     });
     clearTimeout(timer);
-    return res.ok ? host : null;
+    return res.ok ? ip : null;
   } catch {
     clearTimeout(timer);
     return null;
@@ -74,24 +74,16 @@ async function probarHost(host, pwd, timeout = 3000) {
 
 /**
  * Deteccion automatica:
- * 1. Prueba taller-pulga.local (mDNS)
- * 2. Prueba IPs guardadas
- * 3. Escanea rango 192.168.x.x y 10.x.x.x comunes
+ * 1. Prueba IPs guardadas
+ * 2. Escanea rangos comunes de red WiFi
  */
 export async function detectarIpActiva(password) {
   const pwd = password || await getAdminPassword();
 
-  // 1. Intentar mDNS primero
-  const mdns = await probarHost(MDNS_HOST, pwd, 2000);
-  if (mdns) {
-    await AsyncStorage.setItem(KEY_IP_ACTIVA, mdns);
-    return mdns;
-  }
-
-  // 2. Probar IPs guardadas
+  // 1. Probar IPs guardadas primero (rapido)
   const lista = await getIpsGuardadas();
   if (lista.length > 0) {
-    const resultados = await Promise.allSettled(lista.map(ip => probarHost(ip, pwd)));
+    const resultados = await Promise.allSettled(lista.map(ip => probarHost(ip, pwd, 3000)));
     for (let i = 0; i < resultados.length; i++) {
       if (resultados[i].status === 'fulfilled' && resultados[i].value) {
         await AsyncStorage.setItem(KEY_IP_ACTIVA, lista[i]);
@@ -100,19 +92,16 @@ export async function detectarIpActiva(password) {
     }
   }
 
-  // 3. Escaneo automatico de rangos comunes (paralelo, rapido)
+  // 2. Escaneo de rangos comunes en paralelo por lotes
+  const prefijos = ['192.168.1', '192.168.0', '192.168.100', '192.168.2', '10.0.0', '10.0.1'];
   const candidatos = [];
-  // Rangos mas comunes en redes WiFi de taller/casa
-  for (let i = 1; i <= 254; i++) {
-    candidatos.push(`192.168.1.${i}`);
-    candidatos.push(`192.168.0.${i}`);
-    candidatos.push(`192.168.100.${i}`);
-    candidatos.push(`10.0.0.${i}`);
-    candidatos.push(`10.181.58.${i}`);
+  for (const prefijo of prefijos) {
+    for (let i = 1; i <= 254; i++) {
+      candidatos.push(`${prefijo}.${i}`);
+    }
   }
 
-  // Escanear en lotes de 30 para no saturar
-  const LOTE = 30;
+  const LOTE = 50;
   for (let i = 0; i < candidatos.length; i += LOTE) {
     const lote = candidatos.slice(i, i + LOTE);
     const res = await Promise.allSettled(lote.map(ip => probarHost(ip, pwd, 800)));
