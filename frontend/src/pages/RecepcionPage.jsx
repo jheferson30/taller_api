@@ -24,6 +24,107 @@ const emptyTicket = {
   recepcionado_por: "",
 };
 
+function CobroRapidoPanel({ placa, onDone, inline = false }) {
+  const [descripcion, setDescripcion] = useState("");
+  const [valor, setValor] = useState(0);
+  const [metodo, setMetodo] = useState("EFECTIVO");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [open, setOpen] = useState(false);
+
+  async function handleCobrar() {
+    if (!descripcion.trim()) { setMsg("La descripción es obligatoria"); return; }
+    if (!valor || valor <= 0) { setMsg("Ingresa un valor mayor a 0"); return; }
+    setLoading(true);
+    setMsg("");
+    try {
+      await api.cobroRapido({ placa, descripcion: descripcion.trim(), valor, metodo_pago: metodo });
+      setMsg("✓ Cobro registrado");
+      setDescripcion("");
+      setValor(0);
+      setTimeout(() => { if (onDone) onDone(); }, 1500);
+    } catch (e) {
+      setMsg("✗ " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const panelContent = (
+    <div className="form-grid" style={{ marginTop: 12 }}>
+      <label className="full-width">
+        <span className="label-text">Descripción *</span>
+        <input
+          type="text"
+          placeholder="Ej: Cambio de aceite, diagnóstico..."
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          autoFocus
+        />
+      </label>
+      <label>
+        <span className="label-text">Valor *</span>
+        <InputDinero value={valor} onChange={setValor} />
+      </label>
+      <label>
+        <span className="label-text">Método de Pago</span>
+        <select value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+          <option value="EFECTIVO">Efectivo</option>
+          <option value="NEQUI">Nequi</option>
+          <option value="DAVIPLATA">Daviplata</option>
+          <option value="TRANSFERENCIA">Transferencia</option>
+          <option value="TARJETA">Tarjeta</option>
+        </select>
+      </label>
+      <div className="form-actions" style={{ marginTop: 8 }}>
+        <button className="button-secondary" onClick={() => setOpen(false)} disabled={loading}>Cancelar</button>
+        <button className="button-primary" onClick={handleCobrar} disabled={loading}>
+          {loading ? "Registrando..." : "Registrar Cobro"}
+        </button>
+      </div>
+      {msg && <p className={`message full-width ${msg.includes("✓") ? "success" : "error"}`}>{msg}</p>}
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <div>
+        {!open ? (
+          <button
+            className="button-secondary"
+            style={{ whiteSpace: "nowrap", borderColor: "#f59e0b", color: "#92400e" }}
+            onClick={() => setOpen(true)}
+          >
+            ⚡ Cobro Rápido
+          </button>
+        ) : (
+          <div className="form-section" style={{ marginTop: 12, borderLeft: "3px solid #f59e0b", minWidth: 320 }}>
+            <h3 className="section-title">⚡ Cobro Rápido — {placa}</h3>
+            {panelContent}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <div style={{ marginTop: 12, textAlign: "center" }}>
+        <button className="button-secondary" style={{ fontSize: 13 }} onClick={() => setOpen(true)}>
+          ⚡ Cobro Rápido
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="form-section" style={{ marginTop: 16, borderLeft: "3px solid #f59e0b" }}>
+      <h3 className="section-title">⚡ Cobro Rápido — {placa}</h3>
+      {panelContent}
+    </div>
+  );
+}
+
 export default function RecepcionPage() {
   const [step, setStep] = useState("search"); // search | new-vehicle | existing-vehicle
   const [placaBusqueda, setPlacaBusqueda] = useState("");
@@ -211,8 +312,13 @@ export default function RecepcionPage() {
       <section className="recepcion-container">
         <div className="recepcion-header">
           <button onClick={resetForm} className="back-button">Volver a búsqueda</button>
-          <h2>Nuevo Vehículo - {vehiculo.placa}</h2>
-          <p className="subtitle">Completa los datos del vehículo y el motivo de la visita</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <h2>Nuevo Vehículo - {vehiculo.placa}</h2>
+              <p className="subtitle">Completa los datos del vehículo y el motivo de la visita</p>
+            </div>
+            <CobroRapidoPanel placa={vehiculo.placa} onDone={resetForm} inline />
+          </div>
         </div>
 
         <div className="form-sections">
@@ -392,8 +498,13 @@ export default function RecepcionPage() {
       <section className="recepcion-container">
         <div className="recepcion-header">
           <button onClick={resetForm} className="back-button">Volver a búsqueda</button>
-          <h2>Completar Datos - {vehiculo.placa}</h2>
-          <p className="subtitle">Este vehículo fue creado desde una cita. Completa los datos faltantes.</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <h2>Completar Datos - {vehiculo.placa}</h2>
+              <p className="subtitle">Este vehículo fue creado desde una cita. Completa los datos faltantes.</p>
+            </div>
+            <CobroRapidoPanel placa={vehiculo.placa} onDone={resetForm} inline />
+          </div>
         </div>
 
         <div className="form-sections">
@@ -573,8 +684,13 @@ export default function RecepcionPage() {
       <section className="recepcion-container">
         <div className="recepcion-header">
           <button onClick={resetForm} className="back-button">Volver a búsqueda</button>
-          <h2>Vehículo Registrado - {vehiculo.placa}</h2>
-          <p className="subtitle">Crea un nuevo ticket de ingreso</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <h2>Vehículo Registrado - {vehiculo.placa}</h2>
+              <p className="subtitle">Crea un nuevo ticket de ingreso</p>
+            </div>
+            <CobroRapidoPanel placa={vehiculo.placa} onDone={resetForm} inline />
+          </div>
         </div>
 
         <div className="form-sections">

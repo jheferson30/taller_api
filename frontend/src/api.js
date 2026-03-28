@@ -70,6 +70,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  eliminarProceso: (ticketId, procesoId) =>
+    request(`/tickets/${ticketId}/procesos/${procesoId}`, { method: "DELETE" }),
+  eliminarRepuesto: (ticketId, repuestoId) =>
+    request(`/tickets/${ticketId}/repuestos/${repuestoId}`, { method: "DELETE" }),
+  eliminarCompra: (ticketId, compraId) =>
+    request(`/tickets/${ticketId}/compras/${compraId}`, { method: "DELETE" }),
   agregarRepuesto: (ticketId, body) =>
     request(`/tickets/${ticketId}/repuestos`, {
       method: "POST",
@@ -252,4 +258,17 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cobros }),
     }),
+  cobroRapido: (body) =>
+    request("/movimientos-caja/cobro-rapido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  listarCobrosRapidos: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.placa) q.append("placa", params.placa);
+    if (params.fecha_desde) q.append("fecha_desde", params.fecha_desde);
+    if (params.fecha_hasta) q.append("fecha_hasta", params.fecha_hasta);
+    return request(`/movimientos-caja/cobros-rapidos?${q.toString()}`);
+  },
 };

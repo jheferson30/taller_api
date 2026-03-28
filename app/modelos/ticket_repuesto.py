@@ -13,4 +13,5 @@ class TicketRepuesto(Base):
     nombre = Column(String(150), nullable=False)
     cantidad = Column(Integer, nullable=False, default=1)
     marca_referencia = Column(String(120), nullable=True)
+    foto_url = Column(String(500), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())

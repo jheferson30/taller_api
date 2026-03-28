@@ -155,6 +155,40 @@ export const api = {
 
   getCobrosRapidos: () => request('/cobros-rapidos'),
 
+  cobroRapido: (data) =>
+    request('/movimientos-caja/cobro-rapido', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  eliminarProceso: (ticketId, procesoId) =>
+    request(`/tickets/${ticketId}/procesos/${procesoId}`, { method: 'DELETE' }),
+
+  eliminarRepuesto: (ticketId, repuestoId) =>
+    request(`/tickets/${ticketId}/repuestos/${repuestoId}`, { method: 'DELETE' }),
+
+  subirArchivoFoto: async (uri) => {
+    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
+    const filename = uri.split('/').pop();
+    const ext = filename.split('.').pop().toLowerCase();
+    const type = ext === 'png' ? 'image/png' : 'image/jpeg';
+    const formData = new FormData();
+    formData.append('file', { uri, name: filename, type });
+    const response = await fetch(`${baseUrl}/upload/foto`, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Admin-Password': password },
+    });
+    if (!response.ok) throw new Error(`Error al subir foto`);
+    return response.json();
+  },
+
+  createProcesoJson: (ticketId, data) =>
+    request(`/tickets/${ticketId}/procesos`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   createCompra: async (ticketId, data, uri = null) => {
     const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
     const formData = new FormData();

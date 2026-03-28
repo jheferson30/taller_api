@@ -29,6 +29,9 @@ export default function TicketPage() {
   // Forms
   const [proceso, setProceso] = useState({ nombre: "", descripcion: "", mecanico: "" });
   const [repuesto, setRepuesto] = useState({ nombre: "", cantidad: 1, marca_referencia: "" });
+  const [fueComprado, setFueComprado] = useState(false);
+  const [compraRepuesto, setCompraRepuesto] = useState({ valor: 0, responsable: "", nota: "" });
+  const [compraRepuestoFile, setCompraRepuestoFile] = useState(null);
   const [foto, setFoto] = useState({ tipo: "OTRA", archivo_url: "", descripcion: "" });
   const [fotoFile, setFotoFile] = useState(null);
   const [fotoPreview, setFotoPreview] = useState("");
@@ -84,16 +87,14 @@ export default function TicketPage() {
     if (!proceso.nombre) return;
     setLoading(true);
     try {
-      await api.agregarProceso(selectedId, proceso);
-      // Si hay foto seleccionada, subirla junto con el proceso
+      let foto_url = null;
       if (fotoFile) {
         const uploadResult = await api.subirFoto(fotoFile);
-        const fotoUrl = `http://127.0.0.1:8000${uploadResult.url}`;
-        await api.agregarFoto(selectedId, { ...foto, archivo_url: fotoUrl });
+        foto_url = uploadResult.url; // ruta relativa como /uploads/...
         setFotoFile(null);
         setFotoPreview("");
-        setFoto({ tipo: "OTRA", archivo_url: "", descripcion: "" });
       }
+      await api.agregarProceso(selectedId, { ...proceso, foto_url });
       setProceso({ nombre: "", descripcion: "", mecanico: "" });
       await loadResumen(selectedId);
       setMsg("✓ Proceso agregado");
@@ -109,8 +110,29 @@ export default function TicketPage() {
     if (!repuesto.nombre) return;
     setLoading(true);
     try {
-      await api.agregarRepuesto(selectedId, repuesto);
+      // Subir foto primero si hay archivo
+      let foto_url = null;
+      if (compraRepuestoFile) {
+        const uploadResult = await api.subirFoto(compraRepuestoFile);
+        foto_url = uploadResult.url;
+      }
+
+      await api.agregarRepuesto(selectedId, { ...repuesto, foto_url });
+
+      if (fueComprado && Number(compraRepuesto.valor) > 0) {
+        await api.agregarCompra(selectedId, {
+          descripcion: repuesto.nombre,
+          valor: Number(compraRepuesto.valor),
+          responsable: compraRepuesto.responsable || null,
+          nota: compraRepuesto.nota || null,
+          soporte_url: foto_url ? `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${foto_url}` : null,
+        });
+      }
+
       setRepuesto({ nombre: "", cantidad: 1, marca_referencia: "" });
+      setFueComprado(false);
+      setCompraRepuesto({ valor: 0, responsable: "", nota: "" });
+      setCompraRepuestoFile(null);
       await loadResumen(selectedId);
       setMsg("✓ Repuesto agregado");
       setTimeout(() => setMsg(""), 2000);
@@ -207,6 +229,51 @@ export default function TicketPage() {
     }
   }
 
+  async function onDeleteProceso(procesoId) {
+    if (!confirm("¿Eliminar este proceso?")) return;
+    setLoading(true);
+    try {
+      await api.eliminarProceso(selectedId, procesoId);
+      await loadResumen(selectedId);
+      setMsg("✓ Proceso eliminado");
+      setTimeout(() => setMsg(""), 2000);
+    } catch (e) {
+      setMsg("✗ Error: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onDeleteCompra(compraId) {
+    if (!confirm("¿Eliminar esta compra?")) return;
+    setLoading(true);
+    try {
+      await api.eliminarCompra(selectedId, compraId);
+      await loadResumen(selectedId);
+      setMsg("✓ Compra eliminada");
+      setTimeout(() => setMsg(""), 2000);
+    } catch (e) {
+      setMsg("✗ Error: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onDeleteRepuesto(repuestoId) {
+    if (!confirm("¿Eliminar este repuesto?")) return;
+    setLoading(true);
+    try {
+      await api.eliminarRepuesto(selectedId, repuestoId);
+      await loadResumen(selectedId);
+      setMsg("✓ Repuesto eliminado");
+      setTimeout(() => setMsg(""), 2000);
+    } catch (e) {
+      setMsg("✗ Error: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function onAddCobro(conceptoOverride, valorOverride) {
     const concepto = conceptoOverride ?? cobro.concepto;
     const valor = valorOverride ?? cobro.valor;
@@ -289,7 +356,7 @@ export default function TicketPage() {
     }
     setLoading(true);
     try {
-      await api.entregarTicket(selectedId, entrega);
+      await api.entregarTicket(selectedId, { ...entrega, ...observaciones });
       await loadResumen(selectedId);
       await loadTickets();
       setEntrega({ confirmado_entrega_por: "", firma_entrega_url: "" });
@@ -413,13 +480,7 @@ export default function TicketPage() {
                   className={`tab ${activeTab === "fotos" ? "active" : ""}`}
                   onClick={() => setActiveTab("fotos")}
                 >
-                  Fotos ({resumen.fotos.length})
-                </button>
-                <button
-                  className={`tab ${activeTab === "compras" ? "active" : ""}`}
-                  onClick={() => setActiveTab("compras")}
-                >
-                  Compras ({resumen.compras.length})
+                  Fotos ({resumen.fotos.filter(f => f.tipo !== "PROCESO").length})
                 </button>
                 <button
                   className={`tab ${activeTab === "finanzas" ? "active" : ""}`}
@@ -514,7 +575,25 @@ export default function TicketPage() {
                         <p className="empty-state">No hay procesos registrados</p>
                       ) : (
                         resumen.procesos.map((p) => (
-                          <div key={p.id} className="item-card">
+                          <div key={p.id} className="item-card" style={{ position: "relative" }}>
+                            {isEditable && (
+                              <button
+                                className="foto-delete"
+                                onClick={() => onDeleteProceso(p.id)}
+                                disabled={loading}
+                                title="Eliminar proceso"
+                                style={{ position: "absolute", top: 8, right: 8, zIndex: 1 }}
+                              >
+                                ✕
+                              </button>
+                            )}
+                            {p.foto_url && (
+                              <img
+                                src={`${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${p.foto_url}`}
+                                alt={p.nombre}
+                                style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: "8px 8px 0 0", marginBottom: 8 }}
+                              />
+                            )}
                             <div className="item-header">
                               <strong>{p.nombre}</strong>
                               <small>{p.mecanico || "Sin mecánico"}</small>
@@ -561,7 +640,62 @@ export default function TicketPage() {
                               onChange={(e) => setRepuesto({ ...repuesto, marca_referencia: e.target.value })}
                             />
                           </label>
+                          <label className="full-width">
+                            <span className="label-text">Foto del repuesto (opcional)</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files[0] || null;
+                                setCompraRepuestoFile(file);
+                              }}
+                              className="file-input"
+                            />
+                            {compraRepuestoFile && (
+                              <small className="file-selected">✓ {compraRepuestoFile.name}</small>
+                            )}
+                          </label>
                         </div>
+
+                        {/* Toggle ¿Fue comprado? */}
+                        <label style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0", cursor: "pointer", padding: "10px 14px", background: fueComprado ? "#dbeafe" : "#f8fafc", borderRadius: 8, border: "1px solid #cbd5e1" }}>
+                          <input
+                            type="checkbox"
+                            checked={fueComprado}
+                            onChange={(e) => setFueComprado(e.target.checked)}
+                            style={{ width: 18, height: 18, cursor: "pointer" }}
+                          />
+                          <span style={{ fontWeight: 600, fontSize: 14 }}>¿Fue comprado? (registrar egreso)</span>
+                        </label>
+
+                        {fueComprado && (
+                          <div className="form-grid" style={{ marginTop: 4 }}>
+                            <label>
+                              <span className="label-text">Valor *</span>
+                              <InputDinero
+                                value={compraRepuesto.valor}
+                                onChange={(v) => setCompraRepuesto({ ...compraRepuesto, valor: v })}
+                              />
+                            </label>
+                            <label>
+                              <span className="label-text">Responsable</span>
+                              <SelectMecanico
+                                value={compraRepuesto.responsable}
+                                onChange={(v) => setCompraRepuesto({ ...compraRepuesto, responsable: v })}
+                                placeholder="— Sin asignar —"
+                              />
+                            </label>
+                            <label className="full-width">
+                              <span className="label-text">Nota</span>
+                              <textarea
+                                placeholder="Notas adicionales..."
+                                value={compraRepuesto.nota}
+                                onChange={(e) => setCompraRepuesto({ ...compraRepuesto, nota: e.target.value })}
+                                rows="2"
+                              />
+                            </label>
+                          </div>
+                        )}
                         <button
                           className="button-primary"
                           onClick={onAddRepuesto}
@@ -577,15 +711,52 @@ export default function TicketPage() {
                       {resumen.repuestos.length === 0 ? (
                         <p className="empty-state">No hay repuestos registrados</p>
                       ) : (
-                        resumen.repuestos.map((r) => (
-                          <div key={r.id} className="item-card">
-                            <div className="item-header">
-                              <strong>{r.nombre}</strong>
-                              <span className="badge">x{r.cantidad}</span>
-                            </div>
-                            {r.marca_referencia && <p className="item-desc">{r.marca_referencia}</p>}
-                          </div>
-                        ))
+                        (() => {
+                          const nombresComprados = new Set((resumen.compras || []).map(c => c.descripcion));
+                          const comprasPorNombre = Object.fromEntries((resumen.compras || []).map(c => [c.descripcion, c]));
+                          return resumen.repuestos.map((r) => {
+                            const compra = comprasPorNombre[r.nombre];
+                            const fotoSrc = r.foto_url
+                              ? `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${r.foto_url}`
+                              : compra?.soporte_url || null;
+                            return (
+                              <div key={r.id} className="item-card" style={{ position: "relative" }}>
+                                {isEditable && (
+                                  <button
+                                    onClick={() => onDeleteRepuesto(r.id)}
+                                    disabled={loading}
+                                    style={{ position: "absolute", top: 8, right: 8, zIndex: 1, background: "#ef4444", color: "#fff", border: "none", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 12, fontWeight: 700, lineHeight: "22px", padding: 0 }}
+                                    title="Eliminar repuesto"
+                                  >✕</button>
+                                )}
+                                {fotoSrc && (
+                                  <img
+                                    src={fotoSrc}
+                                    alt={r.nombre}
+                                    style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: "8px 8px 0 0", marginBottom: 8 }}
+                                  />
+                                )}
+                                <div className="item-header">
+                                  <strong>{r.nombre}</strong>
+                                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                    {nombresComprados.has(r.nombre) && (
+                                      <span className="badge" style={{ background: "#dcfce7", color: "#166534" }}>🛒 Comprado</span>
+                                    )}
+                                    <span className="badge">x{r.cantidad}</span>
+                                  </div>
+                                </div>
+                                {r.marca_referencia && <p className="item-desc">{r.marca_referencia}</p>}
+                                {compra?.valor > 0 && (
+                                  <p className="item-desc" style={{ color: "#dc2626", fontWeight: 600 }}>
+                                    ${compra.valor.toLocaleString("es-CO")}
+                                    {compra.responsable && ` · ${compra.responsable}`}
+                                    {compra.nota && ` · ${compra.nota}`}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          });
+                        })()
                       )}
                     </div>
                   </div>
@@ -655,11 +826,11 @@ export default function TicketPage() {
 
                     <div className="items-list">
                       <h4 className="section-title">Fotos de Evidencia</h4>
-                      {resumen.fotos.length === 0 ? (
+                      {resumen.fotos.filter(f => f.tipo !== "PROCESO").length === 0 ? (
                         <p className="empty-state">No hay fotos registradas</p>
                       ) : (
                         <div className="fotos-grid">
-                          {resumen.fotos.map((f) => (
+                          {resumen.fotos.filter(f => f.tipo !== "PROCESO").map((f) => (
                             <div key={f.id} className="foto-card">
                               <div className="foto-badge">{f.tipo}</div>
                               {isEditable && (
@@ -682,124 +853,7 @@ export default function TicketPage() {
                   </div>
                 )}
 
-                {/* TAB: COMPRAS */}
-                {activeTab === "compras" && (
-                  <div className="tab-panel">
-                    {isEditable && (
-                      <div className="form-section">
-                        <h4 className="section-title">Registrar Compra</h4>
-                        <div className="form-grid">
-                          <label className="full-width">
-                            <span className="label-text">Descripción *</span>
-                            <input
-                              type="text"
-                              placeholder="Ej: Pastillas de freno"
-                              value={compra.descripcion}
-                              onChange={(e) => setCompra({ ...compra, descripcion: e.target.value })}
-                            />
-                          </label>
-                          <label>
-                            <span className="label-text">Valor *</span>
-                            <InputDinero
-                              value={compra.valor}
-                              onChange={(v) => setCompra({ ...compra, valor: v })}
-                            />
-                          </label>
-                          <label>
-                            <span className="label-text">Responsable</span>
-                            <SelectMecanico
-                              value={compra.responsable}
-                              onChange={(v) => setCompra({ ...compra, responsable: v })}
-                              placeholder="— Sin asignar —"
-                            />
-                          </label>
-                          <label className="full-width">
-                            <span className="label-text">Subir Soporte (Factura/Recibo)</span>
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              onChange={onCompraFileChange}
-                              className="file-input"
-                            />
-                            {compraFile && (
-                              <small className="file-selected">✓ Archivo seleccionado: {compraFile.name}</small>
-                            )}
-                          </label>
-                          <label className="full-width">
-                            <span className="label-text">O pegar URL del Soporte</span>
-                            <input
-                              type="text"
-                              placeholder="https://..."
-                              value={compra.soporte_url}
-                              onChange={(e) => setCompra({ ...compra, soporte_url: e.target.value })}
-                              disabled={!!compraFile}
-                            />
-                          </label>
-                          <label className="full-width">
-                            <span className="label-text">Nota</span>
-                            <textarea
-                              placeholder="Notas adicionales..."
-                              value={compra.nota}
-                              onChange={(e) => setCompra({ ...compra, nota: e.target.value })}
-                              rows="2"
-                            />
-                          </label>
-                        </div>
-                        <button
-                          className="button-primary"
-                          onClick={onAddCompra}
-                          disabled={loading || !compra.descripcion || !compra.valor}
-                        >
-                          {loading ? "Registrando..." : "Registrar Compra"}
-                        </button>
-                      </div>
-                    )}
 
-                    <div className="items-list">
-                      <h4 className="section-title">Compras Realizadas</h4>
-                      {resumen.compras.length === 0 ? (
-                        <p className="empty-state">No hay compras registradas</p>
-                      ) : (
-                        <div className="compras-grid">
-                          {resumen.compras.map((c) => (
-                            <div key={c.id} className="compra-card">
-                              {c.soporte_url && (
-                                <div className="compra-soporte">
-                                  {c.soporte_url.endsWith('.pdf') ? (
-                                    <div className="pdf-preview">
-                                      <span className="pdf-icon">PDF</span>
-                                      <a href={c.soporte_url} target="_blank" rel="noopener noreferrer">
-                                        Ver PDF
-                                      </a>
-                                    </div>
-                                  ) : (
-                                    <img src={c.soporte_url} alt={c.descripcion} className="compra-img" />
-                                  )}
-                                </div>
-                              )}
-                              <div className="compra-info">
-                                <div className="compra-header">
-                                  <strong className="compra-desc">{c.descripcion}</strong>
-                                  <span className="compra-valor">${c.valor.toLocaleString()}</span>
-                                </div>
-                                {c.responsable && (
-                                  <p className="compra-detail">
-                                    <span className="detail-label">Responsable:</span> {c.responsable}
-                                  </p>
-                                )}
-                                {c.nota && (
-                                  <p className="compra-detail">
-                                    <span className="detail-label">Nota:</span> {c.nota}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* TAB: FINANZAS */}
                 {activeTab === "finanzas" && (
@@ -988,42 +1042,6 @@ export default function TicketPage() {
                       );
                     })()}
 
-                    <div className="form-section">
-                      <h4 className="section-title">Observaciones Finales</h4>
-                      <div className="form-grid">
-                        <label className="full-width">
-                          <span className="label-text">Observaciones Finales</span>
-                          <textarea
-                            placeholder="Observaciones sobre el trabajo realizado..."
-                            value={observaciones.observaciones_finales}
-                            onChange={(e) => setObservaciones({ ...observaciones, observaciones_finales: e.target.value })}
-                            rows="3"
-                            disabled={!isEditable}
-                          />
-                        </label>
-                        <label className="full-width">
-                          <span className="label-text">Recomendaciones</span>
-                          <textarea
-                            placeholder="Recomendaciones para el cliente..."
-                            value={observaciones.recomendaciones}
-                            onChange={(e) => setObservaciones({ ...observaciones, recomendaciones: e.target.value })}
-                            rows="3"
-                            disabled={!isEditable}
-                          />
-                        </label>
-                        <label className="full-width">
-                          <span className="label-text">Próximo Mantenimiento</span>
-                          <input
-                            type="text"
-                            placeholder="Ej: 2026-06 o en 5000 km"
-                            value={observaciones.proximo_mantenimiento}
-                            onChange={(e) => setObservaciones({ ...observaciones, proximo_mantenimiento: e.target.value })}
-                            disabled={!isEditable}
-                          />
-                        </label>
-                      </div>
-                    </div>
-
                     {isEditable && (
                       <div className="finalizar-section">
                         <button
@@ -1089,6 +1107,33 @@ export default function TicketPage() {
                             placeholder="https://..."
                             value={entrega.firma_entrega_url}
                             onChange={(e) => setEntrega({ ...entrega, firma_entrega_url: e.target.value })}
+                          />
+                        </label>
+                        <label className="full-width">
+                          <span className="label-text">Observaciones Finales</span>
+                          <textarea
+                            placeholder="Observaciones sobre el trabajo realizado..."
+                            value={observaciones.observaciones_finales}
+                            onChange={(e) => setObservaciones({ ...observaciones, observaciones_finales: e.target.value })}
+                            rows="3"
+                          />
+                        </label>
+                        <label className="full-width">
+                          <span className="label-text">Recomendaciones</span>
+                          <textarea
+                            placeholder="Recomendaciones para el cliente..."
+                            value={observaciones.recomendaciones}
+                            onChange={(e) => setObservaciones({ ...observaciones, recomendaciones: e.target.value })}
+                            rows="3"
+                          />
+                        </label>
+                        <label className="full-width">
+                          <span className="label-text">Próximo Mantenimiento</span>
+                          <input
+                            type="text"
+                            placeholder="Ej: 2026-06 o en 5000 km"
+                            value={observaciones.proximo_mantenimiento}
+                            onChange={(e) => setObservaciones({ ...observaciones, proximo_mantenimiento: e.target.value })}
                           />
                         </label>
                       </div>

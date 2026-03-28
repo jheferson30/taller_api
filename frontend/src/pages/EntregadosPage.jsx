@@ -18,6 +18,7 @@ function primerDiaMes() {
 
 export default function EntregadosPage() {
   const [tickets, setTickets] = useState([]);
+  const [cobrosRapidos, setCobrosRapidos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [placa, setPlaca] = useState("");
@@ -33,12 +34,13 @@ export default function EntregadosPage() {
     try {
       let data;
       if (estado === "TODOS") {
-        // Buscar entregados y finalizados por separado y combinar
-        const [entregados, finalizados] = await Promise.all([
+        const [entregados, finalizados, rapidos] = await Promise.all([
           api.buscarTickets({ estado: "ENTREGADO", placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
           api.buscarTickets({ estado: "FINALIZADO", placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
+          api.listarCobrosRapidos({ placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
         ]);
         data = [...entregados, ...finalizados].sort((a, b) => new Date(b.fecha_ingreso) - new Date(a.fecha_ingreso));
+        setCobrosRapidos(rapidos);
       } else {
         data = await api.buscarTickets({
           estado,
@@ -46,6 +48,7 @@ export default function EntregadosPage() {
           fecha_desde: fechaDesde || undefined,
           fecha_hasta: fechaHasta || undefined,
         });
+        setCobrosRapidos([]);
       }
       setTickets(data);
     } catch (e) {
@@ -65,7 +68,7 @@ export default function EntregadosPage() {
           <h1 className="ent-hero-title">Tickets Entregados</h1>
           <p className="ent-hero-sub">Historial completo de vehículos entregados al cliente</p>
         </div>
-        <div className="ent-hero-badge">{tickets.length} registros</div>
+        <div className="ent-hero-badge">{tickets.length + cobrosRapidos.length} registros</div>
       </div>
 
       {/* Filtros */}
@@ -110,37 +113,61 @@ export default function EntregadosPage() {
         {/* Lista */}
         <div className="ent-lista">
           {loading && <div className="ent-loading">Cargando...</div>}
-          {!loading && tickets.length === 0 && (
+          {!loading && tickets.length === 0 && cobrosRapidos.length === 0 && (
             <div className="ent-empty">
               <span className="ent-empty-icon">—</span>
-              <p>No hay tickets entregados en este rango</p>
+              <p>No hay registros en este rango</p>
             </div>
           )}
-          {tickets.map((t) => {
-            const fecha = new Date(t.fecha_ingreso).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
-            const isActive = selected?.id === t.id;
-            return (
-              <div
-                key={t.id}
-                className={`ent-card ${isActive ? "ent-card--active" : ""}`}
-                onClick={() => setSelected(t)}
-              >
-                <div className="ent-card-top">
-                  <span className="ent-placa">{t.placa}</span>
-                  <span className={`ent-chip ent-chip--${t.estado.toLowerCase()}`}>{t.estado}</span>
+          {/* Mezclar tickets y cobros rápidos ordenados por fecha */}
+          {[
+            ...tickets.map(t => ({ ...t, _tipo: "ticket", _fecha: new Date(t.fecha_ingreso) })),
+            ...cobrosRapidos.map(c => ({ ...c, _tipo: "cobro_rapido", _fecha: new Date(c.fecha_creacion) })),
+          ]
+            .sort((a, b) => b._fecha - a._fecha)
+            .map((item) => {
+              if (item._tipo === "cobro_rapido") {
+                const hora = item._fecha.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+                return (
+                  <div key={`cr-${item.id}`} className="ent-card" style={{ borderLeft: "3px solid #f59e0b" }}>
+                    <div className="ent-card-top">
+                      <span className="ent-placa">{item.placa}</span>
+                      <span className="ent-chip" style={{ background: "#fef3c7", color: "#92400e" }}>⚡ COBRO RÁPIDO</span>
+                    </div>
+                    <p className="ent-motivo">{item.concepto}</p>
+                    <div className="ent-card-footer">
+                      <span>{item.metodo_pago || "EFECTIVO"}</span>
+                      <span>{hora}</span>
+                    </div>
+                    <div className="ent-card-monto">{fmt(item.valor)}</div>
+                  </div>
+                );
+              }
+              const fecha = item._fecha.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+              const isActive = selected?.id === item.id && selected?._tipo !== "cobro_rapido";
+              return (
+                <div
+                  key={`tk-${item.id}`}
+                  className={`ent-card ${isActive ? "ent-card--active" : ""}`}
+                  onClick={() => setSelected(item)}
+                >
+                  <div className="ent-card-top">
+                    <span className="ent-placa">{item.placa}</span>
+                    <span className={`ent-chip ent-chip--${item.estado.toLowerCase()}`}>{item.estado}</span>
+                  </div>
+                  <p className="ent-codigo">{item.ticket_codigo}</p>
+                  <p className="ent-motivo">{item.motivo_visita}</p>
+                  <div className="ent-card-footer">
+                    <span>{item.nombre_propietario || "Sin propietario"}</span>
+                    <span>{fecha}</span>
+                  </div>
+                  {item.total_servicio > 0 && (
+                    <div className="ent-card-monto">{fmt(item.total_servicio)}</div>
+                  )}
                 </div>
-                <p className="ent-codigo">{t.ticket_codigo}</p>
-                <p className="ent-motivo">{t.motivo_visita}</p>
-                <div className="ent-card-footer">
-                  <span>{t.nombre_propietario || "Sin propietario"}</span>
-                  <span>{fecha}</span>
-                </div>
-                {t.total_servicio > 0 && (
-                  <div className="ent-card-monto">{fmt(t.total_servicio)}</div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })
+          }
         </div>
 
         {/* Detalle */}

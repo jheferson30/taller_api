@@ -2,6 +2,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,13 @@ from app.modelos.movimiento_caja import (
 )
 from app.seguridad.dependencias import requerir_password_admin
 
+
+class CobroRapidoCrear(BaseModel):
+    placa: str = Field(..., min_length=1, max_length=20)
+    descripcion: str = Field(..., min_length=1, max_length=200)
+    valor: int = Field(..., gt=0)
+    metodo_pago: str = "EFECTIVO"
+
 router = APIRouter(prefix="/movimientos-caja", tags=["Movimientos Caja"])
 
 
@@ -37,6 +45,46 @@ def _validar_movimiento(datos: MovimientoCajaCrear):
             raise HTTPException(status_code=400, detail="concepto es obligatorio para egresos")
         if not datos.categoria_egreso:
             raise HTTPException(status_code=400, detail="categoria_egreso es obligatoria para egresos")
+
+
+@router.get("/cobros-rapidos")
+def listar_cobros_rapidos(
+    db: Session = Depends(obtener_db),
+    placa: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+):
+    query = db.query(MovimientoCaja).filter(MovimientoCaja.tipo == TipoMovimiento.INGRESO_RAPIDO)
+    if placa:
+        query = query.filter(MovimientoCaja.placa == placa.upper())
+    if fecha_desde:
+        query = query.filter(func.date(MovimientoCaja.fecha_creacion) >= fecha_desde)
+    if fecha_hasta:
+        query = query.filter(func.date(MovimientoCaja.fecha_creacion) <= fecha_hasta)
+    return (
+        query.order_by(MovimientoCaja.fecha_creacion.desc())
+        .offset(skip).limit(limit).all()
+    )
+
+
+@router.post("/cobro-rapido", response_model=MovimientoCajaRespuesta)
+def crear_cobro_rapido(
+    datos: CobroRapidoCrear,
+    db: Session = Depends(obtener_db),
+):
+    nuevo = MovimientoCaja(
+        tipo=TipoMovimiento.INGRESO_RAPIDO,
+        placa=datos.placa.upper().strip(),
+        concepto=datos.descripcion,
+        valor=datos.valor,
+        metodo_pago=datos.metodo_pago,
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return nuevo
 
 
 @router.post("/", response_model=MovimientoCajaRespuesta)

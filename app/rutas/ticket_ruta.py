@@ -202,7 +202,30 @@ def eliminar_repuesto(
     repuesto = db.query(TicketRepuesto).filter(TicketRepuesto.id == repuesto_id, TicketRepuesto.ticket_id == ticket_id).first()
     if not repuesto:
         raise HTTPException(status_code=404, detail="Repuesto no encontrado")
+    # Eliminar compra asociada por nombre si existe
+    compra_asociada = db.query(TicketCompra).filter(
+        TicketCompra.ticket_id == ticket_id,
+        TicketCompra.descripcion == repuesto.nombre,
+    ).first()
+    if compra_asociada:
+        db.delete(compra_asociada)
     db.delete(repuesto)
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/{ticket_id}/compras/{compra_id}")
+def eliminar_compra(
+    ticket_id: int,
+    compra_id: int,
+    db: Session = Depends(obtener_db),
+):
+    ticket = _obtener_ticket_o_404(db, ticket_id)
+    _asegurar_editable(ticket)
+    compra = db.query(TicketCompra).filter(TicketCompra.id == compra_id, TicketCompra.ticket_id == ticket_id).first()
+    if not compra:
+        raise HTTPException(status_code=404, detail="Compra no encontrada")
+    db.delete(compra)
     db.commit()
     return {"ok": True}
 
@@ -401,7 +424,7 @@ def generar_pdf_cliente(
         'proximo_mantenimiento': ticket.proximo_mantenimiento,
     }
     
-    procesos_list = [{'nombre': p.nombre, 'mecanico': p.mecanico, 'descripcion': p.descripcion} for p in procesos]
+    procesos_list = [{'nombre': p.nombre, 'mecanico': p.mecanico, 'descripcion': p.descripcion, 'foto_url': p.foto_url} for p in procesos]
     repuestos_list = [{'nombre': r.nombre, 'cantidad': r.cantidad, 'marca_referencia': r.marca_referencia} for r in repuestos]
     fotos_list = [{'tipo': f.tipo, 'archivo_url': f.archivo_url, 'descripcion': f.descripcion} for f in fotos]
     cobros_list = [{'concepto': c.concepto, 'valor': c.valor} for c in cobros]
@@ -439,6 +462,12 @@ def marcar_entregado(
     ticket.fecha_entrega = datetime.now(timezone.utc)
     ticket.confirmado_entrega_por = datos.confirmado_entrega_por
     ticket.firma_entrega_url = datos.firma_entrega_url
+    if datos.observaciones_finales is not None:
+        ticket.observaciones_finales = datos.observaciones_finales
+    if datos.recomendaciones is not None:
+        ticket.recomendaciones = datos.recomendaciones
+    if datos.proximo_mantenimiento is not None:
+        ticket.proximo_mantenimiento = datos.proximo_mantenimiento
     db.commit()
     db.refresh(ticket)
     return ticket

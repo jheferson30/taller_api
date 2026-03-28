@@ -7,6 +7,7 @@ import enum
 class TipoMovimiento(str, enum.Enum):
     INGRESO_ANTICIPO = "INGRESO_ANTICIPO"
     INGRESO_FINAL = "INGRESO_FINAL"
+    INGRESO_RAPIDO = "INGRESO_RAPIDO"
     EGRESO = "EGRESO"
 
 

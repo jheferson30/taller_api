@@ -75,6 +75,7 @@ class TicketProcesoCrear(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=120)
     descripcion: Optional[str] = Field(None, max_length=400)
     mecanico: Optional[str] = Field(None, max_length=120)
+    foto_url: Optional[str] = Field(None, max_length=500)
 
 
 class TicketProcesoRespuesta(BaseModel):
@@ -83,6 +84,7 @@ class TicketProcesoRespuesta(BaseModel):
     nombre: str
     descripcion: Optional[str]
     mecanico: Optional[str]
+    foto_url: Optional[str]
     fecha_creacion: datetime
 
     class Config:
@@ -94,6 +96,7 @@ class TicketRepuestoCrear(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=150)
     cantidad: int = Field(1, ge=1)
     marca_referencia: Optional[str] = Field(None, max_length=120)
+    foto_url: Optional[str] = Field(None, max_length=500)
 
 
 class TicketRepuestoRespuesta(BaseModel):
@@ -103,6 +106,7 @@ class TicketRepuestoRespuesta(BaseModel):
     nombre: str
     cantidad: int
     marca_referencia: Optional[str]
+    foto_url: Optional[str]
     fecha_creacion: datetime
 
     class Config:
@@ -128,7 +132,7 @@ class TicketFotoRespuesta(BaseModel):
 
 
 class TicketCompraCrear(BaseModel):
-    descripcion: str = Field(..., min_length=3, max_length=250)
+    descripcion: str = Field(..., min_length=1, max_length=250)
     valor: int = Field(..., gt=0)
     soporte_url: Optional[str] = Field(None, max_length=255)
     nota: Optional[str] = Field(None, max_length=500)
@@ -163,6 +167,9 @@ class TicketObservacionesFinalesActualizar(BaseModel):
 class TicketEntregarPayload(BaseModel):
     confirmado_entrega_por: Optional[str] = Field(None, max_length=120)
     firma_entrega_url: Optional[str] = Field(None, max_length=255)
+    observaciones_finales: Optional[str] = Field(None, max_length=800)
+    recomendaciones: Optional[str] = Field(None, max_length=800)
+    proximo_mantenimiento: Optional[str] = Field(None, max_length=200)
 
 
 class TicketCobroCrear(BaseModel):

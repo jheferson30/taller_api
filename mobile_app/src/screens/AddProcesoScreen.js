@@ -63,11 +63,17 @@ export default function AddProcesoScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
-      await api.createProceso(ticketId, {
+      let foto_url = null;
+      if (fotoUri) {
+        const uploadResult = await api.subirArchivoFoto(fotoUri);
+        foto_url = uploadResult.url;
+      }
+      await api.createProcesoJson(ticketId, {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || null,
         mecanico: mecanico.trim() || null,
-      }, fotoUri);
+        foto_url,
+      });
       navigation.goBack();
     } catch (e) {
       toast(e.message, 'error');

@@ -38,6 +38,23 @@ def campo(label: str, valor, style_label, style_val):
     return [Paragraph(label, style_label), Paragraph(str(valor) if valor else "No especificado", style_val)]
 
 
+def resolver_ruta_img(url: str) -> str:
+    """Convierte URL o ruta relativa a ruta local del sistema de archivos."""
+    if not url:
+        return ""
+    for prefijo in [
+        "http://127.0.0.1:8000/uploads/",
+        "http://localhost:8000/uploads/",
+    ]:
+        if url.startswith(prefijo):
+            return "uploads/" + url[len(prefijo):]
+    if url.startswith("/uploads/"):
+        return "uploads/" + url[len("/uploads/"):]
+    if url.startswith("uploads/"):
+        return url
+    return url
+
+
 def generar_pdf_ticket_completo(
     ticket_data: dict,
     procesos: List[dict],
@@ -204,33 +221,53 @@ def generar_pdf_ticket_completo(
 
     # ── PROCESOS REALIZADOS ──────────────────────────────────────────────────
     if procesos:
-        rows = [[ Paragraph("Proceso", s_label),
-                  Paragraph("Mecánico", s_label),
-                  Paragraph("Descripción", s_label) ]]
-        for p in procesos:
-            rows.append([
-                Paragraph(p.get("nombre", "—"), s_valor),
-                Paragraph(p.get("mecanico") or "—", s_valor),
-                Paragraph(p.get("descripcion") or "—", s_small),
-            ])
-        tbl = Table(rows, colWidths=[2.2 * inch, 1.4 * inch, 3.8 * inch])
-        tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, 0),  AZUL_CLARO),
-            ("FONTSIZE",      (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING",    (0, 0), (-1, -1), 5),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, GRIS_FILA]),
-            ("BOX",           (0, 0), (-1, -1), 0.5, GRIS_BORDE),
-            ("LINEBELOW",     (0, 0), (-1, -1), 0.3, GRIS_BORDE),
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ]))
-        story.append(KeepTogether([
-            seccion("PROCESOS REALIZADOS"),
-            tbl,
-            Spacer(1, 0.14 * inch),
-        ]))
+        story.append(seccion("PROCESOS REALIZADOS"))
+        POR_FILA_P = 2
+        col_w_p = W / POR_FILA_P
+
+        for i in range(0, len(procesos), POR_FILA_P):
+            grupo = procesos[i:i + POR_FILA_P]
+            celdas = []
+            for p in grupo:
+                contenido = []
+
+                # Foto del proceso
+                ruta = resolver_ruta_img(p.get("foto_url", ""))
+                if ruta and os.path.exists(ruta):
+                    try:
+                        contenido.append(
+                            Image(ruta, width=col_w_p - 12, height=col_w_p - 12, kind="proportional")
+                        )
+                        contenido.append(Spacer(1, 4))
+                    except Exception:
+                        pass
+
+                contenido.append(Paragraph(f"<b>{p.get('nombre', '—')}</b>", s_valor))
+                if p.get("mecanico"):
+                    contenido.append(Paragraph(f"🔧 {p['mecanico']}", s_small))
+                if p.get("descripcion"):
+                    contenido.append(Paragraph(p["descripcion"], s_small))
+
+                celdas.append(contenido)
+
+            while len(celdas) < POR_FILA_P:
+                celdas.append([Paragraph("", s_small)])
+
+            fila_tbl = Table([celdas], colWidths=[col_w_p] * POR_FILA_P)
+            fila_tbl.setStyle(TableStyle([
+                ("BOX",           (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+                ("LINEBEFORE",    (1, 0), (-1, -1), 0.3, GRIS_BORDE),
+                ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+                ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+                ("TOPPADDING",    (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+                ("ROWBACKGROUNDS",(0, 0), (-1, -1), [colors.white]),
+            ]))
+            story.append(fila_tbl)
+
+        story.append(Spacer(1, 0.14 * inch))
 
     # ── REPUESTOS UTILIZADOS ─────────────────────────────────────────────────
     if repuestos:
@@ -266,22 +303,6 @@ def generar_pdf_ticket_completo(
     # ── COMPRAS / MATERIALES (con fotos de soporte) ──────────────────────────
     if compras:
         story.append(seccion("MATERIALES Y COMPRAS"))
-
-        def resolver_ruta_img(url: str) -> str:
-            """Convierte URL o ruta relativa a ruta local del sistema de archivos."""
-            if not url:
-                return ""
-            for prefijo in [
-                "http://127.0.0.1:8000/uploads/",
-                "http://localhost:8000/uploads/",
-            ]:
-                if url.startswith(prefijo):
-                    return "uploads/" + url[len(prefijo):]
-            if url.startswith("/uploads/"):
-                return "uploads/" + url[len("/uploads/"):]
-            if url.startswith("uploads/"):
-                return url
-            return url
 
         # Agrupar en filas de 3
         POR_FILA = 3
@@ -334,7 +355,7 @@ def generar_pdf_ticket_completo(
 
             # Rellenar hasta 3 columnas
             while len(celdas) < POR_FILA:
-                celdas.append([""])
+                celdas.append([Paragraph("", s_small)])
 
             fila_tbl = Table([celdas], colWidths=[col_w] * POR_FILA)
             fila_tbl.setStyle(TableStyle([
@@ -381,7 +402,7 @@ def generar_pdf_ticket_completo(
         for i in range(0, len(foto_items), 2):
             par = foto_items[i:i + 2]
             while len(par) < 2:
-                par.append([""])
+                par.append([Paragraph("", s_small)])
             row_tbl = Table([par], colWidths=[3.6 * inch, 3.8 * inch])
             row_tbl.setStyle(TableStyle([
                 ("VALIGN",        (0, 0), (-1, -1), "TOP"),

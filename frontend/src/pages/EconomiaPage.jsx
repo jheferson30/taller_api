@@ -146,7 +146,8 @@ export default function EconomiaPage() {
             <strong className="kpi-value">{formatMoney(resumen?.ingresos)}</strong>
             <small className="kpi-detail">
               Anticipos: {formatMoney(resumen?.ingreso_anticipo)} | 
-              Finales: {formatMoney(resumen?.ingreso_final)}
+              Finales: {formatMoney(resumen?.ingreso_final)} |
+              Rápidos: {formatMoney(resumen?.ingreso_rapido)}
             </small>
           </div>
         </article>
@@ -259,6 +260,28 @@ export default function EconomiaPage() {
                       <span className="responsable">{x.responsable || 'N/A'}</span>
                     </div>
                     <strong className="valor-ingreso">{formatMoney(x.valor_final_cobrado)}</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="seccion-movimientos">
+            <h4>⚡ Cobros Rápidos ({ingresos?.cobros_rapidos?.length || 0})</h4>
+            <div className="list">
+              {(ingresos?.cobros_rapidos || []).length === 0 ? (
+                <p className="empty-state">No hay cobros rápidos registrados</p>
+              ) : (
+                (ingresos?.cobros_rapidos || []).map((x) => (
+                  <div key={x.id} className="list-row ingreso-item">
+                    <div className="item-main">
+                      <span className="placa-badge">{x.placa}</span>
+                      <span>{x.descripcion}</span>
+                    </div>
+                    <div className="item-details">
+                      <span className="metodo-pago">{x.metodo_pago || 'N/A'}</span>
+                    </div>
+                    <strong className="valor-ingreso">{formatMoney(x.valor)}</strong>
                   </div>
                 ))
               )}

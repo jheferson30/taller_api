@@ -7,6 +7,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
+import { getApiBaseUrl } from '../config';
 import { colors, estadoConfig } from '../theme';
 import { useToast } from '../components/Toast';
 
@@ -110,7 +111,6 @@ export default function TicketDetailScreen({ route, navigation }) {
     { key: 'procesos', label: `Procesos (${resumen?.contadores?.procesos ?? 0})` },
     { key: 'repuestos', label: `Repuestos (${resumen?.contadores?.repuestos ?? 0})` },
     { key: 'fotos', label: `Fotos (${resumen?.contadores?.fotos ?? 0})` },
-    { key: 'compras', label: `Compras (${resumen?.contadores?.compras ?? 0})` },
     { key: 'finanzas', label: 'Finanzas' },
     ...(isFinalizado ? [{ key: 'entrega', label: '📦 Entrega' }] : []),
   ];
@@ -184,16 +184,13 @@ export default function TicketDetailScreen({ route, navigation }) {
       >
         {tab === 'info' && <InfoTab ticket={ticket} fecha={fecha} />}
         {tab === 'procesos' && (
-          <ProcesosTab procesos={procesos} ticketId={ticketId} editable={editable} navigation={navigation} />
+          <ProcesosTab procesos={procesos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} />
         )}
         {tab === 'repuestos' && (
-          <RepuestosTab repuestos={repuestos} ticketId={ticketId} editable={editable} navigation={navigation} />
+          <RepuestosTab repuestos={repuestos} compras={compras} ticketId={ticketId} editable={editable} navigation={navigation} />
         )}
         {tab === 'fotos' && (
           <FotosTab fotos={fotos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} />
-        )}
-        {tab === 'compras' && (
-          <ComprasTab compras={compras} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} />
         )}
         {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} />}
         {tab === 'entrega' && (
@@ -221,7 +218,28 @@ function InfoTab({ ticket, fecha }) {
   );
 }
 
-function ProcesosTab({ procesos, ticketId, editable, navigation }) {
+function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh }) {
+  const toast = useToast();
+  const [baseUrl, setBaseUrl] = React.useState('');
+  React.useEffect(() => { getApiBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
+
+  const handleEliminar = (procesoId) => {
+    Alert.alert('Eliminar proceso', '¿Eliminar este proceso?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.eliminarProceso(ticketId, procesoId);
+            onRefresh();
+          } catch (e) {
+            toast(e.message, 'error');
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={styles.section}>
       {editable && (
@@ -232,10 +250,18 @@ function ProcesosTab({ procesos, ticketId, editable, navigation }) {
       {procesos.length === 0
         ? <Text style={styles.emptyText}>No hay procesos registrados</Text>
         : procesos.map((p) => (
-          <View key={p.id} style={styles.itemCard}>
-            {p.foto_url ? (
+          <View key={p.id} style={[styles.itemCard, { position: 'relative' }]}>
+            {editable && (
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleEliminar(p.id)}
+              >
+                <Text style={styles.deleteBtnText}>✕</Text>
+              </TouchableOpacity>
+            )}
+            {p.foto_url && baseUrl ? (
               <Image
-                source={{ uri: `http://192.168.100.163:8000${p.foto_url}` }}
+                source={{ uri: `${baseUrl}${p.foto_url}` }}
                 style={{ width: '100%', height: 180, borderRadius: 8, marginBottom: 8 }}
                 resizeMode="cover"
               />
@@ -250,7 +276,12 @@ function ProcesosTab({ procesos, ticketId, editable, navigation }) {
   );
 }
 
-function RepuestosTab({ repuestos, ticketId, editable, navigation }) {
+function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation }) {
+  const nombresComprados = new Set((compras || []).map(c => c.descripcion));
+  const comprasPorNombre = Object.fromEntries((compras || []).map(c => [c.descripcion, c]));
+  const [baseUrl, setBaseUrl] = React.useState('');
+  React.useEffect(() => { getApiBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
+
   return (
     <View style={styles.section}>
       {editable && (
@@ -260,17 +291,44 @@ function RepuestosTab({ repuestos, ticketId, editable, navigation }) {
       )}
       {repuestos.length === 0
         ? <Text style={styles.emptyText}>No hay repuestos registrados</Text>
-        : repuestos.map((r) => (
-          <View key={r.id} style={styles.itemCard}>
-            <View style={styles.repuestoRow}>
-              <Text style={styles.itemTitle}>{r.nombre}</Text>
-              <View style={styles.cantBadge}>
-                <Text style={styles.cantText}>x{r.cantidad}</Text>
+        : repuestos.map((r) => {
+          const compra = comprasPorNombre[r.nombre];
+          const fotoUri = r.foto_url && baseUrl ? `${baseUrl}${r.foto_url}`
+            : compra?.soporte_url ? compra.soporte_url
+            : null;
+          return (
+            <View key={r.id} style={styles.itemCard}>
+              {fotoUri ? (
+                <Image
+                  source={{ uri: fotoUri }}
+                  style={{ width: '100%', height: 160, borderRadius: 8, marginBottom: 8 }}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <View style={styles.repuestoRow}>
+                <Text style={styles.itemTitle}>{r.nombre}</Text>
+                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                  {nombresComprados.has(r.nombre) && (
+                    <View style={{ backgroundColor: '#dcfce7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>🛒 Comprado</Text>
+                    </View>
+                  )}
+                  <View style={styles.cantBadge}>
+                    <Text style={styles.cantText}>x{r.cantidad}</Text>
+                  </View>
+                </View>
               </View>
+              {r.marca_referencia && <Text style={styles.itemSub}>{r.marca_referencia}</Text>}
+              {compra?.valor > 0 && (
+                <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
+                  ${compra.valor.toLocaleString('es-CO')}
+                  {compra.responsable ? ` · ${compra.responsable}` : ''}
+                  {compra.nota ? ` · ${compra.nota}` : ''}
+                </Text>
+              )}
             </View>
-            {r.marca_referencia && <Text style={styles.itemSub}>{r.marca_referencia}</Text>}
-          </View>
-        ))
+          );
+        })
       }
     </View>
   );
@@ -882,6 +940,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  deleteBtn: {
+    position: 'absolute', top: 8, right: 8, zIndex: 10,
+    backgroundColor: '#ef4444', borderRadius: 12,
+    width: 24, height: 24, justifyContent: 'center', alignItems: 'center',
+  },
+  deleteBtnText: { color: '#fff', fontWeight: '700', fontSize: 12, lineHeight: 14 },
   itemTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   itemSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   itemDesc: { fontSize: 13, color: colors.text, marginTop: 4 },

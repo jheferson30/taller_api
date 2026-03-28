@@ -34,8 +34,9 @@ def _sumar_por_tipo(db: Session, fecha_objetivo: date, tipo: TipoMovimiento) -> 
 def _resumen_economia(db: Session, fecha_objetivo: date) -> Dict[str, int]:
     ingreso_anticipo = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_ANTICIPO)
     ingreso_final = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_FINAL)
+    ingreso_rapido = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_RAPIDO)
     egresos = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.EGRESO)
-    ingresos = ingreso_anticipo + ingreso_final
+    ingresos = ingreso_anticipo + ingreso_final + ingreso_rapido
 
     tickets_cerrados_hoy = (
         db.query(func.count(func.distinct(MovimientoCaja.ticket_codigo)))
@@ -59,6 +60,7 @@ def _resumen_economia(db: Session, fecha_objetivo: date) -> Dict[str, int]:
     return {
         "ingreso_anticipo": ingreso_anticipo,
         "ingreso_final": ingreso_final,
+        "ingreso_rapido": ingreso_rapido,
         "ingresos": ingresos,
         "egresos": egresos,
         "balance": ingresos - egresos,
@@ -77,6 +79,12 @@ def _detalle_ingresos(db: Session, fecha_objetivo: date):
     finales = (
         _base_query_dia(db, fecha_objetivo)
         .filter(MovimientoCaja.tipo == TipoMovimiento.INGRESO_FINAL)
+        .order_by(MovimientoCaja.fecha_creacion.desc())
+        .all()
+    )
+    rapidos = (
+        _base_query_dia(db, fecha_objetivo)
+        .filter(MovimientoCaja.tipo == TipoMovimiento.INGRESO_RAPIDO)
         .order_by(MovimientoCaja.fecha_creacion.desc())
         .all()
     )
@@ -108,6 +116,17 @@ def _detalle_ingresos(db: Session, fecha_objetivo: date):
                 "observacion": m.observacion,
             }
             for m in finales
+        ],
+        "cobros_rapidos": [
+            {
+                "id": m.id,
+                "placa": m.placa,
+                "descripcion": m.concepto,
+                "valor": m.valor,
+                "hora": m.fecha_creacion.isoformat() if m.fecha_creacion else None,
+                "metodo_pago": m.metodo_pago,
+            }
+            for m in rapidos
         ],
     }
 

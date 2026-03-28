@@ -104,6 +104,15 @@ export default function HomeScreen({ navigation }) {
 
       {/* Accesos rápidos */}
       <Text style={styles.sectionTitle}>Acceso Rápido</Text>
+
+      <TouchableOpacity
+        style={[styles.quickBtn, styles.quickBtnDestacado]}
+        onPress={() => navigation.navigate('CobroRapido', {})}
+      >
+        <Text style={[styles.quickBtnText, { color: '#92400e' }]}>⚡ Cobro Rápido</Text>
+        <Text style={styles.quickBtnArrow}>›</Text>
+      </TouchableOpacity>
+
       {FILTROS.map((f) => (
         <TouchableOpacity
           key={f.label}
@@ -178,6 +187,7 @@ const styles = StyleSheet.create({
   },
   quickBtnText: { fontSize: 15, color: colors.text, fontWeight: '500' },
   quickBtnArrow: { fontSize: 22, color: colors.textMuted },
+  quickBtnDestacado: { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },
   loadingText: { marginTop: 12, color: colors.textMuted, fontSize: 14 },
   errorIcon: { fontSize: 48, marginBottom: 12 },
   errorTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 8 },
