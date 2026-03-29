@@ -2,12 +2,14 @@
 
 ## Overview
 
-El backend FastAPI del taller mecánico presenta cinco problemas agrupados en tres categorías:
-arquitectura (lógica duplicada y dead code), seguridad (endpoints sin autenticación y password
-hardcodeado) y datos (PDF sin nombre/teléfono del propietario). El fix consolida la lógica de
-finalización en una función compartida, elimina el router obsoleto, agrega la dependencia de
-autenticación a los routers afectados, hace obligatoria la variable de entorno `PDF_PASSWORD` y
-corrige la consulta del vehículo en la generación del PDF.
+El backend FastAPI del taller mecánico presenta nueve problemas agrupados en tres categorías:
+arquitectura (lógica duplicada, dead code, schemas inline), seguridad (endpoints sin autenticación,
+passwords hardcodeados en código y en tests) y rendimiento/datos (PDF sin nombre/teléfono del
+propietario, rate limiting no implementado, N+1 queries en resumen de ticket). El fix consolida la
+lógica de finalización en una función compartida, elimina el router obsoleto, agrega autenticación a
+los routers afectados, hace obligatorias las variables de entorno de seguridad, corrige la consulta
+del vehículo en el PDF, mueve los schemas a su módulo dedicado, implementa rate limiting con slowapi
+y consolida las queries de resumen con agregaciones SQLAlchemy.
 
 ---
 
@@ -23,6 +25,10 @@ corrige la consulta del vehículo en la generación del PDF.
 - **`dependencias.py`**: Módulo con las dependencias de autenticación (`requerir_password_pdf`, `requerir_password_admin`)
 - **`PDF_PASSWORD`**: Variable de entorno que debe proveer la contraseña del PDF; actualmente tiene fallback hardcodeado a `"1234"`
 - **`vehiculo_id`**: FK en el modelo `Ticket` que apunta al modelo `Vehiculo` donde residen `nombre_propietario` y `telefono_propietario`
+- **`conftest.py`**: Archivo de configuración de pytest que establece variables de entorno antes de importar la app; actualmente hardcodea `"1234"` para `PDF_PASSWORD` y `ADMIN_PASSWORD`
+- **`slowapi`**: Librería de rate limiting para FastAPI/Starlette declarada en `requirements.txt` pero no configurada ni aplicada en ningún endpoint
+- **`obtener_resumen_ticket`**: Endpoint `GET /api/mobile/tickets/{id}/resumen` que ejecuta 6 queries separadas en lugar de una query con agregaciones
+- **`mobile_schema.py`**: Módulo a crear en `app/esquemas/` que centralizará los 14 schemas Pydantic actualmente definidos inline en `mobile_api_ruta.py`
 
 ---
 
@@ -59,6 +65,24 @@ FUNCTION isBugCondition(input)
     RETURN ticket.nombre_propietario evaluado con hasattr()
            AND "nombre_propietario" NOT IN Ticket.__table__.columns
 
+  IF input.tipo == "TEST_PASSWORDS_HARDCODED"
+    RETURN "PDF_PASSWORD" hardcodeado como "1234" en tests/conftest.py
+           OR "ADMIN_PASSWORD" hardcodeado como "1234" en tests/conftest.py
+
+  IF input.tipo == "RATE_LIMITING_AUSENTE"
+    RETURN "slowapi" IN requirements.txt
+           AND slowapi NOT configurado en main.py
+           AND ningún endpoint tiene límite de tasa aplicado
+
+  IF input.tipo == "N_PLUS_1_RESUMEN"
+    RETURN endpoint == "GET /api/mobile/tickets/{id}/resumen"
+           AND queries_ejecutadas >= 6
+           AND NO usa func.count() NI func.sum() en query única
+
+  IF input.tipo == "SCHEMAS_INLINE"
+    RETURN schemas Pydantic definidos en mobile_api_ruta.py
+           AND NOT EXISTS "app/esquemas/mobile_schema.py"
+
   RETURN False
 END FUNCTION
 ```
@@ -70,6 +94,10 @@ END FUNCTION
 - **Sin autenticación**: `curl http://localhost:8000/tickets` devuelve todos los tickets sin ninguna credencial
 - **Password hardcodeado**: Con `PDF_PASSWORD` no definida, cualquiera que lea el código fuente conoce la contraseña (`"1234"`)
 - **PDF vacío**: `GET /tickets/42/pdf` genera un PDF donde "Propietario:" y "Teléfono:" aparecen en blanco porque `hasattr(ticket, 'nombre_propietario')` retorna `False`
+- **Passwords en tests**: `tests/conftest.py` contiene `os.environ.setdefault("PDF_PASSWORD", "1234")` — cualquiera que clone el repo conoce la contraseña de producción
+- **Rate limiting ausente**: `curl -X POST http://localhost:8000/api/mobile/tickets/1/estado` puede ejecutarse miles de veces por segundo sin ningún límite
+- **N+1 en resumen**: `GET /api/mobile/tickets/1/resumen` con 100 compras y 50 cobros ejecuta 6 queries en lugar de 1, degradando el rendimiento con carga alta
+- **Schemas inline**: `from app.rutas.mobile_api_ruta import TicketListResponse` funciona pero viola la separación de responsabilidades; un segundo router que necesite `TicketListResponse` tendría que importarlo desde el router en lugar del módulo de esquemas
 
 ---
 
@@ -107,6 +135,14 @@ Todos los inputs que NO activen ninguna de las cinco condiciones del bug deben c
 
 5. **`hasattr()` sobre modelo SQLAlchemy**: En `ticket_ruta.py`, el endpoint `GET /{ticket_id}/pdf` construye `ticket_dict` usando `hasattr(ticket, 'nombre_propietario')`. El modelo `Ticket` no tiene esas columnas (residen en `Vehiculo`), por lo que `hasattr` retorna `False` y los campos quedan vacíos. La solución correcta es consultar el `Vehiculo` por `ticket.vehiculo_id`, como ya hace correctamente `mobile_api_ruta.py`.
 
+6. **Passwords hardcodeadas en `conftest.py`**: `tests/conftest.py` usa `os.environ.setdefault("PDF_PASSWORD", "1234")` y `os.environ.setdefault("ADMIN_PASSWORD", "1234")`. Esto expone las contraseñas de producción en el código fuente. La solución es leer esos valores desde un archivo `.env.test` (en `.gitignore`) o desde variables de entorno del sistema, con un fallback documentado solo para CI.
+
+7. **`slowapi` declarado pero no configurado**: `requirements.txt` incluye `slowapi` pero `app/main.py` no crea el `Limiter`, no registra el handler de `RateLimitExceeded` y ningún endpoint tiene el decorador `@limiter.limit(...)`. La dependencia instalada sin uso es dead weight y deja los endpoints sensibles expuestos a abuso.
+
+8. **N+1 queries en `obtener_resumen_ticket`**: La función ejecuta 6 queries independientes: 4 `COUNT` separados (procesos, repuestos, fotos, compras) y 2 cargas completas de registros para sumar valores (compras y cobros). Con muchos tickets activos y llamadas frecuentes desde la app móvil, esto degrada el rendimiento. La solución es consolidar en una sola query con `func.count()` y `func.sum()` usando `outerjoin` o subqueries.
+
+9. **Schemas Pydantic inline en el router**: Los 14 schemas de `mobile_api_ruta.py` están definidos en el mismo archivo que los endpoints. Esto viola la separación de responsabilidades: el router debería solo definir rutas, no tipos de datos. Además impide reutilizar los schemas desde otros módulos sin importar el router completo.
+
 ---
 
 ## Correctness Properties
@@ -140,6 +176,38 @@ Property 5: Preservation — Clientes autenticados no se ven afectados
 _For any_ petición a `/tickets` o `/api/mobile/tickets` que incluya la cabecera de autenticación correcta, el sistema SHALL CONTINUE TO procesar la petición y retornar la respuesta esperada, sin cambios en el comportamiento funcional.
 
 **Validates: Requirements 3.5, 3.6**
+
+---
+
+Property 6: Bug Condition — Tests no exponen contraseñas de producción
+
+_For any_ ejecución de la suite de tests, el sistema SHALL leer `PDF_PASSWORD` y `ADMIN_PASSWORD` desde variables de entorno del sistema o desde `.env.test` (excluido de git), y SHALL NOT tener esos valores hardcodeados en el código fuente del repositorio.
+
+**Validates: Requirements 1.8, 2.8**
+
+Property 7: Bug Condition — Rate limiting activo en endpoints sensibles
+
+_For any_ cliente que supere el límite de peticiones configurado en los endpoints de autenticación o generación de PDF, el sistema SHALL retornar `429 Too Many Requests` sin procesar la petición.
+
+**Validates: Requirements 1.9, 2.9**
+
+Property 8: Bug Condition — Query consolidada en resumen de ticket
+
+_For any_ llamada a `GET /api/mobile/tickets/{id}/resumen`, el sistema SHALL ejecutar como máximo 2 queries a la base de datos (una para el ticket y una para los agregados), retornando los mismos valores que la implementación original con 6 queries.
+
+**Validates: Requirements 1.10, 2.10, 3.10**
+
+Property 9: Bug Condition — Schemas en módulo dedicado
+
+_For any_ importación de schemas del dominio mobile, el sistema SHALL resolverlos desde `app/esquemas/mobile_schema.py`, y el router `mobile_api_ruta.py` SHALL importarlos desde ese módulo en lugar de definirlos inline.
+
+**Validates: Requirements 1.11, 2.11, 3.11**
+
+Property 10: Preservation — Resumen retorna valores idénticos tras consolidación
+
+_For any_ ticket con procesos, repuestos, fotos, compras y cobros existentes, la query consolidada SHALL CONTINUE TO retornar exactamente los mismos contadores y sumas financieras que la implementación original con queries separadas.
+
+**Validates: Requirements 3.10**
 
 ---
 
@@ -238,6 +306,77 @@ _For any_ petición a `/tickets` o `/api/mobile/tickets` que incluya la cabecera
 
 ---
 
+**Archivo 8**: `tests/conftest.py`
+
+**Cambios específicos**:
+1. Crear (o verificar existencia de) `.env.test` con `PDF_PASSWORD` y `ADMIN_PASSWORD` reales, y agregar `.env.test` a `.gitignore`
+2. Reemplazar los `os.environ.setdefault("PDF_PASSWORD", "1234")` y `os.environ.setdefault("ADMIN_PASSWORD", "1234")` por carga desde `.env.test` usando `python-dotenv`:
+   ```python
+   from dotenv import load_dotenv
+   load_dotenv(".env.test", override=False)
+   ```
+3. Agregar fallback explícito solo para CI con comentario documentando el motivo:
+   ```python
+   # Fallback para CI donde .env.test no existe — usar variables de entorno del sistema
+   os.environ.setdefault("PDF_PASSWORD", os.getenv("CI_PDF_PASSWORD", ""))
+   os.environ.setdefault("ADMIN_PASSWORD", os.getenv("CI_ADMIN_PASSWORD", ""))
+   ```
+
+---
+
+**Archivo 9**: `app/main.py` y endpoints sensibles
+
+**Cambios específicos**:
+1. Importar `slowapi`: `from slowapi import Limiter, _rate_limit_exceeded_handler` y `from slowapi.util import get_remote_address` y `from slowapi.errors import RateLimitExceeded`
+2. Crear el limiter: `limiter = Limiter(key_func=get_remote_address)`
+3. Registrar el limiter en el estado de la app: `app.state.limiter = limiter`
+4. Registrar el handler de error: `app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)`
+5. Aplicar `@limiter.limit("10/minute")` a los endpoints de autenticación (`POST /seguridad/login` o equivalente) y `@limiter.limit("20/minute")` a los endpoints de generación de PDF (`GET /tickets/{id}/pdf`)
+
+---
+
+**Archivo 10**: `app/esquemas/mobile_schema.py` *(nuevo)*
+
+**Cambios específicos**:
+1. Crear `app/esquemas/mobile_schema.py` con los 14 schemas actualmente en `mobile_api_ruta.py`: `TicketListResponse`, `TicketDetailResponse`, `ProcesoResponse`, `RepuestoResponse`, `FotoResponse`, `ProcesoCreate`, `RepuestoCreate`, `ActualizarEstadoTicket`, `CompraResponse`, `CompraCreate`, `CobroResponse`, `CobroCreate`, `ActualizarFinanzasData`, `EntregarTicketData`
+2. En `app/rutas/mobile_api_ruta.py`: eliminar las definiciones inline de los 14 schemas y reemplazarlas por un import: `from app.esquemas.mobile_schema import (...)`
+
+---
+
+**Archivo 11**: `app/rutas/mobile_api_ruta.py`
+
+**Función**: `obtener_resumen_ticket`
+
+**Cambios específicos**:
+1. Importar `func` desde `sqlalchemy`: `from sqlalchemy import func`
+2. Reemplazar las 6 queries separadas por una query consolidada usando `func.count()` y `func.sum()`:
+   ```python
+   from sqlalchemy import func
+   
+   stats = db.query(
+       func.count(TicketProceso.id).label("total_procesos"),
+       func.count(TicketRepuesto.id).label("total_repuestos"),
+       func.count(TicketCompra.id).label("total_compras"),
+   ).filter(...).one()
+   
+   # Fotos (excluye tipo PROCESO) y sumas financieras en queries separadas mínimas
+   total_fotos = db.query(func.count(TicketFoto.id)).filter(
+       TicketFoto.ticket_id == ticket_id,
+       TicketFoto.tipo != "PROCESO"
+   ).scalar()
+   
+   sumas = db.query(
+       func.coalesce(func.sum(TicketCompra.valor), 0).label("total_egresos"),
+   ).filter(TicketCompra.ticket_id == ticket_id).one()
+   
+   total_cobros = db.query(
+       func.coalesce(func.sum(TicketCobro.valor), 0)
+   ).filter(TicketCobro.ticket_id == ticket_id).scalar()
+   ```
+3. Mantener exactamente la misma estructura de respuesta JSON
+
+---
+
 ## Testing Strategy
 
 ### Validation Approach
@@ -307,6 +446,7 @@ END FOR
 - Generar combinaciones aleatorias de `(total_servicio, anticipo_recibido, cobros[])` y verificar que `saldo_pendiente = max(0, total_servicio - anticipo - sum(cobros))` (Property 4)
 - Generar peticiones aleatorias sin cabecera de auth a `/tickets/*` y verificar que todas retornan 401 (Property 2)
 - Generar tickets con vehículos aleatorios y verificar que el PDF siempre incluye los datos del propietario cuando existen (Property 3)
+- Generar tickets con cantidades aleatorias de procesos, repuestos, compras y cobros y verificar que la query consolidada retorna los mismos valores que las queries separadas (Property 10)
 
 ### Integration Tests
 
@@ -314,3 +454,6 @@ END FOR
 - Test end-to-end: crear ticket → finalizar desde `/api/mobile/tickets/{id}/estado` → verificar que el resultado es idéntico al anterior
 - Test de arranque: iniciar la app sin `PDF_PASSWORD` → verificar que falla con error de configuración
 - Test de PDF completo: crear ticket con vehículo con propietario → generar PDF → verificar que contiene nombre y teléfono
+- Test de rate limiting: enviar más de 10 peticiones por minuto al endpoint de autenticación → verificar que la petición 11 retorna 429
+- Test de resumen consolidado: crear ticket con N procesos, M compras y K cobros → llamar a `/resumen` → verificar contadores y sumas correctos
+- Test de schemas: importar `TicketListResponse` desde `app.esquemas.mobile_schema` → verificar que funciona sin importar el router

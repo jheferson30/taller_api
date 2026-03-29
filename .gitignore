@@ -50,6 +50,7 @@ Thumbs.db
 .env
 .env.local
 .env.production
+.env.test
 frontend/.env
 frontend/.env.local
 frontend/.env.production

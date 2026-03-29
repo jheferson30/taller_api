@@ -1006,6 +1006,20 @@ export default function TicketPage() {
                                     <span className="cobro-concepto"><strong>Total del Servicio</strong></span>
                                     <span className="cobro-valor"><strong>${totalCobros.toLocaleString()}</strong></span>
                                   </div>
+                                  {anticipo > 0 && (
+                                    <>
+                                      <div className="cobro-item" style={{ color: '#16a34a' }}>
+                                        <span className="cobro-concepto">— Anticipo recibido</span>
+                                        <span className="cobro-valor">-${anticipo.toLocaleString()}</span>
+                                      </div>
+                                      <div className="cobro-item total" style={{ borderTop: '2px solid #1d4ed8' }}>
+                                        <span className="cobro-concepto"><strong>Saldo a Pagar</strong></span>
+                                        <span className="cobro-valor" style={{ color: '#1d4ed8' }}>
+                                          <strong>${Math.max(0, totalCobros - anticipo).toLocaleString()}</strong>
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </div>

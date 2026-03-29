@@ -101,3 +101,89 @@
 
 - [x] 4. Checkpoint - Ensure all tests pass
   - Asegurarse de que todos los tests pasan. Consultar al usuario si surgen dudas.
+
+- [x] 5. Fix: contraseñas hardcodeadas en conftest.py
+
+  - [x] 5.1 Crear .env.test y excluirlo de git
+    - Crear `.env.test` en la raíz del proyecto con `PDF_PASSWORD` y `ADMIN_PASSWORD` con valores reales de test
+    - Verificar que `.gitignore` incluye `.env.test`
+    - Crear `.env.test.example` con valores placeholder como documentación para otros desarrolladores
+    - _Bug_Condition: isBugCondition(X) donde X es conftest.py con "1234" hardcodeado — cualquiera que lea el repo conoce las contraseñas_
+    - _Requirements: 1.8_
+
+  - [x] 5.2 Actualizar conftest.py para leer desde .env.test
+    - En `tests/conftest.py`: agregar `from dotenv import load_dotenv` y llamar a `load_dotenv(".env.test", override=False)` antes de los `setdefault`
+    - Reemplazar `os.environ.setdefault("PDF_PASSWORD", "1234")` por `os.environ.setdefault("PDF_PASSWORD", "")` (sin valor hardcodeado)
+    - Reemplazar `os.environ.setdefault("ADMIN_PASSWORD", "1234")` de la misma forma
+    - Agregar comentario explicando el fallback vacío para CI
+    - _Expected_Behavior: conftest.py no contiene contraseñas hardcodeadas; las lee desde .env.test o variables de entorno del sistema_
+    - _Preservation: los tests existentes siguen pasando cuando .env.test está presente (3.8)_
+    - _Requirements: 2.8, 3.8_
+
+  - [x] 5.3 Verificar que los tests siguen pasando con la nueva configuración
+    - Ejecutar la suite de tests completa y confirmar que todos pasan
+    - Verificar que `.env.test` no aparece en `git status`
+    - _Requirements: 3.8_
+
+- [x] 6. Fix: implementar rate limiting con slowapi
+
+  - [x] 6.1 Configurar slowapi en app/main.py
+    - Importar `Limiter`, `_rate_limit_exceeded_handler` desde `slowapi`; `get_remote_address` desde `slowapi.util`; `RateLimitExceeded` desde `slowapi.errors`
+    - Crear instancia: `limiter = Limiter(key_func=get_remote_address)`
+    - Registrar en el estado de la app: `app.state.limiter = limiter`
+    - Registrar el handler de error 429: `app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)`
+    - _Bug_Condition: isBugCondition(X) donde X es el arranque de la app — slowapi está en requirements.txt pero no configurado_
+    - _Requirements: 1.9_
+
+  - [x] 6.2 Aplicar rate limiting a endpoints sensibles
+    - En `app/rutas/ticket_ruta.py → generar_pdf_cliente()`: agregar `@limiter.limit("20/minute")` y el parámetro `request: Request`
+    - En `app/rutas/mobile_api_ruta.py → actualizar_estado_mobile()`: agregar `@limiter.limit("30/minute")` y el parámetro `request: Request`
+    - Importar `limiter` desde `app.main` en los routers que lo necesiten, o bien definir el limiter en un módulo compartido (ej. `app/configuracion/limiter.py`) para evitar imports circulares
+    - _Expected_Behavior: petición que supera el límite → 429 Too Many Requests; petición dentro del límite → procesada normalmente_
+    - _Preservation: peticiones dentro del límite siguen funcionando sin cambios (3.9)_
+    - _Requirements: 2.9, 3.9_
+
+  - [x] 6.3 Verificar que el rate limiting funciona correctamente
+    - Escribir un test que envíe más peticiones que el límite configurado y verifique que la petición que excede el límite retorna 429
+    - Verificar que peticiones dentro del límite retornan respuestas normales
+    - _Requirements: 2.9, 3.9_
+
+- [x] 7. Fix: consolidar N+1 queries en obtener_resumen_ticket
+
+  - [x] 7.1 Refactorizar obtener_resumen_ticket con queries agregadas
+    - En `app/rutas/mobile_api_ruta.py → obtener_resumen_ticket()`: importar `func` desde `sqlalchemy`
+    - Reemplazar las 4 queries `COUNT` separadas por queries individuales usando `func.count()` con `.scalar()`
+    - Reemplazar la carga completa de compras para sumar valores por `db.query(func.coalesce(func.sum(TicketCompra.valor), 0)).filter(TicketCompra.ticket_id == ticket_id).scalar()`
+    - Reemplazar la carga completa de cobros para sumar valores por `db.query(func.coalesce(func.sum(TicketCobro.valor), 0)).filter(TicketCobro.ticket_id == ticket_id).scalar()`
+    - Mantener exactamente la misma estructura de respuesta JSON
+    - _Bug_Condition: isBugCondition(X) donde X es cualquier llamada a GET /api/mobile/tickets/{id}/resumen — ejecuta 6 queries en lugar de queries con agregaciones_
+    - _Expected_Behavior: el endpoint usa func.count() y func.sum() en lugar de cargar todos los registros en memoria_
+    - _Preservation: la respuesta JSON retorna exactamente los mismos valores que antes (3.10)_
+    - _Requirements: 1.10, 2.10, 3.10_
+
+  - [x] 7.2 Verificar que la respuesta es idéntica a la implementación original
+    - Escribir un test que verifique que `contadores.procesos`, `contadores.repuestos`, `contadores.fotos`, `contadores.compras`, `finanzas.total_egresos` y `finanzas.total_cobros` son correctos con datos reales
+    - _Requirements: 3.10_
+
+- [x] 8. Fix: mover schemas Pydantic a app/esquemas/mobile_schema.py
+
+  - [x] 8.1 Crear app/esquemas/mobile_schema.py con los schemas extraídos
+    - Crear `app/esquemas/mobile_schema.py`
+    - Mover los 14 schemas desde `mobile_api_ruta.py`: `TicketListResponse`, `TicketDetailResponse`, `ProcesoResponse`, `RepuestoResponse`, `FotoResponse`, `ProcesoCreate`, `RepuestoCreate`, `ActualizarEstadoTicket`, `CompraResponse`, `CompraCreate`, `CobroResponse`, `CobroCreate`, `ActualizarFinanzasData`, `EntregarTicketData`
+    - Agregar los imports necesarios (`BaseModel`, `Optional`, `datetime`, etc.) en el nuevo archivo
+    - _Bug_Condition: isBugCondition(X) donde X es la definición de schemas en mobile_api_ruta.py — viola separación de responsabilidades_
+    - _Requirements: 1.11_
+
+  - [x] 8.2 Actualizar mobile_api_ruta.py para importar desde mobile_schema.py
+    - En `app/rutas/mobile_api_ruta.py`: eliminar las 14 definiciones de schemas inline
+    - Agregar import: `from app.esquemas.mobile_schema import (TicketListResponse, TicketDetailResponse, ProcesoResponse, RepuestoResponse, FotoResponse, ProcesoCreate, RepuestoCreate, ActualizarEstadoTicket, CompraResponse, CompraCreate, CobroResponse, CobroCreate, ActualizarFinanzasData, EntregarTicketData)`
+    - _Expected_Behavior: mobile_api_ruta.py importa schemas desde app.esquemas.mobile_schema; los schemas son reutilizables desde cualquier módulo_
+    - _Preservation: todos los endpoints del router siguen funcionando con los mismos schemas y validaciones (3.11)_
+    - _Requirements: 2.11, 3.11_
+
+  - [x] 8.3 Verificar que el router funciona correctamente tras la extracción
+    - Ejecutar los tests existentes del router mobile y confirmar que todos pasan
+    - Verificar que `from app.esquemas.mobile_schema import TicketListResponse` funciona sin importar el router
+    - _Requirements: 3.11_
+
+

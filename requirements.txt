@@ -6,3 +6,5 @@ reportlab
 pillow
 python-dotenv
 python-multipart
+zeroconf
+slowapi

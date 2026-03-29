@@ -16,6 +16,7 @@ Propiedades verificadas:
 **Validates: Requirements 3.1, 3.2, 3.3, 3.5, 3.6**
 """
 
+import os
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -411,8 +412,9 @@ class TestPreservacion35_AutenticacionNormal:
         GET /tickets/abiertos responde 200 con autenticación correcta.
         """
         from app.rutas import ticket_ruta, vehiculo_ruta
+        password = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD", "")
         client, _ = _make_test_client_with_routers(ticket_ruta, vehiculo_ruta)
-        response = client.get("/tickets/abiertos", headers={"X-Admin-Password": "1234"})
+        response = client.get("/tickets/abiertos", headers={"X-Admin-Password": password})
         assert response.status_code == 200
 
     def test_endpoint_tickets_buscar_responde_200(self):
@@ -420,8 +422,9 @@ class TestPreservacion35_AutenticacionNormal:
         GET /tickets/buscar responde 200 con autenticación correcta.
         """
         from app.rutas import ticket_ruta, vehiculo_ruta
+        password = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD", "")
         client, _ = _make_test_client_with_routers(ticket_ruta, vehiculo_ruta)
-        response = client.get("/tickets/buscar", headers={"X-Admin-Password": "1234"})
+        response = client.get("/tickets/buscar", headers={"X-Admin-Password": password})
         assert response.status_code == 200
 
     def test_finalizar_ticket_con_total_servicio_retorna_ticket_finalizado(self):
@@ -462,7 +465,8 @@ class TestPreservacion35_AutenticacionNormal:
         finally:
             db.close()
 
-        response = client.post(f"/tickets/{ticket_id}/finalizar", headers={"X-Admin-Password": "1234"})
+        password = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD", "")
+        response = client.post(f"/tickets/{ticket_id}/finalizar", headers={"X-Admin-Password": password})
         assert response.status_code == 200
         data = response.json()
         assert data["estado"] == "FINALIZADO"

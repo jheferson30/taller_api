@@ -4,7 +4,7 @@ from typing import List, Optional
 import hmac
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,7 @@ from app.modelos.ticket_repuesto import TicketRepuesto
 from app.servicios.ticket_service import finalizar_ticket as _svc_finalizar_ticket
 from app.utils.pdf_generator import generar_pdf_ticket_completo
 from app.modelos.configuracion_taller import ConfiguracionTaller
+from app.configuracion.limiter import limiter
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"], dependencies=[Depends(requerir_password_admin)])
 
@@ -382,7 +383,9 @@ def finalizar_ticket(
 
 
 @router_pdf.get("/{ticket_id}/pdf")
+@limiter.limit("20/minute")
 def generar_pdf_cliente(
+    request: Request,
     ticket_id: int,
     token: Optional[str] = Query(None),
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),

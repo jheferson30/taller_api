@@ -241,6 +241,7 @@ export default function CitasPage() {
                     type="text"
                     value={form.placa}
                     onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase() })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onBuscarPlaca(); } }}
                     placeholder="ABC123"
                     required
                   />
@@ -463,6 +464,19 @@ export default function CitasPage() {
                   style={tieneCitas ? { cursor: "pointer" } : {}}
                 >
                   <div className="calendario-dia-numero">{fecha.getDate()}</div>
+                  <button
+                    className="calendario-dia-add"
+                    title="Agendar cita este día"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const pad = (n) => String(n).padStart(2, '0');
+                      const fechaStr = `${fecha.getFullYear()}-${pad(fecha.getMonth()+1)}-${pad(fecha.getDate())}T09:00`;
+                      setForm(f => ({ ...f, fecha_cita: fechaStr }));
+                      setVistaActual("lista");
+                      setMostrarForm(true);
+                      setTimeout(() => document.querySelector('.form-cita-card')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                    }}
+                  >+</button>
                   {tieneCitas && (
                     <div className="calendario-citas-badge">
                       {citasDelDia.length} cita{citasDelDia.length > 1 ? "s" : ""}

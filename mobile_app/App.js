@@ -11,7 +11,7 @@ import TicketDetailScreen from './src/screens/TicketDetailScreen';
 import AddProcesoScreen from './src/screens/AddProcesoScreen';
 import AddRepuestoScreen from './src/screens/AddRepuestoScreen';
 import AddFotoScreen from './src/screens/AddFotoScreen';
-import AddCompraScreen from './src/screens/AddCompraScreen';
+
 import CobroRapidoScreen from './src/screens/CobroRapidoScreen';
 import ConfiguracionScreen from './src/screens/ConfiguracionScreen';
 import { detectarIpActiva } from './src/config';
@@ -76,7 +76,6 @@ export default function App() {
         <Stack.Screen name="AddProceso" component={AddProcesoScreen} options={{ title: 'Agregar Proceso' }} />
         <Stack.Screen name="AddRepuesto" component={AddRepuestoScreen} options={{ title: 'Agregar Repuesto' }} />
         <Stack.Screen name="AddFoto" component={AddFotoScreen} options={{ title: 'Agregar Foto' }} />
-        <Stack.Screen name="AddCompra" component={AddCompraScreen} options={{ title: 'Registrar Compra' }} />
         <Stack.Screen name="CobroRapido" component={CobroRapidoScreen} options={{ title: 'Cobro Rápido' }} />
       </Stack.Navigator>
     </NavigationContainer>

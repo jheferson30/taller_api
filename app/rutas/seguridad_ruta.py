@@ -1,11 +1,12 @@
 import hashlib
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
+from app.configuracion.limiter import limiter
 from app.modelos.configuracion_seguridad import ConfiguracionSeguridad
 
 router = APIRouter(prefix="/seguridad", tags=["Seguridad"])
@@ -59,7 +60,8 @@ def verificar_tiene_password(db: Session = Depends(obtener_db)):
 
 
 @router.post("/economia/crear-password")
-def crear_password_economia(payload: CrearPasswordPayload, db: Session = Depends(obtener_db)):
+@limiter.limit("10/minute")
+def crear_password_economia(request: Request, payload: CrearPasswordPayload, db: Session = Depends(obtener_db)):
     """Crea la contraseña inicial para acceder a economía"""
     # Verificar que no exista ya
     if _obtener_config(db, "economia_password"):
@@ -80,7 +82,8 @@ def crear_password_economia(payload: CrearPasswordPayload, db: Session = Depends
 
 
 @router.post("/economia/validar-password")
-def validar_password_economia(payload: ValidarPasswordPayload, db: Session = Depends(obtener_db)):
+@limiter.limit("10/minute")
+def validar_password_economia(request: Request, payload: ValidarPasswordPayload, db: Session = Depends(obtener_db)):
     """Valida la contraseña para acceder a economía"""
     config = _obtener_config(db, "economia_password")
     
@@ -96,7 +99,8 @@ def validar_password_economia(payload: ValidarPasswordPayload, db: Session = Dep
 
 
 @router.post("/economia/recuperar-password")
-def recuperar_password_economia(payload: RecuperarPasswordPayload, db: Session = Depends(obtener_db)):
+@limiter.limit("10/minute")
+def recuperar_password_economia(request: Request, payload: RecuperarPasswordPayload, db: Session = Depends(obtener_db)):
     """Recupera/cambia la contraseña usando la palabra clave"""
     config_password = _obtener_config(db, "economia_password")
     config_palabra = _obtener_config(db, "economia_palabra_clave")

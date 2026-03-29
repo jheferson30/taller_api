@@ -2,7 +2,7 @@
 
 ## Introduction
 
-El backend FastAPI del taller mecánico presenta seis problemas agrupados en tres categorías: arquitectura, seguridad y datos. Los problemas de arquitectura generan deuda técnica y riesgo de divergencia entre rutas; los de seguridad exponen endpoints críticos sin autenticación y credenciales hardcodeadas; el problema de datos hace que el PDF generado nunca muestre el nombre ni el teléfono del cliente.
+El backend FastAPI del taller mecánico presenta diez problemas agrupados en tres categorías: arquitectura, seguridad y datos. Los problemas de arquitectura generan deuda técnica y riesgo de divergencia entre rutas; los de seguridad exponen endpoints críticos sin autenticación y credenciales hardcodeadas; el problema de datos hace que el PDF generado nunca muestre el nombre ni el teléfono del cliente. En una segunda iteración se agregan cuatro problemas adicionales: contraseñas hardcodeadas en tests, rate limiting no implementado, N+1 queries en el endpoint de resumen, y schemas Pydantic definidos inline en el router en lugar de en el módulo de esquemas.
 
 ---
 
@@ -34,6 +34,22 @@ El backend FastAPI del taller mecánico presenta seis problemas agrupados en tre
 
 1.7 WHEN se genera el PDF de un ticket mediante `GET /tickets/{id}/pdf` THEN el sistema evalúa `hasattr(ticket, 'nombre_propietario')` que siempre retorna `False` porque esos campos no existen en el modelo `Ticket`, por lo que el PDF muestra los campos "Propietario" y "Teléfono" vacíos
 
+**Seguridad — Contraseñas hardcodeadas en conftest.py**
+
+1.8 WHEN se ejecuta la suite de tests THEN el sistema carga `tests/conftest.py` que llama a `os.environ.setdefault("PDF_PASSWORD", "1234")` y `os.environ.setdefault("ADMIN_PASSWORD", "1234")`, exponiendo las contraseñas de producción directamente en el código fuente del repositorio
+
+**Rendimiento — Rate limiting no implementado**
+
+1.9 WHEN cualquier cliente envía peticiones ilimitadas a los endpoints de autenticación o generación de PDF THEN el sistema procesa todas las peticiones sin ningún límite de tasa, a pesar de que `slowapi` está declarado en `requirements.txt` pero no está configurado ni aplicado en ningún endpoint
+
+**Rendimiento — N+1 queries en `obtener_resumen_ticket`**
+
+1.10 WHEN se llama a `GET /api/mobile/tickets/{id}/resumen` THEN el sistema ejecuta 6 queries separadas: `COUNT` de procesos, `COUNT` de repuestos, `COUNT` de fotos, `COUNT` de compras, luego carga todas las compras para sumar valores, y luego carga todos los cobros para sumar valores, en lugar de consolidar en una sola query con agregaciones
+
+**Arquitectura — Schemas Pydantic definidos inline en el router**
+
+1.11 WHEN se importa `app/rutas/mobile_api_ruta.py` THEN el sistema carga 14 schemas Pydantic (`TicketListResponse`, `TicketDetailResponse`, `ProcesoResponse`, `RepuestoResponse`, `FotoResponse`, `ProcesoCreate`, `RepuestoCreate`, `ActualizarEstadoTicket`, `CompraResponse`, `CompraCreate`, `CobroResponse`, `CobroCreate`, `ActualizarFinanzasData`, `EntregarTicketData`) definidos directamente en el archivo del router en lugar de en `app/esquemas/`, impidiendo su reutilización desde otros módulos
+
 ---
 
 ### Expected Behavior (Correct)
@@ -62,6 +78,22 @@ El backend FastAPI del taller mecánico presenta seis problemas agrupados en tre
 
 2.7 WHEN se genera el PDF de un ticket THEN el sistema SHALL obtener `nombre_propietario` y `telefono_propietario` consultando el vehículo asociado al ticket (`vehiculo_id`) y SHALL incluir esos valores en el diccionario `ticket_dict` que se pasa al generador de PDF
 
+**Seguridad — Contraseñas de tests desde variables de entorno o archivo .env.test**
+
+2.8 WHEN se ejecuta la suite de tests THEN el sistema SHALL leer `PDF_PASSWORD` y `ADMIN_PASSWORD` desde las variables de entorno del sistema o desde un archivo `.env.test` (excluido de git), con un fallback explícito solo para entornos CI donde se documente el motivo
+
+**Rendimiento — Rate limiting activo en endpoints sensibles**
+
+2.9 WHEN un cliente supera el límite de peticiones configurado en los endpoints de autenticación o generación de PDF THEN el sistema SHALL retornar `429 Too Many Requests` usando `slowapi`
+
+**Rendimiento — Query consolidada en `obtener_resumen_ticket`**
+
+2.10 WHEN se llama a `GET /api/mobile/tickets/{id}/resumen` THEN el sistema SHALL obtener todos los contadores y sumas en una sola query usando `func.count()` y `func.sum()` de SQLAlchemy, eliminando las queries N+1
+
+**Arquitectura — Schemas Pydantic en módulo dedicado**
+
+2.11 WHEN se importa el router mobile THEN el sistema SHALL cargar los schemas desde `app/esquemas/mobile_schema.py` e importarlos en `mobile_api_ruta.py`, de modo que sean reutilizables desde cualquier otro módulo
+
 ---
 
 ### Unchanged Behavior (Regression Prevention)
@@ -79,3 +111,11 @@ El backend FastAPI del taller mecánico presenta seis problemas agrupados en tre
 3.6 WHEN los endpoints de economía, vehículos, citas y seguridad reciben peticiones THEN el sistema SHALL CONTINUE TO comportarse exactamente igual que antes de los cambios
 
 3.7 WHEN la variable de entorno `PDF_PASSWORD` está definida THEN el sistema SHALL CONTINUE TO usar ese valor para validar la cabecera `X-PDF-Password`
+
+3.8 WHEN los tests se ejecutan en un entorno con `PDF_PASSWORD` y `ADMIN_PASSWORD` definidas en el sistema o en `.env.test` THEN el sistema SHALL CONTINUE TO ejecutar todos los tests existentes sin cambios en su comportamiento
+
+3.9 WHEN un cliente envía peticiones dentro del límite de tasa configurado THEN el sistema SHALL CONTINUE TO procesar las peticiones normalmente sin errores adicionales
+
+3.10 WHEN se llama a `GET /api/mobile/tickets/{id}/resumen` con un ticket válido THEN el sistema SHALL CONTINUE TO retornar exactamente los mismos valores de contadores y sumas financieras que retornaba antes de la consolidación de queries
+
+3.11 WHEN cualquier módulo importa schemas del dominio mobile THEN el sistema SHALL CONTINUE TO exponer los mismos schemas con los mismos campos y validaciones que antes de moverlos a `app/esquemas/mobile_schema.py`

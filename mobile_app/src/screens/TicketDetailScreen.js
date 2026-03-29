@@ -7,7 +7,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
-import { getApiBaseUrl } from '../config';
+import { getApiBaseUrl, getPdfBaseUrl } from '../config';
 import { colors, estadoConfig } from '../theme';
 import { useToast } from '../components/Toast';
 
@@ -221,7 +221,7 @@ function InfoTab({ ticket, fecha }) {
 function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh }) {
   const toast = useToast();
   const [baseUrl, setBaseUrl] = React.useState('');
-  React.useEffect(() => { getApiBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
+  React.useEffect(() => { getPdfBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
 
   const handleEliminar = (procesoId) => {
     Alert.alert('Eliminar proceso', '¿Eliminar este proceso?', [
@@ -280,7 +280,7 @@ function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation 
   const nombresComprados = new Set((compras || []).map(c => c.descripcion));
   const comprasPorNombre = Object.fromEntries((compras || []).map(c => [c.descripcion, c]));
   const [baseUrl, setBaseUrl] = React.useState('');
-  React.useEffect(() => { getApiBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
+  React.useEffect(() => { getPdfBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
 
   return (
     <View style={styles.section}>
@@ -336,6 +336,11 @@ function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation 
 
 function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
   const toast = useToast();
+  const [baseUrl, setBaseUrl] = React.useState('');
+  React.useEffect(() => { getPdfBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
+
+  const fotosVisibles = fotos.filter(f => f.tipo !== 'PROCESO');
+
   const handleEliminar = (fotoId) => {
     Alert.alert(
       'Eliminar foto',
@@ -365,9 +370,9 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
           <Text style={styles.addBtnText}>📷 Agregar Foto</Text>
         </TouchableOpacity>
       )}
-      {fotos.length === 0
+      {fotosVisibles.length === 0
         ? <Text style={styles.emptyText}>No hay fotos registradas</Text>
-        : fotos.map((f) => (
+        : fotosVisibles.map((f) => (
           <View key={f.id} style={styles.fotoCard}>
             <View style={styles.fotoHeader}>
               <View style={styles.tipoBadge}>
@@ -379,11 +384,13 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
                 </TouchableOpacity>
               )}
             </View>
-            <Image
-              source={{ uri: `http://192.168.100.163:8000${f.archivo_url}` }}
-              style={styles.fotoImg}
-              resizeMode="cover"
-            />
+            {baseUrl ? (
+              <Image
+                source={{ uri: `${baseUrl}${f.archivo_url}` }}
+                style={styles.fotoImg}
+                resizeMode="cover"
+              />
+            ) : null}
             {f.descripcion && <Text style={styles.fotoDesc}>{f.descripcion}</Text>}
           </View>
         ))
@@ -392,66 +399,6 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
   );
 }
 
-function ComprasTab({ compras, ticketId, editable, navigation, onRefresh }) {
-  const toast = useToast();
-  const handleEliminar = (compraId) => {
-    Alert.alert('Eliminar compra', '¿Eliminar esta compra?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar', style: 'destructive',
-        onPress: async () => {
-          try {
-            await api.eliminarCompra(ticketId, compraId);
-            onRefresh();
-          } catch (e) {
-            toast(e.message, 'error');
-          }
-        },
-      },
-    ]);
-  };
-
-  const fmt = (v) => v != null ? `$${v.toLocaleString('es-CO')}` : '—';
-
-  return (
-    <View style={styles.section}>
-      {editable && (
-        <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('AddCompra', { ticketId })}>
-          <Text style={styles.addBtnText}>+ Registrar Compra</Text>
-        </TouchableOpacity>
-      )}
-      {compras.length === 0
-        ? <Text style={styles.emptyText}>No hay compras registradas</Text>
-        : compras.map((c) => (
-          <View key={c.id} style={styles.itemCard}>
-            {c.soporte_url ? (
-              <Image
-                source={{ uri: `http://192.168.100.163:8000${c.soporte_url}` }}
-                style={{ width: '100%', height: 160, borderRadius: 0 }}
-                resizeMode="cover"
-              />
-            ) : null}
-            <View style={styles.compraRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemTitle}>{c.descripcion}</Text>
-                {c.responsable && <Text style={styles.itemSub}>👤 {c.responsable}</Text>}
-                {c.nota && <Text style={styles.itemDesc}>{c.nota}</Text>}
-              </View>
-              <View style={styles.compraValorCol}>
-                <Text style={styles.compraValor}>{fmt(c.valor)}</Text>
-                {editable && (
-                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleEliminar(c.id)}>
-                    <Text style={styles.deleteBtnText}>✕</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
-        ))
-      }
-    </View>
-  );
-}
 
 function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scrollRef }) {
   const toast = useToast();
@@ -695,6 +642,21 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
                 <Text style={[styles.finDetalleLabel, { fontWeight: '700' }]}>Total del Servicio</Text>
                 <Text style={[styles.finDetalleValue, { fontWeight: '700', color: colors.primary }]}>{fmt(totalCobros)}</Text>
               </View>
+
+              {f.anticipo > 0 && (
+                <>
+                  <View style={styles.finDetalleRow}>
+                    <Text style={[styles.finDetalleLabel, { color: '#16a34a' }]}>— Anticipo recibido</Text>
+                    <Text style={[styles.finDetalleValue, { color: '#16a34a' }]}>-{fmt(f.anticipo)}</Text>
+                  </View>
+                  <View style={[styles.finDetalleRow, { borderTopWidth: 2, borderTopColor: colors.primary, paddingTop: 6 }]}>
+                    <Text style={[styles.finDetalleLabel, { fontWeight: '700' }]}>Saldo a Pagar</Text>
+                    <Text style={[styles.finDetalleValue, { fontWeight: '700', color: colors.primary }]}>
+                      {fmt(Math.max(0, totalCobros - f.anticipo))}
+                    </Text>
+                  </View>
+                </>
+              )}
 
               {/* Método de pago */}
               <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Método de Pago</Text>

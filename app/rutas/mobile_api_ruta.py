@@ -1,19 +1,34 @@
 import os
 import uuid
+import json as _json
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db as get_db
 from app.seguridad.dependencias import requerir_password_admin
+from app.configuracion.limiter import limiter
+from app.esquemas.mobile_schema import (
+    ActualizarEstadoTicket,
+    ActualizarFinanzasData,
+    CobroCreate,
+    CobroResponse,
+    CompraCreate,
+    CompraResponse,
+    EntregarTicketData,
+    FotoResponse,
+    ProcesoCreate,
+    ProcesoResponse,
+    RepuestoCreate,
+    RepuestoResponse,
+    TicketDetailResponse,
+    TicketListResponse,
+)
 from app.servicios.ticket_service import finalizar_ticket as svc_finalizar_ticket
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento, CategoriaEgreso, EstadoTicket
-
-FOTOS_DIR = os.path.join("uploads", "fotos")
-os.makedirs(FOTOS_DIR, exist_ok=True)
 from app.modelos.ticket import Ticket
 from app.modelos.vehiculo import Vehiculo
 from app.modelos.ticket_proceso import TicketProceso
@@ -21,92 +36,13 @@ from app.modelos.ticket_repuesto import TicketRepuesto
 from app.modelos.ticket_foto import TicketFoto
 from app.modelos.ticket_compra import TicketCompra
 from app.modelos.ticket_cobro import TicketCobro
+from app.modelos.mecanico import Mecanico
+from app.modelos.configuracion_taller import ConfiguracionTaller
+
+FOTOS_DIR = os.path.join("uploads", "fotos")
+os.makedirs(FOTOS_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/api/mobile", tags=["Mobile API"], dependencies=[Depends(requerir_password_admin)])
-
-
-# ===== SCHEMAS PARA MOBILE =====
-
-class TicketListResponse(BaseModel):
-    id: int
-    ticket_codigo: str
-    placa: str
-    motivo_visita: str
-    estado: str
-    fecha_ingreso: datetime
-    nombre_propietario: Optional[str] = None
-    telefono_propietario: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
-
-
-class TicketDetailResponse(BaseModel):
-    id: int
-    ticket_codigo: str
-    placa: str
-    motivo_visita: str
-    estado: str
-    fecha_ingreso: datetime
-    observaciones_recepcion: Optional[str] = None
-    kilometraje: Optional[int] = None
-    estado_inicial: Optional[str] = None
-    anticipo_recibido: int
-    total_servicio: Optional[int] = None
-    saldo_pendiente: Optional[int] = None
-    nombre_propietario: Optional[str] = None
-    telefono_propietario: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
-
-
-class ProcesoResponse(BaseModel):
-    id: int
-    nombre: str
-    descripcion: Optional[str] = None
-    mecanico: Optional[str] = None
-    foto_url: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
-
-
-class RepuestoResponse(BaseModel):
-    id: int
-    nombre: str
-    cantidad: int
-    marca_referencia: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
-
-
-class FotoResponse(BaseModel):
-    id: int
-    tipo: str
-    archivo_url: str
-    descripcion: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
-
-
-class ProcesoCreate(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-    mecanico: Optional[str] = None
-
-
-class RepuestoCreate(BaseModel):
-    nombre: str
-    cantidad: int = 1
-    marca_referencia: Optional[str] = None
-    proceso_id: Optional[int] = None
-
-
-class ActualizarEstadoTicket(BaseModel):
-    estado: str
 
 
 # ===== ENDPOINTS =====
@@ -178,47 +114,58 @@ def listar_procesos_mobile(ticket_id: int, db: Session = Depends(get_db)):
 
 @router.post("/tickets/{ticket_id}/procesos", response_model=ProcesoResponse)
 async def crear_proceso_mobile(
+    request: Request,
     ticket_id: int,
-    nombre: str = Form(...),
-    descripcion: Optional[str] = Form(default=None),
-    mecanico: Optional[str] = Form(default=None),
-    file: Optional[UploadFile] = File(default=None),
     db: Session = Depends(get_db)
 ):
     """
-    Crea un nuevo proceso para un ticket, con foto opcional
+    Crea un nuevo proceso. Acepta multipart/form-data (con foto) o application/json.
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    
     if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
         raise HTTPException(status_code=400, detail="No se pueden agregar procesos a un ticket finalizado")
 
-    foto_url = None
-    if file and file.filename:
-        ext = os.path.splitext(file.filename)[1].lower()
-        if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-            raise HTTPException(status_code=400, detail="Solo se permiten imágenes jpg, png o webp")
-        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}{ext}"
-        filepath = os.path.join(FOTOS_DIR, filename)
-        content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
-        foto_url = f"/uploads/fotos/{filename}"
+    content_type = request.headers.get("content-type", "")
+    nombre = descripcion = mecanico = foto_url = None
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        nombre = form.get("nombre")
+        descripcion = form.get("descripcion")
+        mecanico = form.get("mecanico")
+        file = form.get("file")
+        if file and hasattr(file, "filename") and file.filename:
+            ext = os.path.splitext(file.filename)[1].lower()
+            if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+                raise HTTPException(status_code=400, detail="Solo se permiten imágenes jpg, png o webp")
+            filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}{ext}"
+            filepath = os.path.join(FOTOS_DIR, filename)
+            content = await file.read()
+            with open(filepath, "wb") as f:
+                f.write(content)
+            foto_url = f"/uploads/fotos/{filename}"
+    else:
+        body = await request.json()
+        nombre = body.get("nombre")
+        descripcion = body.get("descripcion")
+        mecanico = body.get("mecanico")
+        foto_url = body.get("foto_url")
+
+    if not nombre or not str(nombre).strip():
+        raise HTTPException(status_code=422, detail="El nombre del proceso es obligatorio")
 
     nuevo_proceso = TicketProceso(
         ticket_id=ticket_id,
-        nombre=nombre,
+        nombre=str(nombre).strip(),
         descripcion=descripcion,
         mecanico=mecanico,
         foto_url=foto_url,
     )
-    
     db.add(nuevo_proceso)
     db.commit()
     db.refresh(nuevo_proceso)
-    
     return nuevo_proceso
 
 
@@ -288,7 +235,9 @@ TRANSICIONES_VALIDAS = {
 
 
 @router.patch("/tickets/{ticket_id}/estado")
+@limiter.limit("30/minute")
 def actualizar_estado_mobile(
+    request: Request,
     ticket_id: int,
     data: ActualizarEstadoTicket,
     db: Session = Depends(get_db)
@@ -338,35 +287,49 @@ def obtener_resumen_ticket(ticket_id: int, db: Session = Depends(get_db)):
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    
-    total_procesos = db.query(TicketProceso).filter(TicketProceso.ticket_id == ticket_id).count()
-    total_repuestos = db.query(TicketRepuesto).filter(TicketRepuesto.ticket_id == ticket_id).count()
-    total_fotos = db.query(TicketFoto).filter(TicketFoto.ticket_id == ticket_id).count()
-    total_compras = db.query(TicketCompra).filter(TicketCompra.ticket_id == ticket_id).count()
-    
-    # Calcular total de egresos
-    compras = db.query(TicketCompra).filter(TicketCompra.ticket_id == ticket_id).all()
-    total_egresos = sum(c.valor for c in compras)
-    
-    # Calcular total de cobros
-    cobros = db.query(TicketCobro).filter(TicketCobro.ticket_id == ticket_id).all()
-    total_cobros = sum(c.valor for c in cobros)
-    
+
+    resumen = db.query(
+        db.query(func.count(TicketProceso.id))
+        .filter(TicketProceso.ticket_id == ticket_id)
+        .scalar_subquery()
+        .label("total_procesos"),
+        db.query(func.count(TicketRepuesto.id))
+        .filter(TicketRepuesto.ticket_id == ticket_id)
+        .scalar_subquery()
+        .label("total_repuestos"),
+        db.query(func.count(TicketFoto.id))
+        .filter(TicketFoto.ticket_id == ticket_id, TicketFoto.tipo != "PROCESO")
+        .scalar_subquery()
+        .label("total_fotos"),
+        db.query(func.count(TicketCompra.id))
+        .filter(TicketCompra.ticket_id == ticket_id)
+        .scalar_subquery()
+        .label("total_compras"),
+        db.query(func.coalesce(func.sum(TicketCompra.valor), 0))
+        .filter(TicketCompra.ticket_id == ticket_id)
+        .scalar_subquery()
+        .label("total_egresos"),
+        db.query(func.coalesce(func.sum(TicketCobro.valor), 0))
+        .filter(TicketCobro.ticket_id == ticket_id)
+        .scalar_subquery()
+        .label("total_cobros"),
+    ).one()
+
     return {
         "ticket_id": ticket.id,
         "ticket_codigo": ticket.ticket_codigo,
         "placa": ticket.placa,
         "estado": ticket.estado,
         "contadores": {
-            "procesos": total_procesos,
-            "repuestos": total_repuestos,
-            "fotos": total_fotos,
-            "compras": total_compras
+            "procesos": resumen.total_procesos,
+            "repuestos": resumen.total_repuestos,
+            "fotos": resumen.total_fotos,
+            "compras": resumen.total_compras
         },
         "finanzas": {
             "anticipo": ticket.anticipo_recibido,
-            "total_egresos": total_egresos,
-            "total_cobros": total_cobros,
+            "total_egresos": resumen.total_egresos,
+            "total_cobros": resumen.total_cobros,
             "total_servicio": ticket.total_servicio,
             "saldo_pendiente": ticket.saldo_pendiente
         }
@@ -435,13 +398,6 @@ async def subir_foto_mobile(
     return {"id": foto.id, "archivo_url": foto.archivo_url, "tipo": foto.tipo}
 
 
-class EntregarTicketData(BaseModel):
-    confirmado_entrega_por: str
-    observaciones_finales: Optional[str] = None
-    recomendaciones: Optional[str] = None
-    proximo_mantenimiento: Optional[str] = None
-
-
 @router.post("/tickets/{ticket_id}/entregar")
 def entregar_ticket_mobile(
     ticket_id: int,
@@ -493,24 +449,6 @@ def eliminar_foto_mobile(
 
 
 # ===== COMPRAS =====
-
-class CompraResponse(BaseModel):
-    id: int
-    descripcion: str
-    valor: int
-    soporte_url: Optional[str] = None
-    nota: Optional[str] = None
-    responsable: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class CompraCreate(BaseModel):
-    descripcion: str
-    valor: int
-    nota: Optional[str] = None
-    responsable: Optional[str] = None
 
 
 @router.get("/tickets/{ticket_id}/compras", response_model=List[CompraResponse])
@@ -603,20 +541,6 @@ def eliminar_compra_mobile(ticket_id: int, compra_id: int, db: Session = Depends
 
 # ── Cobros ──────────────────────────────────────────────────────────────────
 
-class CobroResponse(BaseModel):
-    id: int
-    concepto: str
-    valor: int
-
-    class Config:
-        from_attributes = True
-
-
-class CobroCreate(BaseModel):
-    concepto: str
-    valor: int
-
-
 @router.get("/tickets/{ticket_id}/cobros", response_model=List[CobroResponse])
 def listar_cobros_mobile(ticket_id: int, db: Session = Depends(get_db)):
     return db.query(TicketCobro).filter(TicketCobro.ticket_id == ticket_id).all()
@@ -648,11 +572,6 @@ def eliminar_cobro_mobile(ticket_id: int, cobro_id: int, db: Session = Depends(g
 
 # ── Finanzas ─────────────────────────────────────────────────────────────────
 
-class ActualizarFinanzasData(BaseModel):
-    total_servicio: int
-    metodo_pago_final: Optional[str] = None
-
-
 @router.patch("/tickets/{ticket_id}/finanzas")
 def actualizar_finanzas_mobile(ticket_id: int, data: ActualizarFinanzasData, db: Session = Depends(get_db)):
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
@@ -669,10 +588,6 @@ def actualizar_finanzas_mobile(ticket_id: int, data: ActualizarFinanzasData, db:
 
 
 # ── Mecánicos y Procesos Rápidos (para la app móvil) ─────────────────────────
-
-import json as _json
-from app.modelos.mecanico import Mecanico
-from app.modelos.configuracion_taller import ConfiguracionTaller
 
 
 @router.get("/mecanicos")
