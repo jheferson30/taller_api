@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import List
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
@@ -11,8 +12,12 @@ from app.esquemas.vehiculo_schema import VehiculoActualizar, VehiculoCrear, Vehi
 from app.modelos.movimiento_caja import EstadoTicket, MovimientoCaja, TipoMovimiento
 from app.modelos.ticket import Ticket
 from app.modelos.vehiculo import Vehiculo
+from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
+from app.servicios.whatsapp_service import TipoEvento
 
 router = APIRouter(prefix="/vehiculos", tags=["Vehiculos"])
+
+_whatsapp_service = TwilioWhatsAppService()
 
 
 def _normalizar_placa(placa: str) -> str:
@@ -176,4 +181,15 @@ def crear_ticket_ingreso(
 
     db.commit()
     db.refresh(ticket)
+    # Fire-and-forget: notificación WhatsApp de recepción (req 2.1)
+    try:
+        import asyncio
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            _whatsapp_service.enviar_notificacion(TipoEvento.RECEPCION, ticket, vehiculo, db)
+        )
+    except RuntimeError:
+        pass  # No hay event loop activo (ej. en tests síncronos)
+    except Exception:
+        pass
     return ticket

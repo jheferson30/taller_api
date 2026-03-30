@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, Boolean
 from app.configuracion.base_datos import Base
 
 
@@ -12,3 +12,6 @@ class ConfiguracionTaller(Base):
     nit = Column(String(50), nullable=True)
     procesos_rapidos = Column(Text, default="[]")  # JSON string
     cobros_rapidos = Column(Text, default="[]")  # JSON string
+    whatsapp_token    = Column(Text, nullable=True)
+    whatsapp_phone_id = Column(String(50), nullable=True)
+    whatsapp_enabled  = Column(Boolean, default=False, nullable=False)

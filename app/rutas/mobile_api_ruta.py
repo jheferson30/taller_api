@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 import json as _json
@@ -38,11 +39,15 @@ from app.modelos.ticket_compra import TicketCompra
 from app.modelos.ticket_cobro import TicketCobro
 from app.modelos.mecanico import Mecanico
 from app.modelos.configuracion_taller import ConfiguracionTaller
+from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
+from app.servicios.whatsapp_service import TipoEvento
 
 FOTOS_DIR = os.path.join("uploads", "fotos")
 os.makedirs(FOTOS_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/api/mobile", tags=["Mobile API"], dependencies=[Depends(requerir_password_admin)])
+
+_whatsapp_service = TwilioWhatsAppService()
 
 
 # ===== ENDPOINTS =====
@@ -421,6 +426,18 @@ def entregar_ticket_mobile(
 
     db.commit()
     db.refresh(ticket)
+    # Fire-and-forget: notificación WhatsApp de entrega (req 4.1)
+    try:
+        vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+        import asyncio
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            _whatsapp_service.enviar_notificacion(TipoEvento.ENTREGA, ticket, vehiculo, db)
+        )
+    except RuntimeError:
+        pass  # No hay event loop activo (ej. en tests síncronos)
+    except Exception:
+        pass
     return {"message": "Ticket entregado correctamente", "estado": ticket.estado}
 
 

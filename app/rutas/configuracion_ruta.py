@@ -29,6 +29,11 @@ class ProcesosRapidosUpdate(BaseModel):
 class CobrosRapidosUpdate(BaseModel):
     cobros: list[str]
 
+class WhatsAppConfigUpdate(BaseModel):
+    whatsapp_token: Optional[str] = None
+    whatsapp_phone_id: Optional[str] = None
+    whatsapp_enabled: bool = False
+
 
 # ── Mecánicos ─────────────────────────────────────────────────────────────────
 
@@ -148,3 +153,27 @@ def actualizar_cobros_rapidos(body: CobrosRapidosUpdate, db: Session = Depends(g
     cfg.cobros_rapidos = json.dumps(limpios, ensure_ascii=False)
     db.commit()
     return {"ok": True, "cobros": limpios}
+
+
+# ── WhatsApp ──────────────────────────────────────────────────────────────────
+
+@router.get("/whatsapp")
+def obtener_config_whatsapp(db: Session = Depends(get_db)):
+    cfg = _get_config(db)
+    return {
+        "whatsapp_token": cfg.whatsapp_token or "",
+        "whatsapp_phone_id": cfg.whatsapp_phone_id or "",
+        "whatsapp_enabled": cfg.whatsapp_enabled or False,
+    }
+
+
+@router.put("/whatsapp", dependencies=[Depends(verificar_admin)])
+def actualizar_config_whatsapp(body: WhatsAppConfigUpdate, db: Session = Depends(get_db)):
+    if body.whatsapp_phone_id and not body.whatsapp_phone_id.isdigit():
+        raise HTTPException(status_code=422, detail="whatsapp_phone_id debe ser numérico")
+    cfg = _get_config(db)
+    cfg.whatsapp_token = body.whatsapp_token
+    cfg.whatsapp_phone_id = body.whatsapp_phone_id
+    cfg.whatsapp_enabled = body.whatsapp_enabled
+    db.commit()
+    return {"ok": True}

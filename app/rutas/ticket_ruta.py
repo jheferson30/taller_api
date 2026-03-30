@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -44,11 +45,15 @@ from app.servicios.ticket_service import finalizar_ticket as _svc_finalizar_tick
 from app.utils.pdf_generator import generar_pdf_ticket_completo
 from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.configuracion.limiter import limiter
+from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
+from app.servicios.whatsapp_service import TipoEvento
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"], dependencies=[Depends(requerir_password_admin)])
 
 # Router separado para el PDF del ticket (acepta auth por query param para compatibilidad móvil)
 router_pdf = APIRouter(prefix="/tickets", tags=["Tickets"])
+
+_whatsapp_service = TwilioWhatsAppService()
 
 PROCESOS_RAPIDOS = [
     "Cambio de aceite",
@@ -379,6 +384,18 @@ def finalizar_ticket(
     _svc_finalizar_ticket(ticket, db)
     db.commit()
     db.refresh(ticket)
+    # Fire-and-forget: notificación WhatsApp de finalización (req 3.1)
+    try:
+        vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+        import asyncio
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            _whatsapp_service.enviar_notificacion(TipoEvento.FINALIZACION, ticket, vehiculo, db)
+        )
+    except RuntimeError:
+        pass  # No hay event loop activo (ej. en tests síncronos)
+    except Exception:
+        pass
     return ticket
 
 
@@ -473,4 +490,16 @@ def marcar_entregado(
         ticket.proximo_mantenimiento = datos.proximo_mantenimiento
     db.commit()
     db.refresh(ticket)
+    # Fire-and-forget: notificación WhatsApp de entrega (req 4.1)
+    try:
+        vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+        import asyncio
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            _whatsapp_service.enviar_notificacion(TipoEvento.ENTREGA, ticket, vehiculo, db)
+        )
+    except RuntimeError:
+        pass  # No hay event loop activo (ej. en tests síncronos)
+    except Exception:
+        pass
     return ticket

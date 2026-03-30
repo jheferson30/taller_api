@@ -21,9 +21,11 @@ from app.configuracion.limiter import limiter
 from app.rutas import (
     economia_ruta, movimiento_caja_ruta, ticket_ruta, upload_ruta,
     vehiculo_ruta, seguridad_ruta, citas_ruta, mobile_api_ruta, configuracion_ruta,
+    whatsapp_ruta,
 )
 import app.modelos.mecanico  # noqa
 import app.modelos.configuracion_taller  # noqa
+import app.modelos.log_notificacion  # noqa
 
 Base.metadata.create_all(bind=engine)
 
@@ -121,6 +123,7 @@ app.include_router(seguridad_ruta.router)
 app.include_router(citas_ruta.router)
 app.include_router(mobile_api_ruta.router)
 app.include_router(configuracion_ruta.router)
+app.include_router(whatsapp_ruta.router)
 
 
 # ── mDNS ──────────────────────────────────────────────────────────────────────
