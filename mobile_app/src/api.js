@@ -1,16 +1,20 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl, getPdfBaseUrl, getAdminPassword } from './config';
+import authService from './services/authService';
 
 async function request(path, options = {}) {
   try {
-    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${baseUrl}${path}`, {
+    const baseUrl = await getApiBaseUrl();
+    const url = `${baseUrl}${path}`;
+    
+    const response = await authService.authenticatedRequest(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'X-Admin-Password': password,
         ...(options.headers || {}),
       },
     });
+
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       const detail = err.detail;
@@ -50,7 +54,7 @@ export const api = {
     }),
 
   createProceso: async (ticketId, data, uri = null) => {
-    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
+    const baseUrl = await getApiBaseUrl();
     const formData = new FormData();
     formData.append('nombre', data.nombre);
     if (data.descripcion) formData.append('descripcion', data.descripcion);
@@ -61,11 +65,13 @@ export const api = {
       const type = ext === 'png' ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type });
     }
-    const response = await fetch(`${baseUrl}/tickets/${ticketId}/procesos`, {
-      method: 'POST',
-      body: formData,
-      headers: { 'X-Admin-Password': password },
-    });
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/procesos`,
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Error ${response.status}`);
@@ -80,7 +86,7 @@ export const api = {
     }),
 
   subirFoto: async (ticketId, uri, descripcion = null, tipo = 'OTRA') => {
-    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
+    const baseUrl = await getApiBaseUrl();
     const filename = uri.split('/').pop();
     const ext = filename.split('.').pop().toLowerCase();
     const type = ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -90,9 +96,9 @@ export const api = {
     formData.append('tipo', tipo);
     if (descripcion) formData.append('descripcion', descripcion);
 
-    const response = await fetch(
+    const response = await authService.authenticatedRequest(
       `${baseUrl}/tickets/${ticketId}/fotos`,
-      { method: 'POST', body: formData, headers: { 'X-Admin-Password': password } }
+      { method: 'POST', body: formData }
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
@@ -113,10 +119,11 @@ export const api = {
   getCompras: (id) => request(`/tickets/${id}/compras`),
 
   eliminarCompra: async (ticketId, compraId) => {
-    const [baseUrl, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${baseUrl}/tickets/${ticketId}/compras/${compraId}`, {
-      method: 'DELETE', headers: { 'X-Admin-Password': password },
-    });
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/compras/${compraId}`,
+      { method: 'DELETE' }
+    );
     if (!response.ok) throw new Error(`Error ${response.status}`);
     return response.json();
   },
@@ -139,15 +146,17 @@ export const api = {
     }),
 
   getPdfUrl: async (ticketId) => {
-    const [base, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    return `${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(password)}`;
+    const base = await getPdfBaseUrl();
+    const token = authService.accessToken || await AsyncStorage.getItem('@auth_access_token');
+    return `${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(token)}`;
   },
 
   descargarPdf: async (ticketId) => {
-    const [base, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${base}/tickets/${ticketId}/pdf`, {
-      headers: { 'X-Admin-Password': password },
-    });
+    const base = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${base}/tickets/${ticketId}/pdf`,
+      {}
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Error ${response.status}`);
@@ -162,12 +171,15 @@ export const api = {
   getCobrosRapidos: () => request('/cobros-rapidos'),
 
   cobroRapido: async (data) => {
-    const [baseUrl, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${baseUrl}/movimientos-caja/cobro-rapido`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password },
-    });
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/movimientos-caja/cobro-rapido`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       const detail = err.detail;
@@ -178,36 +190,40 @@ export const api = {
   },
 
   eliminarProceso: async (ticketId, procesoId) => {
-    const [baseUrl, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${baseUrl}/tickets/${ticketId}/procesos/${procesoId}`, {
-      method: 'DELETE', headers: { 'X-Admin-Password': password },
-    });
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/procesos/${procesoId}`,
+      { method: 'DELETE' }
+    );
     if (!response.ok) throw new Error(`Error ${response.status}`);
     return response.json();
   },
 
   eliminarRepuesto: async (ticketId, repuestoId) => {
-    const [baseUrl, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${baseUrl}/tickets/${ticketId}/repuestos/${repuestoId}`, {
-      method: 'DELETE', headers: { 'X-Admin-Password': password },
-    });
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/repuestos/${repuestoId}`,
+      { method: 'DELETE' }
+    );
     if (!response.ok) throw new Error(`Error ${response.status}`);
     return response.json();
   },
 
   subirArchivoFoto: async (uri) => {
-    const [baseUrl, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
+    const baseUrl = await getPdfBaseUrl();
     const filename = uri.split('/').pop() || `foto_${Date.now()}.jpg`;
     const ext = filename.includes('.') ? filename.split('.').pop().toLowerCase() : 'jpg';
     const type = ext === 'png' ? 'image/png' : 'image/jpeg';
     const safeName = filename.includes('.') ? filename : `${filename}.jpg`;
     const formData = new FormData();
     formData.append('file', { uri, name: safeName, type });
-    const response = await fetch(`${baseUrl}/upload/foto`, {
-      method: 'POST',
-      body: formData,
-      headers: { 'X-Admin-Password': password },
-    });
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/upload/foto`,
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Error ${response.status} al subir foto`);
@@ -216,15 +232,15 @@ export const api = {
   },
 
   createProcesoJson: async (ticketId, data) => {
-    const [baseUrl, password] = await Promise.all([getPdfBaseUrl(), getAdminPassword()]);
-    const response = await fetch(`${baseUrl}/tickets/${ticketId}/procesos`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Password': password,
-      },
-    });
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/procesos`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       const detail = err.detail;
@@ -237,7 +253,7 @@ export const api = {
   },
 
   createCompra: async (ticketId, data, uri = null) => {
-    const [baseUrl, password] = await Promise.all([getApiBaseUrl(), getAdminPassword()]);
+    const baseUrl = await getApiBaseUrl();
     const formData = new FormData();
     formData.append('descripcion', data.descripcion);
     formData.append('valor', String(data.valor));
@@ -249,11 +265,13 @@ export const api = {
       const type = ext === 'png' ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type });
     }
-    const response = await fetch(`${baseUrl}/tickets/${ticketId}/compras`, {
-      method: 'POST',
-      body: formData,
-      headers: { 'X-Admin-Password': password },
-    });
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/compras`,
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Error ${response.status}`);

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Limpiar Caché y localStorage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .danger {
+            background: #dc3545;
+        }
+        .danger:hover {
+            background: #c82333;
+        }
+        .success {
+            background: #28a745;
+        }
+        .success:hover {
+            background: #218838;
+        }
+        .info {
+            background: #17a2b8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            color: #856404;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Herramienta de Limpieza - Frontend Taller</h1>
+        
+        <div class="warning">
+            <strong>⚠️ Problema:</strong> El navegador está mostrando el dashboard directamente sin pedir login.
+            <br><br>
+            <strong>Causa:</strong> Tienes tokens guardados en localStorage de una sesión anterior.
+        </div>
+
+        <h2>📊 Estado Actual</h2>
+        <div id="status"></div>
+
+        <h2>🔧 Acciones</h2>
+        
+        <button onclick="checkLocalStorage()">1. Ver localStorage</button>
+        <button class="danger" onclick="clearLocalStorage()">2. Limpiar localStorage</button>
+        <button class="success" onclick="clearAndReload()">3. Limpiar TODO y Recargar</button>
+        
+        <h2>📝 Instrucciones</h2>
+        <ol>
+            <li>Haz clic en "Ver localStorage" para ver qué tokens tienes guardados</li>
+            <li>Haz clic en "Limpiar localStorage" para borrar los tokens</li>
+            <li>Haz clic en "Limpiar TODO y Recargar" para limpiar y recargar la página</li>
+            <li>Después de limpiar, ve a <a href="http://localhost:8000" target="_blank">http://localhost:8000</a></li>
+        </ol>
+
+        <div class="info">
+            <strong>✅ Después de limpiar deberías ver:</strong>
+            <ul>
+                <li>Página de LOGIN (sin sidebar)</li>
+                <li>Campos de Usuario y Contraseña</li>
+                <li>Botón "Iniciar Sesión"</li>
+            </ul>
+        </div>
+
+        <h2>🔑 Credenciales de Prueba</h2>
+        <pre>Usuario: admin
+Contraseña: Admin123</pre>
+    </div>
+
+    <script>
+        function checkLocalStorage() {
+            const status = document.getElementById('status');
+            const accessToken = localStorage.getItem('access_token');
+            const refreshToken = localStorage.getItem('refresh_token');
+            const user = localStorage.getItem('user');
+
+            let html = '<pre>';
+            html += 'access_token: ' + (accessToken ? '✅ EXISTE (por eso entras sin login)' : '❌ No existe') + '\n';
+            html += 'refresh_token: ' + (refreshToken ? '✅ EXISTE' : '❌ No existe') + '\n';
+            html += 'user: ' + (user ? '✅ EXISTE' : '❌ No existe') + '\n';
+            
+            if (accessToken || refreshToken || user) {
+                html += '\n⚠️ PROBLEMA: Tienes tokens guardados. Por eso entras sin login.\n';
+                html += '👉 Haz clic en "Limpiar localStorage" para borrarlos.';
+            } else {
+                html += '\n✅ localStorage está limpio. Deberías ver la página de login.';
+            }
+            html += '</pre>';
+
+            status.innerHTML = html;
+        }
+
+        function clearLocalStorage() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+            
+            alert('✅ localStorage limpiado!\n\nAhora ve a http://localhost:8000 y presiona Ctrl+Shift+R');
+            checkLocalStorage();
+        }
+
+        function clearAndReload() {
+            if (confirm('¿Limpiar localStorage y recargar la página?')) {
+                localStorage.clear();
+                location.reload(true);
+            }
+        }
+
+        // Verificar al cargar
+        window.onload = checkLocalStorage;
+    </script>
+</body>
+</html>

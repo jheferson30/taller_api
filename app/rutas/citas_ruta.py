@@ -9,8 +9,9 @@ from app.esquemas.cita_schema import CitaCrear, CitaActualizar, CitaRespuesta
 from app.modelos.cita import Cita
 from app.modelos.vehiculo import Vehiculo
 from app.modelos.ticket import Ticket
+from app.seguridad.dependencias import require_jwt_auth
 
-router = APIRouter(prefix="/citas", tags=["Citas"])
+router = APIRouter(prefix="/citas", tags=["Citas"], dependencies=[Depends(require_jwt_auth)])
 
 
 @router.get("", response_model=List[CitaRespuesta])

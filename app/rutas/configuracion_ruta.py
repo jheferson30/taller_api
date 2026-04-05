@@ -34,6 +34,11 @@ class WhatsAppConfigUpdate(BaseModel):
     whatsapp_phone_id: Optional[str] = None
     whatsapp_enabled: bool = False
 
+class EmailConfigUpdate(BaseModel):
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+
 
 # ── Mecánicos ─────────────────────────────────────────────────────────────────
 
@@ -175,5 +180,31 @@ def actualizar_config_whatsapp(body: WhatsAppConfigUpdate, db: Session = Depends
     cfg.whatsapp_token = body.whatsapp_token
     cfg.whatsapp_phone_id = body.whatsapp_phone_id
     cfg.whatsapp_enabled = body.whatsapp_enabled
+    db.commit()
+    return {"ok": True}
+
+
+# ── Email / SMTP ──────────────────────────────────────────────────────────────
+
+@router.get("/email")
+def obtener_config_email(db: Session = Depends(get_db)):
+    cfg = _get_config(db)
+    return {
+        "smtp_user": cfg.smtp_user or "",
+        "smtp_from": cfg.smtp_from or "",
+        # nunca devolver la contraseña, solo indicar si está configurada
+        "smtp_password_set": bool(cfg.smtp_password),
+    }
+
+
+@router.put("/email", dependencies=[Depends(verificar_admin)])
+def actualizar_config_email(body: EmailConfigUpdate, db: Session = Depends(get_db)):
+    cfg = _get_config(db)
+    if body.smtp_user is not None:
+        cfg.smtp_user = body.smtp_user.strip() or None
+    if body.smtp_password is not None:
+        cfg.smtp_password = body.smtp_password or None
+    if body.smtp_from is not None:
+        cfg.smtp_from = body.smtp_from.strip() or None
     db.commit()
     return {"ok": True}

@@ -28,7 +28,7 @@ from app.esquemas.mobile_schema import (
     TicketDetailResponse,
     TicketListResponse,
 )
-from app.servicios.ticket_service import finalizar_ticket as svc_finalizar_ticket
+from app.servicios.ticket_service import TicketService
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento, CategoriaEgreso, EstadoTicket
 from app.modelos.ticket import Ticket
 from app.modelos.vehiculo import Vehiculo
@@ -119,12 +119,16 @@ def listar_procesos_mobile(ticket_id: int, db: Session = Depends(get_db)):
 
 @router.post("/tickets/{ticket_id}/procesos", response_model=ProcesoResponse)
 async def crear_proceso_mobile(
-    request: Request,
     ticket_id: int,
+    nombre: str = Form(...),
+    descripcion: Optional[str] = Form(None),
+    mecanico: Optional[str] = Form(None),
+    foto_url: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
-    Crea un nuevo proceso. Acepta multipart/form-data (con foto) o application/json.
+    Crea un nuevo proceso sin foto (usando Form data).
+    Para subir con foto, usar el endpoint /tickets/{ticket_id}/procesos/con-foto
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
@@ -132,34 +136,55 @@ async def crear_proceso_mobile(
     if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
         raise HTTPException(status_code=400, detail="No se pueden agregar procesos a un ticket finalizado")
 
-    content_type = request.headers.get("content-type", "")
-    nombre = descripcion = mecanico = foto_url = None
+    if not nombre or not str(nombre).strip():
+        raise HTTPException(status_code=422, detail="El nombre del proceso es obligatorio")
 
-    if "multipart/form-data" in content_type:
-        form = await request.form()
-        nombre = form.get("nombre")
-        descripcion = form.get("descripcion")
-        mecanico = form.get("mecanico")
-        file = form.get("file")
-        if file and hasattr(file, "filename") and file.filename:
-            ext = os.path.splitext(file.filename)[1].lower()
-            if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-                raise HTTPException(status_code=400, detail="Solo se permiten imágenes jpg, png o webp")
-            filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}{ext}"
-            filepath = os.path.join(FOTOS_DIR, filename)
-            content = await file.read()
-            with open(filepath, "wb") as f:
-                f.write(content)
-            foto_url = f"/uploads/fotos/{filename}"
-    else:
-        body = await request.json()
-        nombre = body.get("nombre")
-        descripcion = body.get("descripcion")
-        mecanico = body.get("mecanico")
-        foto_url = body.get("foto_url")
+    nuevo_proceso = TicketProceso(
+        ticket_id=ticket_id,
+        nombre=str(nombre).strip(),
+        descripcion=descripcion,
+        mecanico=mecanico,
+        foto_url=foto_url,
+    )
+    db.add(nuevo_proceso)
+    db.commit()
+    db.refresh(nuevo_proceso)
+    return nuevo_proceso
+
+
+@router.post("/tickets/{ticket_id}/procesos/con-foto", response_model=ProcesoResponse)
+async def crear_proceso_con_foto_mobile(
+    ticket_id: int,
+    nombre: str = Form(...),
+    descripcion: Optional[str] = Form(None),
+    mecanico: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Crea un nuevo proceso con foto adjunta (usando multipart/form-data).
+    """
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
+        raise HTTPException(status_code=400, detail="No se pueden agregar procesos a un ticket finalizado")
 
     if not nombre or not str(nombre).strip():
         raise HTTPException(status_code=422, detail="El nombre del proceso es obligatorio")
+
+    # Validar y guardar foto
+    foto_url = None
+    if file and file.filename:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+            raise HTTPException(status_code=400, detail="Solo se permiten imágenes jpg, png o webp")
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}{ext}"
+        filepath = os.path.join(FOTOS_DIR, filename)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+        foto_url = f"/uploads/fotos/{filename}"
 
     nuevo_proceso = TicketProceso(
         ticket_id=ticket_id,
@@ -276,7 +301,8 @@ def actualizar_estado_mobile(
     ticket.fecha_actualizacion = datetime.now()
 
     if nuevo_estado == "FINALIZADO":
-        svc_finalizar_ticket(ticket, db)
+        ticket_service = TicketService(db)
+        ticket_service.finalizar_ticket(ticket)
 
     db.commit()
     db.refresh(ticket)
@@ -413,19 +439,20 @@ def entregar_ticket_mobile(
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if ticket.estado != "FINALIZADO":
-        raise HTTPException(status_code=400, detail="Solo se pueden entregar tickets en estado FINALIZADO")
 
-    ticket.estado = "ENTREGADO"
-    ticket.confirmado_entrega_por = data.confirmado_entrega_por
-    ticket.observaciones_finales = data.observaciones_finales
-    ticket.recomendaciones = data.recomendaciones
-    ticket.proximo_mantenimiento = data.proximo_mantenimiento
-    ticket.fecha_entrega = datetime.now()
-    ticket.fecha_actualizacion = datetime.now()
+    # Usar servicio para entregar ticket
+    ticket_service = TicketService(db)
+    ticket_service.entregar_ticket(
+        ticket=ticket,
+        confirmado_entrega_por=data.confirmado_entrega_por,
+        observaciones_finales=data.observaciones_finales,
+        recomendaciones=data.recomendaciones,
+        proximo_mantenimiento=data.proximo_mantenimiento,
+    )
 
     db.commit()
     db.refresh(ticket)
+    
     # Fire-and-forget: notificación WhatsApp de entrega (req 4.1)
     try:
         vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
@@ -489,8 +516,6 @@ async def crear_compra_mobile(
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
-        raise HTTPException(status_code=400, detail="No se pueden agregar compras a un ticket finalizado")
     if valor <= 0:
         raise HTTPException(status_code=400, detail="El valor debe ser mayor a 0")
 
@@ -508,32 +533,16 @@ async def crear_compra_mobile(
             f.write(content)
         soporte_url = f"/uploads/compras/{filename}"
 
-    compra = TicketCompra(
-        ticket_id=ticket_id,
+    # Usar servicio para crear compra con movimiento
+    ticket_service = TicketService(db)
+    compra = ticket_service.crear_compra_con_movimiento(
+        ticket=ticket,
         descripcion=descripcion,
         valor=valor,
+        responsable=responsable,
         nota=nota,
-        responsable=responsable,
         soporte_url=soporte_url,
     )
-    db.add(compra)
-    db.flush()
-
-    movimiento = MovimientoCaja(
-        tipo=TipoMovimiento.EGRESO,
-        ticket_id=ticket.id,
-        ticket_codigo=ticket.ticket_codigo,
-        placa=ticket.placa,
-        estado_ticket=EstadoTicket.EN_PROCESO,
-        valor=valor,
-        categoria_egreso=CategoriaEgreso.OTRO,
-        concepto=descripcion,
-        responsable=responsable,
-        observacion=nota,
-        soporte_url=soporte_url,
-        creado_por=responsable,
-    )
-    db.add(movimiento)
     db.commit()
     db.refresh(compra)
     return compra
@@ -594,12 +603,14 @@ def actualizar_finanzas_mobile(ticket_id: int, data: ActualizarFinanzasData, db:
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    ticket.total_servicio = data.total_servicio
-    ticket.metodo_pago_final = data.metodo_pago_final
-    # Recalcular saldo pendiente
-    cobros = db.query(TicketCobro).filter(TicketCobro.ticket_id == ticket_id).all()
-    total_cobros = sum(c.valor for c in cobros)
-    ticket.saldo_pendiente = data.total_servicio - (ticket.anticipo_recibido or 0) - total_cobros
+    
+    # Usar servicio para actualizar finanzas
+    ticket_service = TicketService(db)
+    ticket_service.actualizar_finanzas(
+        ticket=ticket,
+        total_servicio=data.total_servicio,
+        metodo_pago_final=data.metodo_pago_final,
+    )
     db.commit()
     return {"ok": True, "saldo_pendiente": ticket.saldo_pendiente}
 
@@ -634,3 +645,294 @@ def listar_cobros_rapidos_mobile(db: Session = Depends(get_db)):
     except Exception:
         cobros = []
     return {"cobros": cobros}
+
+
+# ── Sincronización por lotes (Modo Offline) ──────────────────────────────────
+
+
+from pydantic import BaseModel, Field
+from typing import Literal
+
+
+class OperacionOffline(BaseModel):
+    """Representa una operación realizada offline que necesita sincronizarse."""
+    id: str = Field(..., description="ID único de la operación (UUID generado en cliente)")
+    tipo: Literal["crear_proceso", "crear_repuesto", "subir_foto", "crear_compra", "actualizar_estado"] = Field(..., description="Tipo de operación")
+    ticket_id: int = Field(..., description="ID del ticket asociado")
+    timestamp: datetime = Field(..., description="Timestamp de cuando se realizó la operación")
+    datos: dict = Field(..., description="Datos de la operación (varía según el tipo)")
+
+
+class ResultadoOperacion(BaseModel):
+    """Resultado de procesar una operación offline."""
+    id: str = Field(..., description="ID de la operación")
+    status: Literal["success", "failed", "conflict"] = Field(..., description="Estado del procesamiento")
+    message: str = Field(..., description="Mensaje descriptivo")
+    resource_id: Optional[int] = Field(None, description="ID del recurso creado (si aplica)")
+    details: Optional[dict] = Field(None, description="Detalles adicionales del error o conflicto")
+
+
+class SyncBatchRequest(BaseModel):
+    """Request para sincronización por lotes."""
+    operaciones: List[OperacionOffline] = Field(..., description="Lista de operaciones a sincronizar")
+
+
+class SyncBatchResponse(BaseModel):
+    """Response de sincronización por lotes."""
+    total: int = Field(..., description="Total de operaciones procesadas")
+    exitosas: int = Field(..., description="Operaciones exitosas")
+    fallidas: int = Field(..., description="Operaciones fallidas")
+    conflictos: int = Field(..., description="Operaciones con conflictos")
+    resultados: List[ResultadoOperacion] = Field(..., description="Resultados detallados por operación")
+
+
+@router.post("/sync/batch", response_model=SyncBatchResponse)
+@limiter.limit("10/minute")
+def sincronizar_operaciones_batch(
+    request: Request,
+    sync_request: SyncBatchRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Sincroniza múltiples operaciones offline en un solo request.
+    
+    Valida:
+    - Timestamps no sean demasiado antiguos (>30 días)
+    - Procesa operaciones en orden cronológico
+    - Detecta conflictos (recurso modificado en servidor)
+    - Retorna resultados: success, failed, conflicts
+    
+    Requirements: 25.13, 25.14, 25.15
+    """
+    from datetime import timedelta
+    from app.utils.exceptions import ValidationError, ResourceNotFoundError, ConflictError
+    
+    # Validar que no haya demasiadas operaciones
+    if len(sync_request.operaciones) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Máximo 100 operaciones por batch"
+        )
+    
+    # Validar timestamps
+    ahora = datetime.now()
+    max_antiguedad = timedelta(days=30)
+    
+    for op in sync_request.operaciones:
+        if ahora - op.timestamp > max_antiguedad:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Operación {op.id} demasiado antigua (>30 días). No se puede sincronizar."
+            )
+    
+    # Ordenar operaciones por timestamp (cronológico)
+    operaciones_ordenadas = sorted(sync_request.operaciones, key=lambda x: x.timestamp)
+    
+    resultados = []
+    exitosas = 0
+    fallidas = 0
+    conflictos = 0
+    
+    for op in operaciones_ordenadas:
+        try:
+            # Verificar que el ticket existe
+            ticket = db.query(Ticket).filter(Ticket.id == op.ticket_id).first()
+            if not ticket:
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="failed",
+                    message=f"Ticket {op.ticket_id} no encontrado",
+                    details={"error": "resource_not_found"}
+                ))
+                fallidas += 1
+                continue
+            
+            # Detectar conflictos: si el ticket fue modificado después del timestamp de la operación
+            if ticket.fecha_actualizacion and ticket.fecha_actualizacion > op.timestamp:
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="conflict",
+                    message=f"Ticket {op.ticket_id} fue modificado en el servidor después de esta operación",
+                    details={
+                        "server_updated_at": ticket.fecha_actualizacion.isoformat(),
+                        "operation_timestamp": op.timestamp.isoformat()
+                    }
+                ))
+                conflictos += 1
+                continue
+            
+            # Procesar según tipo de operación
+            if op.tipo == "crear_proceso":
+                # Validar datos requeridos
+                if "nombre" not in op.datos:
+                    raise ValidationError("Campo 'nombre' requerido para crear_proceso")
+                
+                nuevo_proceso = TicketProceso(
+                    ticket_id=op.ticket_id,
+                    nombre=op.datos["nombre"],
+                    descripcion=op.datos.get("descripcion"),
+                    mecanico=op.datos.get("mecanico"),
+                    foto_url=op.datos.get("foto_url"),
+                )
+                db.add(nuevo_proceso)
+                db.flush()
+                
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="success",
+                    message="Proceso creado exitosamente",
+                    resource_id=nuevo_proceso.id
+                ))
+                exitosas += 1
+            
+            elif op.tipo == "crear_repuesto":
+                # Validar datos requeridos
+                if "nombre" not in op.datos or "cantidad" not in op.datos:
+                    raise ValidationError("Campos 'nombre' y 'cantidad' requeridos para crear_repuesto")
+                
+                nuevo_repuesto = TicketRepuesto(
+                    ticket_id=op.ticket_id,
+                    nombre=op.datos["nombre"],
+                    cantidad=op.datos["cantidad"],
+                    marca_referencia=op.datos.get("marca_referencia"),
+                    proceso_id=op.datos.get("proceso_id")
+                )
+                db.add(nuevo_repuesto)
+                db.flush()
+                
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="success",
+                    message="Repuesto creado exitosamente",
+                    resource_id=nuevo_repuesto.id
+                ))
+                exitosas += 1
+            
+            elif op.tipo == "subir_foto":
+                # Validar datos requeridos
+                if "archivo_url" not in op.datos:
+                    raise ValidationError("Campo 'archivo_url' requerido para subir_foto")
+                
+                nueva_foto = TicketFoto(
+                    ticket_id=op.ticket_id,
+                    tipo=op.datos.get("tipo", "OTRA"),
+                    archivo_url=op.datos["archivo_url"],
+                    descripcion=op.datos.get("descripcion")
+                )
+                db.add(nueva_foto)
+                db.flush()
+                
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="success",
+                    message="Foto subida exitosamente",
+                    resource_id=nueva_foto.id
+                ))
+                exitosas += 1
+            
+            elif op.tipo == "crear_compra":
+                # Validar datos requeridos
+                if "descripcion" not in op.datos or "valor" not in op.datos:
+                    raise ValidationError("Campos 'descripcion' y 'valor' requeridos para crear_compra")
+                
+                if op.datos["valor"] <= 0:
+                    raise ValidationError("El valor debe ser mayor a 0")
+                
+                # Usar servicio para crear compra con movimiento
+                ticket_service = TicketService(db)
+                compra = ticket_service.crear_compra_con_movimiento(
+                    ticket=ticket,
+                    descripcion=op.datos["descripcion"],
+                    valor=op.datos["valor"],
+                    responsable=op.datos.get("responsable"),
+                    nota=op.datos.get("nota"),
+                    soporte_url=op.datos.get("soporte_url"),
+                )
+                db.flush()
+                
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="success",
+                    message="Compra creada exitosamente",
+                    resource_id=compra.id
+                ))
+                exitosas += 1
+            
+            elif op.tipo == "actualizar_estado":
+                # Validar datos requeridos
+                if "estado" not in op.datos:
+                    raise ValidationError("Campo 'estado' requerido para actualizar_estado")
+                
+                nuevo_estado = op.datos["estado"].upper()
+                estado_actual = ticket.estado
+                
+                # Validar transición
+                permitidos = TRANSICIONES_VALIDAS.get(estado_actual, [])
+                if nuevo_estado not in permitidos and nuevo_estado != estado_actual:
+                    raise ValidationError(
+                        f"Transición inválida: {estado_actual} → {nuevo_estado}. "
+                        f"Desde {estado_actual} solo se puede pasar a: {permitidos or ['ninguno']}"
+                    )
+                
+                if nuevo_estado != estado_actual:
+                    ticket.estado = nuevo_estado
+                    ticket.fecha_actualizacion = datetime.now()
+                    
+                    if nuevo_estado == "FINALIZADO":
+                        ticket_service = TicketService(db)
+                        ticket_service.finalizar_ticket(ticket)
+                
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="success",
+                    message=f"Estado actualizado a {nuevo_estado}",
+                    resource_id=ticket.id
+                ))
+                exitosas += 1
+            
+            else:
+                resultados.append(ResultadoOperacion(
+                    id=op.id,
+                    status="failed",
+                    message=f"Tipo de operación desconocido: {op.tipo}",
+                    details={"error": "unknown_operation_type"}
+                ))
+                fallidas += 1
+        
+        except ValidationError as e:
+            resultados.append(ResultadoOperacion(
+                id=op.id,
+                status="failed",
+                message=str(e),
+                details={"error": "validation_error", "details": e.details}
+            ))
+            fallidas += 1
+            db.rollback()
+        
+        except Exception as e:
+            resultados.append(ResultadoOperacion(
+                id=op.id,
+                status="failed",
+                message=f"Error al procesar operación: {str(e)}",
+                details={"error": "processing_error"}
+            ))
+            fallidas += 1
+            db.rollback()
+    
+    # Commit todas las operaciones exitosas
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al guardar cambios: {str(e)}"
+        )
+    
+    return SyncBatchResponse(
+        total=len(operaciones_ordenadas),
+        exitosas=exitosas,
+        fallidas=fallidas,
+        conflictos=conflictos,
+        resultados=resultados
+    )

@@ -15,3 +15,6 @@ class ConfiguracionTaller(Base):
     whatsapp_token    = Column(Text, nullable=True)
     whatsapp_phone_id = Column(String(50), nullable=True)
     whatsapp_enabled  = Column(Boolean, default=False, nullable=False)
+    smtp_user         = Column(String(200), nullable=True)
+    smtp_password     = Column(Text, nullable=True)
+    smtp_from         = Column(String(200), nullable=True)

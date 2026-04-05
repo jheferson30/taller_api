@@ -1,13 +1,15 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
+from app.modelos.ticket import Ticket
+from app.modelos.ticket_proceso import TicketProceso
 from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.seguridad.dependencias import requerir_password_admin
 from app.utils.pdf_economia import generar_pdf_economia_profesional
@@ -216,6 +218,84 @@ def obtener_detalle_egresos_dia(
     return {"fecha": fecha.isoformat(), "egresos": _detalle_egresos(db, fecha)}
 
 
+@router.get("/estadisticas")
+def obtener_estadisticas(
+    periodo: str = Query(default="semana", pattern="^(semana|mes)$"),
+    db: Session = Depends(obtener_db),
+    _: bool = Depends(requerir_password_admin),
+):
+    hoy = date.today()
+    dias = 7 if periodo == "semana" else 30
+    fecha_desde = hoy - timedelta(days=dias - 1)
+
+    # Ingresos por día
+    tipos_ingreso = [TipoMovimiento.INGRESO_ANTICIPO, TipoMovimiento.INGRESO_FINAL, TipoMovimiento.INGRESO_RAPIDO]
+    rows_ingresos = (
+        db.query(
+            func.date(MovimientoCaja.fecha_creacion).label("dia"),
+            func.sum(MovimientoCaja.valor).label("total"),
+        )
+        .filter(
+            func.date(MovimientoCaja.fecha_creacion) >= fecha_desde,
+            func.date(MovimientoCaja.fecha_creacion) <= hoy,
+            MovimientoCaja.tipo.in_(tipos_ingreso),
+        )
+        .group_by(func.date(MovimientoCaja.fecha_creacion))
+        .all()
+    )
+    ingresos_map = {str(r.dia): int(r.total) for r in rows_ingresos}
+    ingresos_por_dia = []
+    actual = fecha_desde
+    while actual <= hoy:
+        ingresos_por_dia.append({"fecha": actual.isoformat(), "total": ingresos_map.get(actual.isoformat(), 0)})
+        actual += timedelta(days=1)
+
+    # Top servicios (motivo_visita de tickets en el período)
+    rows_servicios = (
+        db.query(
+            Ticket.motivo_visita,
+            func.count(Ticket.id).label("cantidad"),
+        )
+        .filter(
+            func.date(Ticket.fecha_ingreso) >= fecha_desde,
+            func.date(Ticket.fecha_ingreso) <= hoy,
+        )
+        .group_by(Ticket.motivo_visita)
+        .order_by(func.count(Ticket.id).desc())
+        .limit(5)
+        .all()
+    )
+    servicios_frecuentes = [{"servicio": r.motivo_visita, "cantidad": int(r.cantidad)} for r in rows_servicios]
+
+    # Ranking mecánicos por procesos en el período
+    rows_mecanicos = (
+        db.query(
+            TicketProceso.mecanico,
+            func.count(TicketProceso.id).label("procesos"),
+        )
+        .filter(
+            TicketProceso.mecanico.isnot(None),
+            TicketProceso.mecanico != "",
+            func.date(TicketProceso.fecha_creacion) >= fecha_desde,
+            func.date(TicketProceso.fecha_creacion) <= hoy,
+        )
+        .group_by(TicketProceso.mecanico)
+        .order_by(func.count(TicketProceso.id).desc())
+        .limit(5)
+        .all()
+    )
+    mecanicos_ranking = [{"mecanico": r.mecanico, "procesos": int(r.procesos)} for r in rows_mecanicos]
+
+    return {
+        "periodo": periodo,
+        "fecha_desde": fecha_desde.isoformat(),
+        "fecha_hasta": hoy.isoformat(),
+        "ingresos_por_dia": ingresos_por_dia,
+        "servicios_frecuentes": servicios_frecuentes,
+        "mecanicos_ranking": mecanicos_ranking,
+    }
+
+
 @router.get("/historico")
 def obtener_historico_economia(
     fecha_desde: date = Query(...),
@@ -226,10 +306,9 @@ def obtener_historico_economia(
     if fecha_hasta < fecha_desde:
         return {"detalle": "Rango de fechas invalido", "items": []}
 
-    items = []
-    actual = fecha_desde
-    while actual <= fecha_hasta:
-        resumen = _resumen_economia(db, actual)
-        items.append({"fecha": actual.isoformat(), **resumen})
-        actual = date.fromordinal(actual.toordinal() + 1)
+    # Usar query optimizada del repositorio con GROUP BY
+    from app.repositorios.movimiento_caja_repository import MovimientoCajaRepository
+    repo = MovimientoCajaRepository(db)
+    items = repo.get_historico_economico(fecha_desde, fecha_hasta)
+    
     return {"fecha_desde": fecha_desde.isoformat(), "fecha_hasta": fecha_hasta.isoformat(), "items": items}

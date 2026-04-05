@@ -41,7 +41,7 @@ from app.modelos.ticket_compra import TicketCompra
 from app.modelos.ticket_foto import TicketFoto
 from app.modelos.ticket_proceso import TicketProceso
 from app.modelos.ticket_repuesto import TicketRepuesto
-from app.servicios.ticket_service import finalizar_ticket as _svc_finalizar_ticket
+from app.servicios.ticket_service import TicketService
 from app.utils.pdf_generator import generar_pdf_ticket_completo
 from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.configuracion.limiter import limiter
@@ -204,18 +204,13 @@ def eliminar_repuesto(
     db: Session = Depends(obtener_db),
 ):
     ticket = _obtener_ticket_o_404(db, ticket_id)
-    _asegurar_editable(ticket)
     repuesto = db.query(TicketRepuesto).filter(TicketRepuesto.id == repuesto_id, TicketRepuesto.ticket_id == ticket_id).first()
     if not repuesto:
         raise HTTPException(status_code=404, detail="Repuesto no encontrado")
-    # Eliminar compra asociada por nombre si existe
-    compra_asociada = db.query(TicketCompra).filter(
-        TicketCompra.ticket_id == ticket_id,
-        TicketCompra.descripcion == repuesto.nombre,
-    ).first()
-    if compra_asociada:
-        db.delete(compra_asociada)
-    db.delete(repuesto)
+    
+    # Usar servicio para eliminar repuesto con su compra asociada
+    ticket_service = TicketService(db)
+    ticket_service.eliminar_repuesto_con_compra(ticket, repuesto)
     db.commit()
     return {"ok": True}
 
@@ -275,28 +270,17 @@ def agregar_compra(
     db: Session = Depends(obtener_db),
 ):
     ticket = _obtener_ticket_o_404(db, ticket_id)
-    _asegurar_editable(ticket)
-    _actualizar_estado_ticket(ticket)
-
-    compra = TicketCompra(ticket_id=ticket_id, **datos.model_dump())
-    db.add(compra)
-    db.flush()
-
-    movimiento = MovimientoCaja(
-        tipo=TipoMovimiento.EGRESO,
-        ticket_id=ticket.id,
-        ticket_codigo=ticket.ticket_codigo,
-        placa=ticket.placa,
-        estado_ticket=EstadoTicket.EN_PROCESO,
+    
+    # Usar servicio para crear compra con movimiento
+    ticket_service = TicketService(db)
+    compra = ticket_service.crear_compra_con_movimiento(
+        ticket=ticket,
+        descripcion=datos.descripcion,
         valor=datos.valor,
-        categoria_egreso=CategoriaEgreso.OTRO,
-        concepto=datos.descripcion,
         responsable=datos.responsable,
-        observacion=datos.nota,
+        nota=datos.nota,
         soporte_url=datos.soporte_url,
-        creado_por=datos.responsable,
     )
-    db.add(movimiento)
     db.commit()
     db.refresh(compra)
     return compra
@@ -342,16 +326,14 @@ def actualizar_finanzas_ticket(
     db: Session = Depends(obtener_db),
 ):
     ticket = _obtener_ticket_o_404(db, ticket_id)
-    _asegurar_editable(ticket)
-    total = datos.total_servicio
-    cobros = db.query(TicketCobro).filter(TicketCobro.ticket_id == ticket_id).all()
-    total_cobros = sum(c.valor for c in cobros)
-    saldo = total - (ticket.anticipo_recibido or 0) - total_cobros
-    if saldo < 0:
-        saldo = 0
-    ticket.total_servicio = total
-    ticket.saldo_pendiente = saldo
-    ticket.metodo_pago_final = datos.metodo_pago_final
+    
+    # Usar servicio para actualizar finanzas
+    ticket_service = TicketService(db)
+    ticket_service.actualizar_finanzas(
+        ticket=ticket,
+        total_servicio=datos.total_servicio,
+        metodo_pago_final=datos.metodo_pago_final,
+    )
     db.commit()
     db.refresh(ticket)
     return ticket
@@ -381,9 +363,13 @@ def finalizar_ticket(
     ticket = _obtener_ticket_o_404(db, ticket_id)
     if ticket.estado in ("FINALIZADO", "ENTREGADO"):
         return ticket
-    _svc_finalizar_ticket(ticket, db)
+    
+    # Usar servicio para finalizar ticket
+    ticket_service = TicketService(db)
+    ticket_service.finalizar_ticket(ticket)
     db.commit()
     db.refresh(ticket)
+    
     # Fire-and-forget: notificación WhatsApp de finalización (req 3.1)
     try:
         vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
@@ -408,13 +394,15 @@ def generar_pdf_cliente(
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
     db: Session = Depends(obtener_db),
 ):
-    # Autenticación: acepta header X-Admin-Password o query param ?token= (compatibilidad)
-    password_esperada = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD")
-    admin_token = x_admin_password or token
-    if not admin_token:
-        raise HTTPException(status_code=401, detail="Se requiere autenticacion")
-    if not hmac.compare_digest(admin_token.encode("utf-8"), password_esperada.encode("utf-8")):
-        raise HTTPException(status_code=401, detail="Contrasena incorrecta")
+    # Autenticación: acepta JWT (nuevo) o header X-Admin-Password o query param ?token= (legacy)
+    jwt_user = getattr(request.state, "user", None)
+    
+    if not jwt_user:
+        # Fallback legacy: verificar X-Admin-Password o token query param
+        password_esperada = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD")
+        admin_token = x_admin_password or token
+        if not admin_token or not hmac.compare_digest(admin_token.encode("utf-8"), password_esperada.encode("utf-8")):
+            raise HTTPException(status_code=401, detail="Autenticacion requerida")
     ticket = _obtener_ticket_o_404(db, ticket_id)
     vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
     procesos = db.query(TicketProceso).filter(TicketProceso.ticket_id == ticket_id).order_by(TicketProceso.fecha_creacion.asc()).all()
@@ -476,20 +464,20 @@ def marcar_entregado(
     db: Session = Depends(obtener_db),
 ):
     ticket = _obtener_ticket_o_404(db, ticket_id)
-    if ticket.estado != "FINALIZADO":
-        raise HTTPException(status_code=400, detail="Solo puedes entregar tickets finalizados")
-    ticket.estado = "ENTREGADO"
-    ticket.fecha_entrega = datetime.now(timezone.utc)
-    ticket.confirmado_entrega_por = datos.confirmado_entrega_por
-    ticket.firma_entrega_url = datos.firma_entrega_url
-    if datos.observaciones_finales is not None:
-        ticket.observaciones_finales = datos.observaciones_finales
-    if datos.recomendaciones is not None:
-        ticket.recomendaciones = datos.recomendaciones
-    if datos.proximo_mantenimiento is not None:
-        ticket.proximo_mantenimiento = datos.proximo_mantenimiento
+    
+    # Usar servicio para entregar ticket
+    ticket_service = TicketService(db)
+    ticket_service.entregar_ticket(
+        ticket=ticket,
+        confirmado_entrega_por=datos.confirmado_entrega_por,
+        firma_entrega_url=datos.firma_entrega_url,
+        observaciones_finales=datos.observaciones_finales,
+        recomendaciones=datos.recomendaciones,
+        proximo_mantenimiento=datos.proximo_mantenimiento,
+    )
     db.commit()
     db.refresh(ticket)
+    
     # Fire-and-forget: notificación WhatsApp de entrega (req 4.1)
     try:
         vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()

@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
-
 const fmt = (v) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v || 0);
 

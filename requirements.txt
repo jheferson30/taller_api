@@ -8,3 +8,5 @@ python-dotenv
 python-multipart
 zeroconf
 slowapi
+bcrypt
+pyjwt

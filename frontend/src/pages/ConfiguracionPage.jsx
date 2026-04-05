@@ -1,30 +1,23 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
-import EconomiaAuth from "../components/EconomiaAuth";
 import { QRCodeSVG } from "qrcode.react";
+import authService from "../services/authService";
+
 export default function ConfiguracionPage() {
-  const [autenticado, setAutenticado] = useState(false);
-  const [tienePassword, setTienePassword] = useState(null);
-
-  useEffect(() => {
-    api.verificarTienePassword().then((r) => setTienePassword(r.tiene_password));
-  }, []);
-
-  if (tienePassword === null) return <div className="loading">Cargando...</div>;
-
-  if (!autenticado) {
-    return (
-      <EconomiaAuth
-        onAutenticado={() => setAutenticado(true)}
-        modoInicial={tienePassword ? "login" : "crear"}
-      />
-    );
-  }
-
   return <ConfiguracionInterna />;
 }
 
 function ConfiguracionInterna() {
+  const currentUser = authService.getUser();
+  const isAdmin = currentUser?.roles?.includes("ADMIN");
+
+  // ── Usuarios (solo ADMIN) ──
+  const [usuarios, setUsuarios] = useState([]);
+  const [nuevoUsuario, setNuevoUsuario] = useState({ username: "", email: "", password: "", roles: ["MECANICO"], nombre_completo: "", telefono: "", direccion: "" });
+  const [loadingUsuarios, setLoadingUsuarios] = useState(false);
+  const [msgUsuarios, setMsgUsuarios] = useState("");
+  const [mostrarFormUsuario, setMostrarFormUsuario] = useState(false);
+
   // ── Mecánicos ──
   const [mecanicos, setMecanicos] = useState([]);
   const [nuevoMecanico, setNuevoMecanico] = useState("");
@@ -53,6 +46,12 @@ function ConfiguracionInterna() {
   const [copiado, setCopiado] = useState(false);
   const [mostrarQr, setMostrarQr] = useState(false);
 
+  // ── Email SMTP ──
+  const [emailConfig, setEmailConfig] = useState({ smtp_user: "", smtp_password: "", smtp_from: "" });
+  const [emailPasswordSet, setEmailPasswordSet] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [msgEmail, setMsgEmail] = useState("");
+
   useEffect(() => {
     cargarMecanicos();
     api.obtenerConfigTaller().then(setTaller);
@@ -60,6 +59,13 @@ function ConfiguracionInterna() {
     api.obtenerCobrosRapidos().then((r) => setCobros(r.cobros));
     api.infoSistema().then(setInfoSistema).catch(() => {});
     api.infoConexionQr().then((r) => setQrData(r.qr_data)).catch(() => {});
+    if (isAdmin) {
+      cargarUsuarios();
+      api.obtenerConfigEmail().then((r) => {
+        setEmailConfig({ smtp_user: r.smtp_user || "", smtp_from: r.smtp_from || "", smtp_password: "" });
+        setEmailPasswordSet(r.smtp_password_set || false);
+      }).catch(() => {});
+    }
   }, []);
 
   const copiarIP = () => {
@@ -69,6 +75,48 @@ function ConfiguracionInterna() {
       setTimeout(() => setCopiado(false), 2000);
     });
   };
+
+  async function cargarUsuarios() {
+    try {
+      const data = await api.listarUsuarios();
+      setUsuarios(data.users || []);
+    } catch (err) {
+      console.error("Error cargando usuarios:", err);
+    }
+  }
+
+  async function handleCrearUsuario(e) {
+    e.preventDefault();
+    setLoadingUsuarios(true);
+    setMsgUsuarios("");
+    try {
+      await api.crearUsuario(nuevoUsuario);
+      setNuevoUsuario({ username: "", email: "", password: "", roles: ["MECANICO"], nombre_completo: "", telefono: "", direccion: "" });
+      setMostrarFormUsuario(false);
+      setMsgUsuarios("✓ Usuario creado");
+      await cargarUsuarios();
+      setTimeout(() => setMsgUsuarios(""), 3000);
+    } catch (err) {
+      setMsgUsuarios("✗ " + err.message);
+    } finally {
+      setLoadingUsuarios(false);
+    }
+  }
+
+  async function handleEliminarUsuario(id, username) {
+    if (!confirm(`¿Desactivar al usuario "${username}"?`)) return;
+    setLoadingUsuarios(true);
+    try {
+      await api.eliminarUsuario(id);
+      setMsgUsuarios("✓ Usuario desactivado");
+      await cargarUsuarios();
+      setTimeout(() => setMsgUsuarios(""), 3000);
+    } catch (err) {
+      setMsgUsuarios("✗ " + err.message);
+    } finally {
+      setLoadingUsuarios(false);
+    }
+  }
 
   async function cargarMecanicos() {
     const data = await api.listarMecanicos();
@@ -174,8 +222,112 @@ function ConfiguracionInterna() {
     }
   }
 
+  async function handleGuardarEmail(e) {
+    e.preventDefault();
+    setSavingEmail(true);
+    setMsgEmail("");
+    try {
+      const body = { smtp_user: emailConfig.smtp_user, smtp_from: emailConfig.smtp_from };
+      if (emailConfig.smtp_password) body.smtp_password = emailConfig.smtp_password;
+      await api.actualizarConfigEmail(body);
+      setEmailConfig((prev) => ({ ...prev, smtp_password: "" }));
+      setEmailPasswordSet(true);
+      setMsgEmail("✓ Configuración guardada");
+      setTimeout(() => setMsgEmail(""), 3000);
+    } catch (err) {
+      setMsgEmail("✗ " + err.message);
+    } finally {
+      setSavingEmail(false);
+    }
+  }
+
   return (
     <div className="config-page">
+
+      {/* ── Usuarios (solo ADMIN) ── */}
+      {isAdmin && (
+        <section className="config-section config-section-full">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+            <h2 className="config-section-title" style={{ margin: 0 }}>Usuarios del sistema</h2>
+            <button className="btn-primary" onClick={() => setMostrarFormUsuario(!mostrarFormUsuario)}>
+              {mostrarFormUsuario ? "Cancelar" : "+ Nuevo Usuario"}
+            </button>
+          </div>
+
+          {mostrarFormUsuario && (
+            <form onSubmit={handleCrearUsuario} className="config-form" style={{ marginBottom: "1rem", background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <div className="config-field">
+                <label>Usuario *</label>
+                <input className="config-input" placeholder="nombre_usuario" value={nuevoUsuario.username}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, username: e.target.value })} required />
+              </div>
+              <div className="config-field">
+                <label>Email *</label>
+                <input className="config-input" type="email" placeholder="correo@taller.com" value={nuevoUsuario.email}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, email: e.target.value })} required />
+              </div>
+              <div className="config-field">
+                <label>Contraseña * (mín. 8 caracteres, mayúscula, número)</label>
+                <input className="config-input" type="password" placeholder="Contraseña123" value={nuevoUsuario.password}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })} required />
+              </div>
+              <div className="config-field">
+                <label>Rol *</label>
+                <select className="config-input" value={nuevoUsuario.roles[0]}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, roles: [e.target.value] })}>
+                  <option value="MECANICO">Mecánico</option>
+                  <option value="RECEPCIONISTA">Recepcionista</option>
+                  <option value="ADMIN">Administrador</option>
+                </select>
+              </div>
+              <div className="config-field">
+                <label>Nombre completo</label>
+                <input className="config-input" placeholder="Ej: Juan Pérez" value={nuevoUsuario.nombre_completo}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, nombre_completo: e.target.value })} />
+              </div>
+              <div className="config-field">
+                <label>Teléfono</label>
+                <input className="config-input" placeholder="Ej: 3001234567" value={nuevoUsuario.telefono}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, telefono: e.target.value })} />
+              </div>
+              <div className="config-field">
+                <label>Dirección</label>
+                <input className="config-input" placeholder="Ej: Calle 10 #5-20" value={nuevoUsuario.direccion}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, direccion: e.target.value })} />
+              </div>
+              <div className="config-save-row">
+                <button className="btn-primary" type="submit" disabled={loadingUsuarios}>
+                  {loadingUsuarios ? "Creando..." : "Crear Usuario"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {msgUsuarios && <span className={`config-msg ${msgUsuarios.startsWith("✓") ? "ok" : "err"}`}>{msgUsuarios}</span>}
+
+          <div className="config-list">
+            {usuarios.length === 0 && <p className="config-empty">Sin usuarios registrados</p>}
+            {usuarios.map((u) => (
+              <div key={u.id} className="config-list-item">
+                <div>
+                  <span className="config-item-name">{u.username}</span>
+                  <small style={{ color: "#64748b", marginLeft: "0.5rem" }}>{u.email}</small>
+                  <span style={{ marginLeft: "0.5rem", fontSize: "0.75rem", background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: "12px" }}>
+                    {u.roles?.join(", ")}
+                  </span>
+                </div>
+                <div className="config-item-actions">
+                  <button className="btn-chip btn-chip-danger"
+                    onClick={() => handleEliminarUsuario(u.id, u.username)}
+                    disabled={loadingUsuarios || u.username === currentUser?.username}>
+                    Desactivar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Mecánicos ── */}
       <section className="config-section config-section-full">
@@ -350,6 +502,50 @@ function ConfiguracionInterna() {
           </div>
         )}
       </section>
+
+      {/* ── Configuración Email (solo ADMIN) ── */}
+      {isAdmin && (
+        <section className="config-section">
+          <h2 className="config-section-title">Correo para recuperación de contraseña</h2>
+          <p className="config-section-desc">
+            Configura el correo Gmail desde el que se enviarán los emails de recuperación de contraseña.
+            Necesitas una <strong>contraseña de aplicación</strong> de Google (no tu contraseña normal).
+          </p>
+          <form onSubmit={handleGuardarEmail} className="config-form" style={{ marginTop: "1rem" }}>
+            <div className="config-field">
+              <label>Correo Gmail</label>
+              <input className="config-input" type="email" placeholder="tucorreo@gmail.com"
+                value={emailConfig.smtp_user}
+                onChange={(e) => setEmailConfig({ ...emailConfig, smtp_user: e.target.value })} />
+            </div>
+            <div className="config-field">
+              <label>Correo remitente (puede ser el mismo)</label>
+              <input className="config-input" type="email" placeholder="tucorreo@gmail.com"
+                value={emailConfig.smtp_from}
+                onChange={(e) => setEmailConfig({ ...emailConfig, smtp_from: e.target.value })} />
+            </div>
+            <div className="config-field">
+              <label>
+                Contraseña de aplicación Google
+                {emailPasswordSet && <span style={{ marginLeft: 8, fontSize: "0.8rem", color: "#16a34a" }}>✓ ya configurada</span>}
+              </label>
+              <input className="config-input" type="password"
+                placeholder={emailPasswordSet ? "Dejar vacío para no cambiar" : "xxxx xxxx xxxx xxxx"}
+                value={emailConfig.smtp_password}
+                onChange={(e) => setEmailConfig({ ...emailConfig, smtp_password: e.target.value })} />
+              <small style={{ color: "#64748b" }}>
+                Generala en: Google → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones
+              </small>
+            </div>
+            <div className="config-save-row">
+              <button className="btn-primary" type="submit" disabled={savingEmail}>
+                {savingEmail ? "Guardando..." : "Guardar"}
+              </button>
+              {msgEmail && <span className={`config-msg ${msgEmail.startsWith("✓") ? "ok" : "err"}`}>{msgEmail}</span>}
+            </div>
+          </form>
+        </section>
+      )}
 
     </div>
   );

@@ -1,35 +1,29 @@
+import axios from 'axios';
+import authService from './services/authService';
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
 const TIMEOUT_MS = 15000; // 15 segundos
 
+// Configurar axios con base URL y timeout
+axios.defaults.baseURL = API_BASE;
+axios.defaults.timeout = TIMEOUT_MS;
+
+// IMPORTANTE: Los interceptores de axios ya están configurados en authService
+// No necesitamos configurarlos aquí de nuevo
+
 async function request(path, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  if (ADMIN_PASSWORD) headers["X-Admin-Password"] = ADMIN_PASSWORD;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const response = await axios({
+      url: path,
       ...options,
-      headers,
-      signal: controller.signal,
     });
-    const contentType = res.headers.get("content-type") || "";
-    const isJson = contentType.includes("application/json");
-    const payload = isJson ? await res.json() : await res.text();
-    if (!res.ok) {
-      const detail = isJson ? payload.detail || JSON.stringify(payload) : payload;
-      throw new Error(detail || "Error de servidor");
+    return response.data;
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('El servidor no respondió. Verifica la conexión.');
     }
-    return payload;
-  } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error("El servidor no respondió. Verifica la conexión.");
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
+    const detail = error.response?.data?.detail || error.message || 'Error de servidor';
+    throw new Error(detail);
   }
 }
 
@@ -38,21 +32,18 @@ export const api = {
   crearVehiculo: (body) =>
     request("/vehiculos/", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   actualizarVehiculo: (placa, body) =>
     request(`/vehiculos/${encodeURIComponent(placa)}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   fichaVehiculo: (placa) => request(`/vehiculos/${encodeURIComponent(placa)}/ficha`),
   crearTicketIngreso: (placa, body) =>
     request(`/vehiculos/${encodeURIComponent(placa)}/ticket-ingreso`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   ticketsAbiertos: () => request("/tickets/abiertos"),
   buscarTickets: (params = {}) => {
@@ -67,8 +58,7 @@ export const api = {
   agregarProceso: (ticketId, body) =>
     request(`/tickets/${ticketId}/procesos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   eliminarProceso: (ticketId, procesoId) =>
     request(`/tickets/${ticketId}/procesos/${procesoId}`, { method: "DELETE" }),
@@ -79,14 +69,12 @@ export const api = {
   agregarRepuesto: (ticketId, body) =>
     request(`/tickets/${ticketId}/repuestos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   agregarFoto: (ticketId, body) =>
     request(`/tickets/${ticketId}/fotos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   eliminarFoto: (ticketId, fotoId) =>
     request(`/tickets/${ticketId}/fotos/${fotoId}`, {
@@ -95,34 +83,24 @@ export const api = {
   subirFoto: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE}/upload/foto`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) throw new Error("Error al subir foto");
-    return res.json();
+    const response = await axios.post("/upload/foto", formData);
+    return response.data;
   },
   subirSoporteCompra: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE}/upload/compra`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) throw new Error("Error al subir soporte");
-    return res.json();
+    const response = await axios.post("/upload/compra", formData);
+    return response.data;
   },
   agregarCompra: (ticketId, body) =>
     request(`/tickets/${ticketId}/compras`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   agregarCobro: (ticketId, body) =>
     request(`/tickets/${ticketId}/cobros`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   eliminarCobro: (ticketId, cobroId) =>
     request(`/tickets/${ticketId}/cobros/${cobroId}`, {
@@ -131,8 +109,7 @@ export const api = {
   actualizarFinanzas: (ticketId, body) =>
     request(`/tickets/${ticketId}/finanzas`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   finalizarTicket: (ticketId) =>
     request(`/tickets/${ticketId}/finalizar`, {
@@ -141,8 +118,7 @@ export const api = {
   entregarTicket: (ticketId, body) =>
     request(`/tickets/${ticketId}/entregar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   economiaResumen: (fecha) => {
     const params = fecha ? `?fecha=${fecha}` : '';
@@ -157,43 +133,18 @@ export const api = {
     return request(`/economia-dia/egresos${params}`);
   },
   descargarPdfTicket: async (ticketId) => {
-    const res = await fetch(`${API_BASE}/tickets/${ticketId}/pdf`, {
-      headers: { "X-Admin-Password": ADMIN_PASSWORD },
+    const response = await axios.get(`/tickets/${ticketId}/pdf`, {
+      responseType: 'blob',
     });
-    if (!res.ok) throw new Error("No se pudo descargar el PDF");
-    return res.blob();
+    return response.data;
   },
   descargarPdfEconomia: async (fecha) => {
     const params = fecha ? `?fecha=${fecha}` : '';
-    const res = await fetch(`${API_BASE}/economia-dia/pdf${params}`, {
-      headers: { "X-Admin-Password": ADMIN_PASSWORD },
+    const response = await axios.get(`/economia-dia/pdf${params}`, {
+      responseType: 'blob',
     });
-    if (!res.ok) {
-      throw new Error("No se pudo descargar el PDF");
-    }
-    return res.blob();
+    return response.data;
   },
-  // Seguridad Economía
-  verificarTienePassword: () => request("/seguridad/economia/tiene-password"),
-  crearPasswordEconomia: (body) =>
-    request("/seguridad/economia/crear-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  validarPasswordEconomia: (body) =>
-    request("/seguridad/economia/validar-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  recuperarPasswordEconomia: (body) =>
-    request("/seguridad/economia/recuperar-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  // Citas
   listarCitas: (fechaDesde, fechaHasta, estado) => {
     const params = new URLSearchParams();
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
@@ -206,14 +157,12 @@ export const api = {
   crearCita: (body) =>
     request("/citas", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   actualizarCita: (citaId, body) =>
     request(`/citas/${citaId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   cancelarCita: (citaId) =>
     request(`/citas/${citaId}`, {
@@ -230,8 +179,7 @@ export const api = {
   crearMecanico: (body) =>
     request("/configuracion/mecanicos", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   toggleMecanico: (id) =>
     request(`/configuracion/mecanicos/${id}`, { method: "PUT" }),
@@ -241,29 +189,27 @@ export const api = {
   actualizarConfigTaller: (body) =>
     request("/configuracion/taller", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
   obtenerProcesosRapidos: () => request("/configuracion/procesos-rapidos"),
   actualizarProcesosRapidos: (procesos) =>
     request("/configuracion/procesos-rapidos", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ procesos }),
+      data: { procesos },
     }),
   obtenerCobrosRapidos: () => request("/configuracion/cobros-rapidos"),
   actualizarCobrosRapidos: (cobros) =>
     request("/configuracion/cobros-rapidos", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cobros }),
+      data: { cobros },
     }),
   cobroRapido: (body) =>
     request("/movimientos-caja/cobro-rapido", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      data: body,
     }),
+  economiaEstadisticas: (periodo = "semana") =>
+    request(`/economia-dia/estadisticas?periodo=${periodo}`),
   listarCobrosRapidos: (params = {}) => {
     const q = new URLSearchParams();
     if (params.placa) q.append("placa", params.placa);
@@ -271,4 +217,12 @@ export const api = {
     if (params.fecha_hasta) q.append("fecha_hasta", params.fecha_hasta);
     return request(`/movimientos-caja/cobros-rapidos?${q.toString()}`);
   },
+  // Usuarios
+  listarUsuarios: () => request("/users"),
+  crearUsuario: (body) => request("/users", { method: "POST", data: body }),
+  eliminarUsuario: (id) => request(`/users/${id}`, { method: "DELETE" }),
+  cambiarPasswordPropio: (body) => request("/users/me/change-password", { method: "POST", data: body }),
+  obtenerPerfil: (userId) => request(`/users/${userId}`),
+  obtenerConfigEmail: () => request("/configuracion/email"),
+  actualizarConfigEmail: (body) => request("/configuracion/email", { method: "PUT", data: body }),
 };

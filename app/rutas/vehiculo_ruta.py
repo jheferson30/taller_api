@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 import asyncio
 
@@ -25,7 +25,7 @@ def _normalizar_placa(placa: str) -> str:
 
 
 def _generar_codigo_ticket(placa: str) -> str:
-    marca_tiempo = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    marca_tiempo = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     return f"TK-{placa}-{marca_tiempo}"
 
 
