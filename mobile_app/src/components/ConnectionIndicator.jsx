@@ -1,30 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useOffline } from '../hooks/useOffline';
+import offlineService from '../services/offlineService';
 
-/**
- * Indicador visual de estado de conexión y operaciones pendientes
- */
 export function ConnectionIndicator() {
   const { isOnline, isSyncing, pendingCount } = useOffline();
 
-  if (isOnline && pendingCount === 0) {
-    return null; // No mostrar nada si está online y no hay operaciones pendientes
-  }
+  if (isOnline && pendingCount === 0) return null;
+
+  const handleSync = () => {
+    if (isOnline && !isSyncing && pendingCount > 0) {
+      offlineService.syncPendingOperations().catch(console.error);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <View style={[styles.indicator, isOnline ? styles.online : styles.offline]}>
+      <TouchableOpacity
+        style={[styles.indicator, isOnline ? styles.online : styles.offline]}
+        onPress={handleSync}
+        disabled={!isOnline || isSyncing}
+      >
         <Text style={styles.dot}>{isOnline ? '●' : '○'}</Text>
         <Text style={styles.text}>
-          {isSyncing ? 'Sincronizando...' : isOnline ? 'En línea' : 'Sin conexión'}
+          {isSyncing ? 'Sincronizando...' : isOnline ? 'En línea — toca para sincronizar' : 'Sin conexión'}
         </Text>
         {pendingCount > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{pendingCount}</Text>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
     </View>
   );
 }

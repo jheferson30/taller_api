@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import PageHero from "../components/PageHero";
 
 const fmt = (v) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v || 0);
@@ -60,13 +61,11 @@ export default function EntregadosPage() {
   return (
     <div className="ent-page">
       {/* Header */}
-      <div className="ent-hero">
-        <div>
-          <h1 className="ent-hero-title">Tickets Entregados</h1>
-          <p className="ent-hero-sub">Historial completo de vehículos entregados al cliente</p>
-        </div>
-        <div className="ent-hero-badge">{tickets.length + cobrosRapidos.length} registros</div>
-      </div>
+      <PageHero
+        titulo="Tickets Entregados"
+        subtitulo="Historial completo de vehículos entregados al cliente"
+        badge={`${tickets.length + cobrosRapidos.length} registros`}
+      />
 
       {/* Filtros */}
       <div className="ent-filtros-card">

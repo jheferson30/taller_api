@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getApiBaseUrl } from '../config';
+import { getAuthBaseUrl } from '../config';
+import { sessionEvents } from './sessionEvents';
 
 const TOKEN_KEY = '@auth_access_token';
 const REFRESH_TOKEN_KEY = '@auth_refresh_token';
@@ -18,8 +19,8 @@ class AuthService {
    * Almacena tokens en AsyncStorage
    */
   async login(username, password) {
-    const baseUrl = await getApiBaseUrl();
-    const response = await fetch(`${baseUrl.replace('/mobile', '')}/auth/login`, {
+    const baseUrl = await getAuthBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
@@ -52,13 +53,14 @@ class AuthService {
   async logout() {
     try {
       if (this.accessToken) {
-        const baseUrl = await getApiBaseUrl();
-        await fetch(`${baseUrl.replace('/mobile', '')}/auth/logout`, {
+        const baseUrl = await getAuthBaseUrl();
+        await fetch(`${baseUrl}/auth/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({ refresh_token: this.refreshToken || '' }),
         });
       }
     } catch (error) {
@@ -94,8 +96,8 @@ class AuthService {
           throw new Error('No refresh token available');
         }
 
-        const baseUrl = await getApiBaseUrl();
-        const response = await fetch(`${baseUrl.replace('/mobile', '')}/auth/refresh`, {
+        const baseUrl = await getAuthBaseUrl();
+        const response = await fetch(`${baseUrl}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: refreshToken }),
@@ -159,9 +161,10 @@ class AuthService {
           },
         });
       } catch (error) {
-        // Si falla el refresh, hacer logout
+        // Si falla el refresh, hacer logout y notificar
         await this.logout();
-        throw new Error('Session expired. Please login again.');
+        sessionEvents.emitSessionExpired();
+        throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
       }
     }
 

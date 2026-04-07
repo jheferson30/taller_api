@@ -31,7 +31,9 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-sharing",
+      "@react-native-community/datetimepicker"
     ],
     "web": {
       "favicon": "./assets/logo.png"

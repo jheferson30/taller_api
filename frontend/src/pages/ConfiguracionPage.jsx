@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import { QRCodeSVG } from "qrcode.react";
 import authService from "../services/authService";
+import PageHero from "../components/PageHero";
 
 export default function ConfiguracionPage() {
   return <ConfiguracionInterna />;
@@ -242,9 +243,12 @@ function ConfiguracionInterna() {
   }
 
   return (
-    <div className="config-page">
-
-      {/* ── Usuarios (solo ADMIN) ── */}
+    <>
+      <PageHero
+        titulo="Configuración del Taller"
+        subtitulo="Ajustes generales del sistema"
+      />
+      <div className="config-page">
       {isAdmin && (
         <section className="config-section config-section-full">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -482,7 +486,7 @@ function ConfiguracionInterna() {
         {qrData && (
           <div style={{ marginTop: 16 }}>
             <button
-              className="btn-primary"
+              className="btn-secondary"
               style={{ marginBottom: 12 }}
               onClick={() => setMostrarQr(!mostrarQr)}
             >
@@ -548,5 +552,6 @@ function ConfiguracionInterna() {
       )}
 
     </div>
+    </>
   );
 }

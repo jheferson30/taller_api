@@ -86,65 +86,85 @@ class OfflineService {
 
     try {
       const baseUrl = await getApiBaseUrl();
-      const operations = [...this.pendingOperations];
+      const successIds = [];
+      const failedOps = [];
 
-      // Preparar batch de operaciones
-      const batch = operations.map(op => ({
-        id: op.id,
-        type: op.type,
-        endpoint: op.endpoint,
-        method: op.method,
-        data: op.data,
-        timestamp: op.timestamp,
-      }));
-
-      // Enviar batch al servidor
-      const response = await authService.authenticatedRequest(
-        `${baseUrl}/sync/batch`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ operations: batch }),
+      for (const op of [...this.pendingOperations]) {
+        try {
+          if (op.type === 'CREATE_PROCESO_CON_FOTO') {
+            // Operación especial: multipart con foto
+            await this._syncProcesoConFoto(op, baseUrl);
+          } else {
+            // Operación JSON normal via batch
+            const response = await authService.authenticatedRequest(
+              `${baseUrl}/sync/batch`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ operations: [{ id: op.id, type: op.type, endpoint: op.endpoint, method: op.method, data: op.data, timestamp: op.timestamp }] }),
+              }
+            );
+            if (!response.ok) throw new Error(`Sync failed: ${response.status}`);
+            const result = await response.json();
+            if ((result.successful || []).includes(op.id)) {
+              successIds.push(op.id);
+            } else {
+              failedOps.push(op);
+            }
+            continue;
+          }
+          successIds.push(op.id);
+        } catch (err) {
+          console.warn(`Operation ${op.id} failed:`, err.message);
+          failedOps.push(op);
         }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Sync failed: ${response.status}`);
       }
-
-      const result = await response.json();
-
-      // Procesar resultados
-      const successIds = result.successful || [];
-      const failedOps = result.failed || [];
 
       // Remover operaciones exitosas
       this.pendingOperations = this.pendingOperations.filter(
         op => !successIds.includes(op.id)
       );
 
-      // Manejar operaciones fallidas
-      for (const failed of failedOps) {
-        console.warn(`Operation ${failed.id} failed:`, failed.error);
-        // Mantener en la cola para reintentar
-      }
-
       await this.savePendingOperations();
       this.notifyListeners();
 
-      return {
-        successful: successIds.length,
-        failed: failedOps.length,
-        conflicts: result.conflicts || [],
-      };
+      return { successful: successIds.length, failed: failedOps.length };
     } catch (error) {
       console.error('Sync error:', error);
-      // Reintentar con backoff exponencial
       await this.scheduleRetry();
       throw error;
     } finally {
       this.isSyncing = false;
       this.notifyListeners();
+    }
+  }
+
+  /**
+   * Sincroniza un proceso con foto usando multipart/form-data
+   */
+  async _syncProcesoConFoto(op, baseUrl) {
+    const { ticketId, nombre, descripcion, mecanico, fotoUri } = op.data;
+
+    const formData = new FormData();
+    formData.append('nombre', nombre);
+    if (descripcion) formData.append('descripcion', descripcion);
+    if (mecanico) formData.append('mecanico', mecanico);
+
+    if (fotoUri) {
+      const filename = fotoUri.split('/').pop();
+      const ext = filename.split('.').pop().toLowerCase();
+      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+      formData.append('file', { uri: fotoUri, name: filename, type: mimeType });
+    }
+
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/procesos/con-foto`,
+      { method: 'POST', body: formData }
+    );
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${response.status}`);
     }
   }
 

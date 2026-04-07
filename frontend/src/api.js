@@ -225,4 +225,6 @@ export const api = {
   obtenerPerfil: (userId) => request(`/users/${userId}`),
   obtenerConfigEmail: () => request("/configuracion/email"),
   actualizarConfigEmail: (body) => request("/configuracion/email", { method: "PUT", data: body }),
+  obtenerLogo: () => request("/configuracion/logo"),
+  subirLogo: (formData) => request("/configuracion/logo", { method: "POST", data: formData, headers: { "Content-Type": "multipart/form-data" } }),
 };

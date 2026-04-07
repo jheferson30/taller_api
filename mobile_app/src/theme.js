@@ -1,7 +1,7 @@
 export const colors = {
-  primary: '#1e40af',
-  primaryDark: '#1e3a8a',
-  primaryLight: '#3b82f6',
+  primary: '#0F1923',
+  primaryDark: '#0A1017',
+  primaryLight: '#1C2B3A',
   background: '#f8fafc',
   surface: '#ffffff',
   text: '#0f172a',
@@ -13,13 +13,13 @@ export const colors = {
 
   // Estados de tickets
   estadoAbierto: '#dbeafe',
-  estadoAbiertoText: '#1e40af',
+  estadoAbiertoText: '#0F1923',
   estadoEnProceso: '#fef3c7',
   estadoEnProcesoText: '#92400e',
   estadoFinalizado: '#d1fae5',
   estadoFinalizadoText: '#065f46',
   estadoEntregado: '#e0e7ff',
-  estadoEntregadoText: '#3730a3',
+  estadoEntregadoText: '#0F1923',
 };
 
 export const estadoConfig = {

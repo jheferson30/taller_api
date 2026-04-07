@@ -158,7 +158,7 @@ async def crear_proceso_con_foto_mobile(
     nombre: str = Form(...),
     descripcion: Optional[str] = Form(None),
     mecanico: Optional[str] = Form(None),
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -936,3 +936,55 @@ def sincronizar_operaciones_batch(
         conflictos=conflictos,
         resultados=resultados
     )
+
+
+@router.get("/economia-hoy")
+def economia_hoy_mobile(fecha: Optional[str] = None, db: Session = Depends(get_db)):
+    """Resumen económico del día para el panel admin móvil."""
+    from datetime import date
+    if fecha:
+        try:
+            hoy = date.fromisoformat(fecha)
+        except ValueError:
+            hoy = date.today()
+    else:
+        hoy = date.today()
+
+    movimientos = db.query(MovimientoCaja).filter(
+        func.date(MovimientoCaja.fecha_creacion) == hoy
+    ).all()
+
+    anticipos   = sum(m.valor for m in movimientos if m.tipo == TipoMovimiento.INGRESO_ANTICIPO)
+    finales     = sum(m.valor for m in movimientos if m.tipo == TipoMovimiento.INGRESO_FINAL)
+    rapidos     = sum(m.valor for m in movimientos if m.tipo == TipoMovimiento.INGRESO_RAPIDO)
+    ingresos    = anticipos + finales + rapidos
+    gastos      = sum(m.valor for m in movimientos if m.tipo == TipoMovimiento.EGRESO)
+
+    tickets_hoy = db.query(Ticket).filter(
+        func.date(Ticket.fecha_ingreso) == hoy,
+        Ticket.estado.in_(["FINALIZADO", "ENTREGADO"])
+    ).count()
+
+    ultimos = sorted(movimientos, key=lambda m: m.fecha_creacion or "", reverse=True)[:5]
+
+    return {
+        "fecha": str(hoy),
+        "total_ingresos": float(ingresos),
+        "total_gastos": float(gastos),
+        "saldo_caja": float(ingresos - gastos),
+        "tickets_finalizados": tickets_hoy,
+        "desglose_ingresos": {
+            "anticipos": float(anticipos),
+            "finales": float(finales),
+            "rapidos": float(rapidos),
+        },
+        "ultimos_movimientos": [
+            {
+                "tipo": m.tipo,
+                "valor": float(m.valor),
+                "concepto": m.concepto or m.tipo,
+                "placa": m.placa or "",
+            }
+            for m in ultimos
+        ],
+    }

@@ -1,10 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap");
 
 :root {
   /* Paleta Profesional - Azul Corporativo */
-  --brand-primary: #1e40af;
-  --brand-primary-light: #3b82f6;
-  --brand-primary-dark: #1e3a8a;
+  --brand-primary: #D4920A;
+  --brand-primary-light: #F5A623;
+  --brand-primary-dark: #b87a08;
   --brand-secondary: #475569;
   --brand-accent: #0ea5e9;
   
@@ -15,7 +15,7 @@
   --muted: #64748b;
   --line: #e2e8f0;
   --gray-strong: #334155;
-  --gray-main: var(--brand-primary);
+  --gray-main: #374151;
   --gray-soft: #f1f5f9;
   
   /* Colores de acento */
@@ -45,7 +45,7 @@ body {
 }
 
 .sidebar {
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  background: linear-gradient(180deg, #0A1017 0%, #0A1017 100%);
   backdrop-filter: blur(10px);
   color: #f1f5f9;
   padding: 1rem;
@@ -143,8 +143,8 @@ body {
 .nav a.active {
   background: var(--brand-primary);
   border-color: var(--brand-primary);
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.3);
+  color: #0F1923;
+  box-shadow: 0 2px 8px rgba(245, 166, 35, 0.3);
 }
 
 .sidebar-footer {
@@ -184,12 +184,7 @@ body {
 
 .content {
   padding: 1.4rem;
-  background-color: #f8fafc;
-  background-image: url('/assets/logo.png');
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  background-color: #e2e8f0;
   height: 100vh;
   overflow-y: auto;
   position: relative;
@@ -647,7 +642,7 @@ button.primary:hover:not(:disabled) {
 
 .badge-abierto {
   background: #dbeafe;
-  color: #1e40af;
+  color: #1e3a8a;
 }
 
 .badge-en_proceso {
@@ -862,7 +857,7 @@ button.primary:hover:not(:disabled) {
 
 .ticket-placa {
   font-size: 0.85rem;
-  color: var(--gray-main);
+  color: #0F1923;
   font-weight: 600;
 }
 
@@ -971,7 +966,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .tab.active {
-  color: var(--brand-primary);
+  color: #0F1923;
   border-bottom-color: var(--brand-primary);
 }
 
@@ -1684,7 +1679,7 @@ button.primary:hover:not(:disabled) {
 }
 
 
-/* ===== PÁGINA DE ECONOMÍA MEJORADA ===== */
+/* ===== PÃGINA DE ECONOMÃA MEJORADA ===== */
 .economia-page {
   max-width: 1400px;
   margin: 0 auto;
@@ -1757,7 +1752,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .kpi-card.ingreso {
-  border-left: 4px solid #1e40af;
+  border-left: 4px solid #1e3a8a;
 }
 
 .kpi-card.egreso {
@@ -1804,7 +1799,7 @@ button.primary:hover:not(:disabled) {
   color: #95a5a6;
 }
 
-/* Gráfico simple */
+/* GrÃ¡fico simple */
 .grafico-simple {
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(10px);
@@ -1862,7 +1857,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .barra.ingreso-bar {
-  background: linear-gradient(90deg, #1e40af, #3b82f6);
+  background: linear-gradient(90deg, #1e3a8a, #3b82f6);
 }
 
 .barra.egreso-bar {
@@ -1965,8 +1960,8 @@ button.primary:hover:not(:disabled) {
 }
 
 .placa-badge {
-  background: #3498db;
-  color: white;
+  background: #0F1923;
+  color: #ffffff;
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -2010,7 +2005,7 @@ button.primary:hover:not(:disabled) {
   margin-top: 0.25rem;
 }
 
-/* Categorías resumen */
+/* CategorÃ­as resumen */
 .categorias-resumen {
   margin-bottom: 1.5rem;
   padding: 1rem;
@@ -2057,17 +2052,17 @@ button.primary:hover:not(:disabled) {
   color: #95a5a6;
 }
 
-/* Sección PDF mejorada */
+/* SecciÃ³n PDF mejorada */
 .pdf-section {
   margin-top: 2rem;
   margin-bottom: 2rem;
 }
 
 .pdf-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0F1923;
   border-radius: 12px;
   padding: 2rem;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2126,20 +2121,21 @@ button.primary:hover:not(:disabled) {
 
 .btn-pdf {
   padding: 0.75rem 2rem;
-  background: white;
-  color: #667eea;
+  background: #D4920A;
+  color: #0F1923;
   border: none;
   border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  box-shadow: none;
 }
 
 .btn-pdf:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+  background: #C17F08;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-pdf:disabled {
@@ -2198,7 +2194,7 @@ button.primary:hover:not(:disabled) {
 }
 
 
-/* ===== AUTENTICACIÓN DE ECONOMÍA ===== */
+/* ===== AUTENTICACIÃ“N DE ECONOMÃA ===== */
 .economia-auth-container {
   min-height: 80vh;
   display: flex;
@@ -2285,23 +2281,49 @@ button.primary:hover:not(:disabled) {
 
 .btn-primary {
   padding: 0.875rem 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #D4920A;
+  color: #0F1923;
   border: none;
   border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(212, 146, 10, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
+  background: #b87a08;
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+  box-shadow: 0 6px 16px rgba(212, 146, 10, 0.5);
 }
 
 .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  padding: 0.875rem 2rem;
+  background: #0F1923;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(15, 25, 35, 0.3);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #1a2a3a;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 25, 35, 0.5);
+}
+
+.btn-secondary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
@@ -2363,7 +2385,7 @@ button.primary:hover:not(:disabled) {
 }
 
 
-/* ===== GESTIÓN DE PROCESOS PREGRABADOS ===== */
+/* ===== GESTIÃ“N DE PROCESOS PREGRABADOS ===== */
 .section-header-with-actions {
   display: flex;
   justify-content: space-between;
@@ -2510,7 +2532,7 @@ button.primary:hover:not(:disabled) {
 }
 
 
-/* ===== PÁGINA DE CITAS ===== */
+/* ===== PÃGINA DE CITAS ===== */
 .citas-page {
   max-width: 1400px;
   margin: 0 auto;
@@ -2528,20 +2550,20 @@ button.primary:hover:not(:disabled) {
 
 .btn-nueva-cita {
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #D4920A;
+  color: #0F1923;
   border: none;
   border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(212, 146, 10, 0.3);
 }
 
 .btn-nueva-cita:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+  box-shadow: 0 6px 16px rgba(212, 146, 10, 0.5);
 }
 
 /* Formulario de cita */
@@ -2589,8 +2611,8 @@ button.primary:hover:not(:disabled) {
 
 .btn-buscar {
   padding: 0.6rem 1rem;
-  background: #3498db;
-  color: white;
+  background: #D4920A;
+  color: #0F1923;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -2600,7 +2622,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .btn-buscar:hover:not(:disabled) {
-  background: #2980b9;
+  background: #C17F08;
 }
 
 .btn-buscar:disabled {
@@ -2612,24 +2634,24 @@ button.primary:hover:not(:disabled) {
 
 .filtro-btn {
   padding: 0.5rem 1rem;
-  background: white;
-  border: 2px solid #dee2e6;
+  background: #ffffff;
+  border: 1px solid #CBD0D8;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
   font-weight: 500;
-  color: #2c3e50;
+  color: #0F1923;
 }
 
 .filtro-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: #0F1923;
+  color: #0F1923;
 }
 
 .filtro-btn.active {
-  background: #667eea;
-  border-color: #667eea;
-  color: white;
+  background: #0F1923;
+  border-color: #0F1923;
+  color: #ffffff;
 }
 
 /* Secciones de citas */
@@ -2698,7 +2720,7 @@ button.primary:hover:not(:disabled) {
 .cita-hora {
   font-size: 1.3rem;
   font-weight: 700;
-  color: #667eea;
+  color: #0F1923;
 }
 
 .badge-cita {
@@ -2710,8 +2732,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .badge-pendiente {
-  background: #fff3cd;
-  color: #856404;
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #F5D485;
 }
 
 .badge-confirmada {
@@ -2768,8 +2791,8 @@ button.primary:hover:not(:disabled) {
 .btn-generar-ticket {
   flex: 1;
   padding: 0.6rem 1rem;
-  background: #27ae60;
-  color: white;
+  background: #0F1923;
+  color: #ffffff;
   border: none;
   border-radius: 6px;
   font-weight: 600;
@@ -2778,7 +2801,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .btn-generar-ticket:hover:not(:disabled) {
-  background: #229954;
+  background: #1a2a3a;
   transform: translateY(-1px);
 }
 
@@ -2790,8 +2813,8 @@ button.primary:hover:not(:disabled) {
 .btn-confirmar-cita {
   flex: 1;
   padding: 0.6rem 1rem;
-  background: #3498db;
-  color: white;
+  background: #D4920A;
+  color: #0F1923;
   border: none;
   border-radius: 6px;
   font-weight: 600;
@@ -2800,7 +2823,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .btn-confirmar-cita:hover:not(:disabled) {
-  background: #2980b9;
+  background: #b87a08;
   transform: translateY(-1px);
 }
 
@@ -2811,16 +2834,17 @@ button.primary:hover:not(:disabled) {
 
 .btn-cancelar-cita {
   padding: 0.6rem 1rem;
-  background: #e74c3c;
-  color: white;
-  border: none;
+  background: #FDECEA;
+  color: #C0392B;
+  border: 1px solid #F5C0BB;
   border-radius: 6px;
   cursor: pointer;
+  font-weight: 600;
   transition: background 0.3s;
 }
 
 .btn-cancelar-cita:hover:not(:disabled) {
-  background: #c0392b;
+  background: #fcd5d0;
 }
 
 .cita-convertida {
@@ -2890,18 +2914,19 @@ button.primary:hover:not(:disabled) {
 
 .vista-btn {
   padding: 0.5rem 1rem;
-  background: transparent;
-  border: none;
+  background: #ffffff;
+  border: 1px solid #CBD0D8;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
   transition: all 0.3s;
-  color: #6b7280;
+  color: #0F1923;
 }
 
 .vista-btn.active {
-  background: #667eea;
-  color: white;
+  background: #0F1923;
+  border-color: #0F1923;
+  color: #ffffff;
 }
 
 .vista-btn:hover:not(.active) {
@@ -2933,8 +2958,8 @@ button.primary:hover:not(:disabled) {
 
 .calendario-nav {
   padding: 0.6rem 1.2rem;
-  background: #667eea;
-  color: white;
+  background: #0F1923;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -2943,7 +2968,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .calendario-nav:hover {
-  background: #5568d3;
+  background: #1a2a3a;
 }
 
 .calendario-grid {
@@ -2980,7 +3005,7 @@ button.primary:hover:not(:disabled) {
 
 .calendario-dia:hover {
   background: #f3f4f6;
-  border-color: #667eea;
+  border-color: #0F1923;
 }
 
 .calendario-dia-add {
@@ -2990,8 +3015,8 @@ button.primary:hover:not(:disabled) {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #667eea;
-  color: white;
+  background: #D4920A;
+  color: #0F1923;
   border: none;
   font-size: 16px;
   line-height: 1;
@@ -3008,12 +3033,12 @@ button.primary:hover:not(:disabled) {
 }
 
 .calendario-dia-add:hover {
-  background: #4f46e5;
+  background: #b87a08;
 }
 
 .calendario-dia.hoy {
   background: #eef2ff;
-  border-color: #667eea;
+  border-color: #0F1923;
 }
 
 .calendario-dia.con-citas {
@@ -3057,7 +3082,7 @@ button.primary:hover:not(:disabled) {
 
 .cita-hora-mini {
   font-weight: 600;
-  color: #667eea;
+  color: #0F1923;
 }
 
 .cita-cliente-mini {
@@ -3101,14 +3126,14 @@ button.primary:hover:not(:disabled) {
   }
 }
 
-/* Día seleccionado en calendario */
+/* DÃ­a seleccionado en calendario */
 .calendario-dia.dia-seleccionado {
   background: #dbeafe !important;
-  border-color: #2563eb !important;
-  box-shadow: 0 0 0 2px #2563eb;
+  border-color: #0F1923 !important;
+  box-shadow: 0 0 0 2px #0F1923;
 }
 
-/* Panel agenda del día */
+/* Panel agenda del dÃ­a */
 .agenda-dia-panel {
   margin-top: 16px;
   background: white;
@@ -3123,8 +3148,8 @@ button.primary:hover:not(:disabled) {
   justify-content: space-between;
   align-items: center;
   padding: 14px 20px;
-  background: linear-gradient(135deg, #1e40af, #2563eb);
-  color: white;
+  background: #0F1923;
+  color: #ffffff;
 }
 
 .agenda-dia-titulo {
@@ -3221,7 +3246,7 @@ button.primary:hover:not(:disabled) {
   flex-shrink: 0;
 }
 
-/* ── Entregados Page ─────────────────────────────────────────────────────── */
+/* â”€â”€ Entregados Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ent-page {
   padding: 28px 32px;
   max-width: 1300px;
@@ -3229,12 +3254,39 @@ button.primary:hover:not(:disabled) {
   font-family: "Sora", sans-serif;
 }
 
+/* Page Hero — componente reutilizable */
+.page-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0F1923;
+  border-radius: 16px;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  width: 100%;
+  box-sizing: border-box;
+}
+.page-hero-title { font-size: 1.5rem; font-weight: 700; color: #fff; margin: 0 0 4px; }
+.page-hero-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin: 0; }
+.page-hero-right { display: flex; align-items: center; gap: 12px; }
+.page-hero-badge {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,0.2);
+  white-space: nowrap;
+}
+
 /* Hero */
 .ent-hero {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #2563eb 100%);
+  background: #0F1923;
   border-radius: 16px;
   padding: 24px 28px;
   margin-bottom: 24px;
@@ -3284,15 +3336,15 @@ button.primary:hover:not(:disabled) {
 .ent-input:focus { outline: none; border-color: #3b82f6; background: #fff; }
 .ent-btn-buscar {
   padding: 10px 26px;
-  background: linear-gradient(135deg, #1e40af, #3b82f6);
-  color: #fff;
+  background: #D4920A;
+  color: #0F1923;
   border: none;
   border-radius: 9px;
   font-weight: 700;
   font-size: 14px;
   font-family: "Sora", sans-serif;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+  box-shadow: 0 2px 8px rgba(212,146,10,0.3);
   transition: opacity 0.15s;
 }
 .ent-btn-buscar:hover { opacity: 0.9; }
@@ -3351,7 +3403,7 @@ button.primary:hover:not(:disabled) {
   letter-spacing: 0.5px;
 }
 .ent-chip--lg { font-size: 11px; padding: 5px 14px; }
-.ent-chip--entregado { background: #ede9fe; color: #5b21b6; }
+.ent-chip--entregado { background: #E6F4ED; color: #1A7A4A; }
 .ent-chip--finalizado { background: #d1fae5; color: #065f46; }
 .ent-codigo { font-size: 11px; color: #94a3b8; margin: 0 0 4px; }
 .ent-motivo { font-size: 13px; color: #334155; margin: 0 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3410,7 +3462,7 @@ button.primary:hover:not(:disabled) {
 .ent-fin-value { font-size: 16px; font-weight: 700; color: #0f172a; }
 .ent-fin-card--blue .ent-fin-value { color: #1d4ed8; }
 .ent-fin-card--green .ent-fin-value { color: #15803d; }
-.ent-fin-card--orange .ent-fin-value { color: #d97706; }
+.ent-fin-card--orange .ent-fin-value { color: #0F1923; }
 
 .ent-nota { background: #f8fafc; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .ent-nota-label { display: block; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
@@ -3421,18 +3473,19 @@ button.primary:hover:not(:disabled) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, #0369a1, #0ea5e9);
-  color: #fff;
+  background: #D4920A;
+  color: #0F1923;
   padding: 12px;
   border-radius: 10px;
   font-weight: 700;
   font-size: 14px;
   text-decoration: none;
   margin-top: 8px;
-  box-shadow: 0 2px 8px rgba(14,165,233,0.3);
-  transition: opacity 0.15s;
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s;
 }
-.ent-pdf-btn:hover { opacity: 0.9; }
+.ent-pdf-btn:hover { background: #C17F08; }
 
 .ent-detalle-empty {
   display: flex;
@@ -3521,7 +3574,7 @@ button.primary:hover:not(:disabled) {
 .ip-value {
   font-size: 1.6rem;
   font-weight: 700;
-  color: var(--brand-primary);
+  color: #0F1923;
   font-family: monospace;
   letter-spacing: 1px;
 }
@@ -3534,9 +3587,9 @@ button.primary:hover:not(:disabled) {
 
 .btn-copiar {
   padding: 0.4rem 1rem;
-  background: var(--brand-primary);
-  color: white;
-  border: none;
+  background: #ffffff;
+  border: 1px solid #CBD0D8;
+  color: #0F1923;
   border-radius: 8px;
   font-size: 0.85rem;
   font-weight: 600;
@@ -3545,7 +3598,8 @@ button.primary:hover:not(:disabled) {
 }
 
 .btn-copiar:hover {
-  background: var(--brand-primary-dark);
+  background: #f3f4f6;
+  border-color: #9ca3af;
   transform: translateY(-1px);
 }
 
@@ -3622,7 +3676,7 @@ button.primary:hover:not(:disabled) {
   }
 }
 
-/* ── Configuración Page ─────────────────────────────────────────────────── */
+/* â”€â”€ ConfiguraciÃ³n Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .config-page {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -3722,9 +3776,9 @@ button.primary:hover:not(:disabled) {
   cursor: pointer;
 }
 
-.btn-chip-warning { background: #fef3c7; color: #92400e; }
-.btn-chip-success { background: #d1fae5; color: #065f46; }
-.btn-chip-danger  { background: #fee2e2; color: #991b1b; }
+.btn-chip-warning { background: #FEF3C7; color: #92400E; border: 1px solid #F5D485; }
+.btn-chip-success { background: #d1fae5; color: #065f46; border: 1px solid #86efac; }
+.btn-chip-danger  { background: #FDECEA; color: #C0392B; border: 1px solid #F5C0BB; }
 
 .config-form {
   display: flex;
@@ -3741,7 +3795,7 @@ button.primary:hover:not(:disabled) {
 .config-field label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
+  color: #6B7280;
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
@@ -3798,7 +3852,7 @@ button.primary:hover:not(:disabled) {
 .chip-remove:hover { color: #dc2626; }
 
 
-/* ===== ESTADÍSTICAS DASHBOARD ===== */
+/* ===== ESTADÃSTICAS DASHBOARD ===== */
 
 .estadisticas-dashboard {
   background: rgba(255, 255, 255, 0.82);
@@ -3851,16 +3905,17 @@ button.primary:hover:not(:disabled) {
 }
 
 .periodo-btn:hover:not(.activo) {
-  background: rgba(255,255,255,0.6);
-  color: var(--text);
+  background: #ffffff;
+  border: 1px solid #CBD0D8;
+  color: #0F1923;
   transform: none;
   box-shadow: none;
 }
 
 .periodo-btn.activo {
-  background: var(--brand-primary);
-  color: white;
-  box-shadow: 0 2px 6px rgba(30, 64, 175, 0.3);
+  background: #D4920A;
+  color: #0F1923;
+  box-shadow: none;
   transform: none;
 }
 
@@ -3897,7 +3952,7 @@ button.primary:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  background: #0F1923;
   border-radius: 12px;
   padding: 1rem 1.4rem;
   margin-bottom: 1.2rem;
@@ -4006,7 +4061,7 @@ button.primary:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-/* Ranking mecánicos */
+/* Ranking mecÃ¡nicos */
 .mecanicos-ranking {
   display: flex;
   flex-direction: column;
@@ -4091,4 +4146,5 @@ button.primary:hover:not(:disabled) {
     margin-left: 0;
   }
 }
+
 

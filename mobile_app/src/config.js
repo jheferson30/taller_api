@@ -123,6 +123,11 @@ export async function getApiBaseUrl() {
   return `http://${ip}:8000/api/mobile`;
 }
 
+export async function getAuthBaseUrl() {
+  const ip = await getServerIp();
+  return `http://${ip}:8000`;
+}
+
 export async function getPdfBaseUrl() {
   const ip = await getServerIp();
   return `http://${ip}:8000`;

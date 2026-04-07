@@ -1,7 +1,9 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { api } from "../api";
 import InputDinero from "../components/InputDinero";
 import SelectMecanico from "../components/SelectMecanico";
+import { FiZap } from "react-icons/fi";
+import PageHero from "../components/PageHero";
 
 const emptyVehiculo = {
   placa: "",
@@ -82,7 +84,7 @@ function CobroRapidoPanel({ placa, onDone, inline = false }) {
           {loading ? "Registrando..." : "Registrar Cobro"}
         </button>
       </div>
-      {msg && <p className={`message full-width ${msg.includes("✓") ? "success" : "error"}`}>{msg}</p>}
+      {msg && <p className={`message full-width ${msg.startsWith("correcto") || msg.startsWith("✓") || msg.startsWith("Ticket") || msg.startsWith("Veh") ? "success" : "error"}`}>{msg}</p>}
     </div>
   );
 
@@ -95,11 +97,11 @@ function CobroRapidoPanel({ placa, onDone, inline = false }) {
             style={{ whiteSpace: "nowrap", borderColor: "#f59e0b", color: "#92400e" }}
             onClick={() => setOpen(true)}
           >
-            ⚡ Cobro Rápido
+            <FiZap size={14} style={{marginRight:5, verticalAlign:"middle"}} /> Cobro Rápido
           </button>
         ) : (
           <div className="form-section" style={{ marginTop: 12, borderLeft: "3px solid #f59e0b", minWidth: 320 }}>
-            <h3 className="section-title">⚡ Cobro Rápido — {placa}</h3>
+            <h3 className="section-title"><FiZap size={14} style={{marginRight:5, verticalAlign:"middle"}} /> Cobro Rápido — {placa}</h3>
             {panelContent}
           </div>
         )}
@@ -111,7 +113,7 @@ function CobroRapidoPanel({ placa, onDone, inline = false }) {
     return (
       <div style={{ marginTop: 12, textAlign: "center" }}>
         <button className="button-secondary" style={{ fontSize: 13 }} onClick={() => setOpen(true)}>
-          ⚡ Cobro Rápido
+          <FiZap size={14} style={{marginRight:5, verticalAlign:"middle"}} /> Cobro Rápido
         </button>
       </div>
     );
@@ -119,7 +121,7 @@ function CobroRapidoPanel({ placa, onDone, inline = false }) {
 
   return (
     <div className="form-section" style={{ marginTop: 16, borderLeft: "3px solid #f59e0b" }}>
-      <h3 className="section-title">⚡ Cobro Rápido — {placa}</h3>
+      <h3 className="section-title"><FiZap size={14} style={{marginRight:5, verticalAlign:"middle"}} /> Cobro Rápido — {placa}</h3>
       {panelContent}
     </div>
   );
@@ -277,32 +279,33 @@ export default function RecepcionPage() {
   // PANTALLA DE BÚSQUEDA
   if (step === "search") {
     return (
-      <section className="recepcion-container">
-        <div className="recepcion-header">
-          <h2>Recepción de Vehículos</h2>
-          <p className="subtitle">Ingresa la placa del vehículo para comenzar</p>
-        </div>
-
-        <div className="search-card">
-          <form onSubmit={onBuscar} className="search-form">
-            <div className="search-input-group">
-              <input
-                type="text"
-                placeholder="Ej: ABC123"
-                value={placaBusqueda}
-                onChange={(e) => setPlacaBusqueda(e.target.value.toUpperCase())}
-                className="search-input"
-                autoFocus
-                disabled={loading}
-              />
-              <button type="submit" className="search-button" disabled={loading}>
-                {loading ? "Buscando..." : "Buscar Vehículo"}
-              </button>
-            </div>
-          </form>
-          {msg && <p className="message error">{msg}</p>}
-        </div>
-      </section>
+      <>
+        <PageHero
+          titulo="Recepción de Vehículos"
+          subtitulo="Ingresa la placa del vehículo para comenzar"
+        />
+        <section className="recepcion-container">
+          <div className="search-card">
+            <form onSubmit={onBuscar} className="search-form">
+              <div className="search-input-group">
+                <input
+                  type="text"
+                  placeholder="Ej: ABC123"
+                  value={placaBusqueda}
+                  onChange={(e) => setPlacaBusqueda(e.target.value.toUpperCase())}
+                  className="search-input"
+                  autoFocus
+                  disabled={loading}
+                />
+                <button type="submit" className="search-button" disabled={loading}>
+                  {loading ? "Buscando..." : "Buscar Vehículo"}
+                </button>
+              </div>
+            </form>
+            {msg && <p className="message error">{msg}</p>}
+          </div>
+        </section>
+      </>
     );
   }
 
@@ -487,7 +490,7 @@ export default function RecepcionPage() {
           </button>
         </div>
 
-        {msg && <p className={`message ${msg.includes("✓") ? "success" : "error"}`}>{msg}</p>}
+        {msg && <p className={`message ${msg.startsWith("correcto") || msg.startsWith("✓") || msg.startsWith("Ticket") || msg.startsWith("Veh") ? "success" : "error"}`}>{msg}</p>}
       </section>
     );
   }
@@ -673,7 +676,7 @@ export default function RecepcionPage() {
           </button>
         </div>
 
-        {msg && <p className={`message ${msg.includes("✓") ? "success" : "error"}`}>{msg}</p>}
+        {msg && <p className={`message ${msg.startsWith("correcto") || msg.startsWith("✓") || msg.startsWith("Ticket") || msg.startsWith("Veh") ? "success" : "error"}`}>{msg}</p>}
       </section>
     );
   }
@@ -823,8 +826,10 @@ export default function RecepcionPage() {
           </button>
         </div>
 
-        {msg && <p className={`message ${msg.includes("✓") ? "success" : "error"}`}>{msg}</p>}
+        {msg && <p className={`message ${msg.startsWith("correcto") || msg.startsWith("✓") || msg.startsWith("Ticket") || msg.startsWith("Veh") ? "success" : "error"}`}>{msg}</p>}
       </section>
     );
   }
 }
+
+

@@ -10,6 +10,8 @@ import { Picker } from '@react-native-picker/picker';
 import { api } from '../api';
 import { colors } from '../theme';
 import { useToast } from '../components/Toast';
+import offlineService from '../services/offlineService';
+import { useOffline } from '../hooks/useOffline';
 
 const PROCESOS_RAPIDOS_DEFAULT = [
   'Cambio de aceite',
@@ -27,6 +29,7 @@ const PROCESOS_RAPIDOS_DEFAULT = [
 export default function AddProcesoScreen({ route, navigation }) {
   const { ticketId } = route.params;
   const toast = useToast();
+  const { isOnline } = useOffline();
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [mecanico, setMecanico] = useState('');
@@ -63,6 +66,25 @@ export default function AddProcesoScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
+      // Sin conexión: encolar siempre (con o sin foto)
+      if (!isOnline) {
+        await offlineService.enqueueOperation({
+          type: fotoUri ? 'CREATE_PROCESO_CON_FOTO' : 'CREATE_PROCESO',
+          endpoint: `/tickets/${ticketId}/procesos`,
+          method: 'POST',
+          data: {
+            ticketId,
+            nombre: nombre.trim(),
+            descripcion: descripcion.trim() || null,
+            mecanico: mecanico.trim() || null,
+            fotoUri: fotoUri || null,
+          },
+        });
+        toast('Sin conexión — se subirá automáticamente cuando vuelva el internet', 'warning');
+        navigation.goBack();
+        return;
+      }
+
       await api.createProceso(ticketId, {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || null,
@@ -170,7 +192,9 @@ export default function AddProcesoScreen({ route, navigation }) {
           >
             {loading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.btnText}>Guardar Proceso</Text>
+              : <Text style={styles.btnText}>
+                  {!isOnline ? '📥 Guardar sin conexión' : 'Guardar Proceso'}
+                </Text>
             }
           </TouchableOpacity>
 
@@ -183,12 +207,12 @@ export default function AddProcesoScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: '#0A1017' },
   form: { padding: 20 },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textMuted,
+    color: '#94a3b8',
     marginBottom: 6,
     marginTop: 16,
     textTransform: 'uppercase',
@@ -202,56 +226,56 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.1)',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: colors.surface,
+    backgroundColor: '#1C2B3A',
   },
   chipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
+    borderColor: '#D4920A',
+    backgroundColor: '#D4920A',
   },
-  chipText: { fontSize: 13, color: colors.text },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
+  chipText: { fontSize: 13, color: '#fff' },
+  chipTextActive: { color: '#0A1017', fontWeight: '600' },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1C2B3A',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: colors.text,
+    color: '#fff',
   },
   textArea: { height: 100, paddingTop: 12 },
   btn: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#D4920A',
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 28,
   },
   btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  btnText: { color: '#0A1017', fontWeight: '700', fontSize: 16 },
   cancelBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  cancelText: { color: colors.textMuted, fontSize: 15 },
+  cancelText: { color: '#94a3b8', fontSize: 15 },
   botonesRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
   btnFoto: {
-    flex: 1, backgroundColor: colors.surface, borderWidth: 1,
-    borderColor: colors.border, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+    flex: 1, backgroundColor: '#1C2B3A', borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 12, alignItems: 'center',
   },
-  btnFotoText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  btnFotoText: { fontSize: 14, fontWeight: '600', color: '#D4920A' },
   previewContainer: { borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
   preview: { width: '100%', height: 180 },
-  removeBtn: { backgroundColor: colors.error, padding: 8, alignItems: 'center' },
+  removeBtn: { backgroundColor: '#C0392B', padding: 8, alignItems: 'center' },
   removeBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   pickerWrapper: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1C2B3A',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: 10,
     overflow: 'hidden',
   },
-  picker: { color: colors.text, height: 50 },
+  picker: { color: '#fff', height: 50 },
 });

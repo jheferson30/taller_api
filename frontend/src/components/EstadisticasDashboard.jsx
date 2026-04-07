@@ -51,7 +51,7 @@ function GraficoColumnas({ datos, alto = 200 }) {
             <rect
               x={x} y={y} width={barAncho} height={barH}
               rx={esMes ? 3 : 5}
-              fill={esHoy ? "#1e40af" : "#3b82f6"}
+              fill={esHoy ? "#0F1923" : "#D4920A"}
               opacity={esHoy ? 1 : 0.7}
             >
               <title>{d.fecha}: {formatMoney(d.total)}</title>
@@ -67,14 +67,14 @@ function GraficoColumnas({ datos, alto = 200 }) {
             {mostrarLabel(i) && (
               <text x={x + barAncho / 2} y={labelY} textAnchor="middle"
                 fontSize={esMes ? 8 : 9}
-                fill={esHoy ? "#1e40af" : "#64748b"}
+                fill={esHoy ? "#0F1923" : "#64748b"}
                 fontWeight={esHoy ? "700" : "400"}>
                 {esMes ? `${dia}/${mes}` : dia}
               </text>
             )}
             {/* Punto indicador para hoy en modo mes */}
             {esMes && esHoy && (
-              <circle cx={x + barAncho / 2} cy={y - 5} r="3" fill="#1e40af" />
+              <circle cx={x + barAncho / 2} cy={y - 5} r="3" fill="#0F1923" />
             )}
           </g>
         );
@@ -84,7 +84,7 @@ function GraficoColumnas({ datos, alto = 200 }) {
 }
 
 // Barra horizontal con porcentaje
-function BarraHorizontal({ label, valor, max, color = "#3b82f6", suffix = "" }) {
+function BarraHorizontal({ label, valor, max, color = "#D4920A", suffix = "" }) {
   const pct = max > 0 ? Math.min(100, (valor / max) * 100) : 0;
   return (
     <div className="barra-h-row">
@@ -99,7 +99,7 @@ function BarraHorizontal({ label, valor, max, color = "#3b82f6", suffix = "" }) 
 
 // Medallas para el podio
 const MEDALLAS = ["🥇", "🥈", "🥉"];
-const COLORES_MECANICO = ["#f59e0b", "#94a3b8", "#cd7c2f", "#3b82f6", "#8b5cf6"];
+const COLORES_MECANICO = ["#D4920A", "#1C2B3A", "#cd7c2f", "#374151", "#475569"];
 
 export default function EstadisticasDashboard() {
   const [periodo, setPeriodo] = useState("semana");
@@ -165,7 +165,7 @@ export default function EstadisticasDashboard() {
             <div className="stats-card stats-card-wide">
               <h4 className="stats-card-title">Ingresos por día</h4>
               <GraficoColumnas datos={datos.ingresos_por_dia} />
-              <p className="stats-chart-hint">Las barras azul oscuro indican el día de hoy</p>
+              <p className="stats-chart-hint">Las barras oscuras indican el día de hoy</p>
             </div>
 
             {/* Top servicios */}
@@ -181,7 +181,7 @@ export default function EstadisticasDashboard() {
                       label={s.servicio?.length > 28 ? s.servicio.slice(0, 28) + "…" : s.servicio}
                       valor={s.cantidad}
                       max={maxServicios}
-                      color={`hsl(${210 + i * 25}, 70%, ${55 - i * 5}%)`}
+                      color="#D4920A"
                       suffix=" tickets"
                     />
                   ))}

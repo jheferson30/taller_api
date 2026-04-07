@@ -278,4 +278,6 @@ export const api = {
     }
     return await response.json();
   },
+
+  getEconomia: (fecha) => request(`/economia-hoy${fecha ? '?fecha=' + fecha : ''}`),
 };

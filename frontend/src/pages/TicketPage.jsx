@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import InputDinero from "../components/InputDinero";
 import SelectMecanico from "../components/SelectMecanico";
+import PageHero from "../components/PageHero";
 
 const PROCESOS_RAPIDOS_DEFAULT = [
   "Cambio de aceite",
@@ -374,11 +375,13 @@ export default function TicketPage() {
   const isEntregado = resumen?.ticket.estado === "ENTREGADO";
 
   return (
-    <section className="ticket-container">
-      <div className="ticket-header">
-        <h2>Gestión de Tickets</h2>
-        <p className="subtitle">Control técnico del mantenimiento</p>
-      </div>
+    <>
+      <PageHero
+        titulo="Tickets Activos"
+        subtitulo="Gestión de tickets en proceso"
+        badge={tickets.length > 0 ? `${tickets.length} activos` : null}
+      />
+      <section className="ticket-container">
 
       <div className="ticket-layout">
         {/* SIDEBAR - Lista de tickets */}
@@ -1169,5 +1172,6 @@ export default function TicketPage() {
 
       {msg && <div className={`message-toast ${msg.includes("✓") ? "success" : "error"}`}>{msg}</div>}
     </section>
+    </>
   );
 }

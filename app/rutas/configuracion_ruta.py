@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -208,3 +208,37 @@ def actualizar_config_email(body: EmailConfigUpdate, db: Session = Depends(get_d
         cfg.smtp_from = body.smtp_from.strip() or None
     db.commit()
     return {"ok": True}
+
+
+# ── Logo del taller ───────────────────────────────────────────────────────────
+
+@router.get("/logo")
+def obtener_logo(db: Session = Depends(get_db)):
+    cfg = _get_config(db)
+    return {"logo_url": cfg.logo_url or ""}
+
+
+@router.post("/logo", dependencies=[Depends(verificar_admin)])
+async def subir_logo(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    import uuid, os, shutil
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(status_code=400, detail="Solo se permiten jpg, png o webp")
+    logo_dir = os.path.join("uploads", "logo")
+    os.makedirs(logo_dir, exist_ok=True)
+    filename = f"logo_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(logo_dir, filename)
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+    logo_url = f"/uploads/logo/{filename}"
+
+    # Copiar también como logo para los PDFs
+    pdf_logo_path = os.path.join("frontend", "public", "assets", "logo.png")
+    os.makedirs(os.path.dirname(pdf_logo_path), exist_ok=True)
+    shutil.copy2(filepath, pdf_logo_path)
+
+    cfg = _get_config(db)
+    cfg.logo_url = logo_url
+    db.commit()
+    return {"logo_url": logo_url}

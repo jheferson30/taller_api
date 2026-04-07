@@ -1,6 +1,7 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 import EstadisticasDashboard from "../components/EstadisticasDashboard";
+import PageHero from "../components/PageHero";
 
 export default function EconomiaPage() {
   const [resumen, setResumen] = useState(null);
@@ -59,14 +60,18 @@ export default function EconomiaPage() {
   const egresosPorCategoria = agruparEgresosPorCategoria(egresos?.egresos);
 
   return (
-    <section className="economia-page">
-      <div className="economia-header">
-        <div><h2>Economia del Dia</h2><p className="subtitle">Ingresos, egresos y resultado diario</p></div>
-        <div className="fecha-selector">
-          <label>Fecha:</label>
-          <input type="date" value={fecha} onChange={handleFechaChange} max={new Date().toISOString().split("T")[0]} />
-        </div>
-      </div>
+    <>
+      <PageHero
+        titulo="Economía del Día"
+        subtitulo="Ingresos, egresos y resultado diario"
+        action={
+          <div className="fecha-selector">
+            <label>Fecha:</label>
+            <input type="date" value={fecha} onChange={handleFechaChange} max={new Date().toISOString().split("T")[0]} />
+          </div>
+        }
+      />
+      <section className="economia-page">
       {loading && <p className="loading">Cargando...</p>}
       <div className="kpis-economia">
         <article className="kpi-card ingreso">
@@ -144,5 +149,7 @@ export default function EconomiaPage() {
       </div>
       {msg && <p className={`status ${msg.startsWith('correcto') ? 'success' : 'error'}`}>{msg}</p>}
     </section>
+    </>
   );
 }
+

@@ -7,7 +7,7 @@ const ICONS = { success: 'OK', error: 'X', info: 'i', warning: '!' };
 const COLORS = {
   success: { bg: '#14532d', border: '#22c55e', text: '#86efac', icon: '#22c55e' },
   error:   { bg: '#450a0a', border: '#ef4444', text: '#fca5a5', icon: '#ef4444' },
-  info:    { bg: '#0c1a3a', border: '#3b82f6', text: '#93c5fd', icon: '#3b82f6' },
+  info:    { bg: '#0c1a3a', border: '#0F1923', text: '#93c5fd', icon: '#0F1923' },
   warning: { bg: '#431407', border: '#f97316', text: '#fdba74', icon: '#f97316' },
 };
 

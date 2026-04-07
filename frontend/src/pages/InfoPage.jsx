@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import PageHero from "../components/PageHero";
 
 export default function InfoPage() {
   const [info, setInfo] = useState(null);
@@ -9,11 +10,12 @@ export default function InfoPage() {
   }, []);
 
   return (
-    <section className="info-page">
-      <div className="info-header">
-        <h2>Información del Sistema</h2>
-        <p className="subtitle">Datos de configuración y contacto del desarrollador</p>
-      </div>
+    <>
+      <PageHero
+        titulo="Información del Sistema"
+        subtitulo="Versión, soporte y documentación"
+      />
+      <section className="info-page">
 
       {/* Tarjeta sistema */}
       <div className="info-sys-card">
@@ -71,5 +73,6 @@ export default function InfoPage() {
         </div>
       </div>
     </section>
+    </>
   );
 }

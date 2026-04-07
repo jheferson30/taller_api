@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -7,6 +7,8 @@ import { TouchableOpacity, Text } from 'react-native';
 import { ToastProvider } from './src/components/Toast';
 import { ConnectionIndicator } from './src/components/ConnectionIndicator';
 import HomeScreen from './src/screens/HomeScreen';
+import HomeAdminScreen from './src/screens/HomeAdminScreen';
+import AdminEconomiaScreen from './src/screens/AdminEconomiaScreen';
 import TicketListScreen from './src/screens/TicketListScreen';
 import TicketDetailScreen from './src/screens/TicketDetailScreen';
 import AddProcesoScreen from './src/screens/AddProcesoScreen';
@@ -19,6 +21,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import { detectarIpActiva } from './src/config';
 import authService from './src/services/authService';
 import offlineService from './src/services/offlineService';
+import { sessionEvents } from './src/services/sessionEvents';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,6 +29,8 @@ export default function App() {
   const [iniciando, setIniciando] = useState(true);
   const [hayConexion, setHayConexion] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const navigationRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -33,19 +38,37 @@ export default function App() {
       const ip = await detectarIpActiva();
       setHayConexion(!!ip);
 
-      // Cargar tokens guardados
+      // Cargar tokens guardados - sesión persistente
       await authService.loadTokens();
       const authenticated = await authService.isAuthenticated();
       setIsAuthenticated(authenticated);
+      if (authenticated) {
+        const user = await authService.getUser();
+        const roles = user?.roles || [];
+        setIsAdmin(roles.includes('ADMIN'));
+      }
 
       // Inicializar servicio offline
       await offlineService.initialize();
       offlineService.startAutoSync();
+      // Si ya hay operaciones pendientes y hay conexión, sincronizar de inmediato
+      const state = offlineService.getState();
+      if (state.isOnline && state.pendingCount > 0) {
+        offlineService.syncPendingOperations().catch(console.error);
+      }
 
       setIniciando(false);
     })();
 
+    // Escuchar sesión expirada
+    const unsubSession = sessionEvents.onSessionExpired(() => {
+      if (navigationRef.current) {
+        navigationRef.current.reset({ index: 0, routes: [{ name: 'Login' }] });
+      }
+    });
+
     return () => {
+      unsubSession();
       offlineService.stopAutoSync();
       offlineService.destroy();
     };
@@ -63,17 +86,17 @@ export default function App() {
   const getInitialRoute = () => {
     if (!hayConexion) return 'Configuracion';
     if (!isAuthenticated) return 'Login';
-    return 'Home';
+    return isAdmin ? 'HomeAdmin' : 'Home';
   };
 
   return (
     <ToastProvider>
       <ConnectionIndicator />
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator
           initialRouteName={getInitialRoute()}
           screenOptions={{
-            headerStyle: { backgroundColor: '#1e40af' },
+            headerStyle: { backgroundColor: '#0F1923' },
             headerTintColor: '#fff',
             headerTitleStyle: { fontWeight: 'bold' },
           }}
@@ -87,17 +110,23 @@ export default function App() {
             name="Home"
             component={HomeScreen}
             options={({ navigation }) => ({
-              title: 'PULGA Mecánica Fi',
+              title: 'Taller Mecánico',
               headerRight: () => (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('Configuracion')}
-                  style={{ marginRight: 4, padding: 6 }}
-                >
+                <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
                   <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
                 </TouchableOpacity>
               ),
             })}
           />
+          <Stack.Screen name="HomeAdmin" component={HomeAdminScreen} options={({ navigation }) => ({
+            title: 'Panel Administrador',
+            headerRight: () => (
+              <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
+                <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
+              </TouchableOpacity>
+            ),
+          })} />
+          <Stack.Screen name="AdminEconomia" component={AdminEconomiaScreen} options={{ title: 'Economia del Dia' }} />
           <Stack.Screen
             name="Configuracion"
             component={ConfiguracionScreen}

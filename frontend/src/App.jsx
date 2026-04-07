@@ -1,4 +1,5 @@
 import { NavLink, Route, Routes, Navigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
 import RecepcionPage from "./pages/RecepcionPage";
 import TicketPage from "./pages/TicketPage";
 import EconomiaPage from "./pages/EconomiaPage";
@@ -10,6 +11,8 @@ import ConfiguracionMecanicoPage from "./pages/ConfiguracionMecanicoPage";
 import Starfield from "./components/Starfield";
 import LoginPage from "./pages/LoginPage";
 import authService from "./services/authService";
+import { FiEdit2, FiCamera, FiGrid, FiClipboard, FiCalendar, FiCheckSquare, FiTrendingUp, FiSettings, FiInfo } from 'react-icons/fi';
+import { api } from "./api";
 
 function getRoles() {
   const user = authService.getUser();
@@ -28,32 +31,72 @@ function AppLayout({ children }) {
   }
 
   const { isAdmin, isMecanico, isRecepcionista, username } = getRoles();
+  const [logoUrl, setLogoUrl] = useState(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    api.obtenerLogo()
+      .then(r => setLogoUrl(r.logo_url || "/assets/logo.png"))
+      .catch(() => setLogoUrl("/assets/logo.png"));
+  }, []);
+
+  async function handleLogoChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const r = await api.subirLogo(formData);
+      setLogoUrl(r.logo_url);
+    } catch (err) {
+      alert("Error subiendo logo: " + err.message);
+    }
+  }
 
   async function handleLogout() {
     await authService.logout();
     window.location.href = "/login";
   }
 
+  const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <img src="/assets/logo.png" alt="PULGA Mecánica Fi" className="brand-logo-img" />
+        <div className="brand" style={{ position: "relative", cursor: isAdmin ? "pointer" : "default" }}
+          onClick={() => isAdmin && fileInputRef.current?.click()}
+          title={isAdmin ? "Haz clic para cambiar el logo" : ""}
+        >
+          {logoUrl ? (
+            <img src={logoUrl.startsWith("/uploads") ? `${API_BASE}${logoUrl}` : logoUrl} alt="Logo taller" className="brand-logo-img" />
+          ) : (
+            <div style={{ width: "100%", maxWidth: 140, height: 80, border: "2px dashed rgba(255,255,255,0.3)", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.5)", fontSize: "0.75rem", textAlign: "center", padding: "0.5rem" }}>
+              {isAdmin ? <><FiCamera size={20} style={{marginBottom:4}} /><br />Subir logo</> : "Sin logo"}
+            </div>
+          )}
+          {isAdmin && logoUrl && (
+            <div style={{ position: "absolute", bottom: 0, right: 0, background: "rgba(0,0,0,0.6)", borderRadius: "50%", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <FiEdit2 size={12} color="#fff" />
+            </div>
+          )}
         </div>
+        {isAdmin && <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleLogoChange} />}
         <nav className="nav">
-          <NavLink to="/" end>Recepcion</NavLink>
-          <NavLink to="/tickets">Tickets</NavLink>
-          <NavLink to="/citas">Citas</NavLink>
-          {/* Entregados: ADMIN y RECEPCIONISTA */}
-          {(isAdmin || isRecepcionista) && <NavLink to="/entregados">Entregados</NavLink>}
-          {/* Economía: solo ADMIN */}
-          {isAdmin && <NavLink to="/economia">Economia</NavLink>}
-          {/* Configuración: ADMIN y MECANICO y RECEPCIONISTA */}
-          {(isAdmin || isMecanico || isRecepcionista) && <NavLink to="/configuracion">Configuracion</NavLink>}
-          <NavLink to="/info">Info</NavLink>
+          <NavLink to="/" end><FiGrid size={17} style={{marginRight:8, verticalAlign:'middle'}} />Recepcion</NavLink>
+          <NavLink to="/tickets"><FiClipboard size={17} style={{marginRight:8, verticalAlign:'middle'}} />Tickets</NavLink>
+          <NavLink to="/citas"><FiCalendar size={17} style={{marginRight:8, verticalAlign:'middle'}} />Citas</NavLink>
+          {(isAdmin || isRecepcionista) && <NavLink to="/entregados"><FiCheckSquare size={17} style={{marginRight:8, verticalAlign:'middle'}} />Entregados</NavLink>}
+          {isAdmin && <NavLink to="/economia"><FiTrendingUp size={17} style={{marginRight:8, verticalAlign:'middle'}} />Economia</NavLink>}
+          {(isAdmin || isMecanico || isRecepcionista) && <NavLink to="/configuracion"><FiSettings size={17} style={{marginRight:8, verticalAlign:'middle'}} />Configuracion</NavLink>}
+          <NavLink to="/info"><FiInfo size={17} style={{marginRight:8, verticalAlign:'middle'}} />Info</NavLink>
         </nav>
         <div className="sidebar-footer">
-          <span className="sidebar-user">👤 {username}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#1e293b", border: "2px solid var(--brand-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "0.8rem", color: "var(--brand-primary)", flexShrink: 0 }}>
+              {username.slice(0, 2).toUpperCase()}
+            </div>
+            <span className="sidebar-user" style={{ fontSize: "0.9rem" }}>{username}</span>
+          </div>
           <button className="sidebar-logout" onClick={handleLogout}>
             Cerrar Sesión
           </button>

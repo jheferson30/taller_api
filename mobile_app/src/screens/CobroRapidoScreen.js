@@ -116,27 +116,27 @@ export default function CobroRapidoScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: '#0A1017' },
   form: { padding: 20 },
   label: {
-    fontSize: 13, fontWeight: '600', color: colors.textMuted,
+    fontSize: 13, fontWeight: '600', color: '#94a3b8',
     marginBottom: 6, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: colors.text,
+    backgroundColor: '#1C2B3A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#fff',
   },
   pickerWrapper: {
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: '#1C2B3A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: 10, overflow: 'hidden',
   },
-  picker: { color: colors.text, height: 50 },
+  picker: { color: '#fff', height: 50 },
   btn: {
-    backgroundColor: colors.primary, borderRadius: 10,
+    backgroundColor: '#D4920A', borderRadius: 10,
     paddingVertical: 14, alignItems: 'center', marginTop: 28,
   },
   btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  btnText: { color: '#0A1017', fontWeight: '700', fontSize: 16 },
   cancelBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  cancelText: { color: colors.textMuted, fontSize: 15 },
+  cancelText: { color: '#94a3b8', fontSize: 15 },
 });

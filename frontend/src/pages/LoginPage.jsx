@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 import authService from '../services/authService';
 
 export default function LoginPage() {
@@ -7,6 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   // ── Recuperar contraseña ──
   const [mostrarRecuperar, setMostrarRecuperar] = useState(false);
@@ -49,10 +51,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#0A1017' }}>
       <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <img src="/assets/logo.png" alt="PULGA Mecánica Fi" style={{ height: '60px', marginBottom: '1rem' }} />
+          <img src="/assets/logo.png" alt="PULGA Mecánica Fi" style={{ height: '120px', marginBottom: '1.5rem', filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15))' }} />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333' }}>Iniciar Sesión</h1>
         </div>
 
@@ -62,14 +64,21 @@ export default function LoginPage() {
               <label htmlFor="username" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Usuario</label>
               <input id="username" type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                 required disabled={loading}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', fontSize: '1rem' }} />
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #E2E5EA', borderRadius: '4px', fontSize: '1rem', background: '#F7F8FA' }} />
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
               <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Contraseña</label>
-              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                required disabled={loading}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', fontSize: '1rem' }} />
+              <div style={{ position: 'relative' }}>
+                <input id="password" type={mostrarPassword ? 'text' : 'password'} value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required disabled={loading}
+                  style={{ width: '100%', padding: '0.5rem', paddingRight: '2.5rem', border: '1px solid #E2E5EA', borderRadius: '4px', fontSize: '1rem', boxSizing: 'border-box', background: '#F7F8FA' }} />
+                <button type="button" onClick={() => setMostrarPassword(v => !v)}
+                  style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#8B95A1', display: 'flex', alignItems: 'center' }}>
+                  {mostrarPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -81,14 +90,14 @@ export default function LoginPage() {
             {error && (
               <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
                 <button type="button" onClick={() => setMostrarRecuperar(true)}
-                  style={{ background: 'none', border: 'none', color: '#667eea', cursor: 'pointer', fontSize: '0.875rem', textDecoration: 'underline' }}>
+                  style={{ background: 'none', border: 'none', color: '#D4920A', cursor: 'pointer', fontSize: '0.875rem', textDecoration: 'underline' }}>
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>
             )}
 
             <button type="submit" disabled={loading}
-              style={{ width: '100%', padding: '0.75rem', background: loading ? '#ccc' : '#667eea', color: 'white', border: 'none', borderRadius: '4px', fontSize: '1rem', fontWeight: '500', cursor: loading ? 'not-allowed' : 'pointer' }}>
+              style={{ width: '100%', padding: '0.75rem', background: loading ? '#ccc' : '#D4920A', color: '#0A1017', border: 'none', borderRadius: '4px', fontSize: '1rem', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer' }}>
               {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </button>
           </form>
@@ -105,12 +114,12 @@ export default function LoginPage() {
             )}
 
             <button type="submit" disabled={loadingRecuperar}
-              style={{ width: '100%', padding: '0.75rem', background: loadingRecuperar ? '#ccc' : '#667eea', color: 'white', border: 'none', borderRadius: '4px', fontSize: '1rem', fontWeight: '500', cursor: loadingRecuperar ? 'not-allowed' : 'pointer', marginBottom: '0.75rem' }}>
+              style={{ width: '100%', padding: '0.75rem', background: loadingRecuperar ? '#ccc' : '#D4920A', color: '#0A1017', border: 'none', borderRadius: '4px', fontSize: '1rem', fontWeight: '600', cursor: loadingRecuperar ? 'not-allowed' : 'pointer', marginBottom: '0.75rem' }}>
               {loadingRecuperar ? 'Enviando...' : 'Enviar enlace al correo registrado'}
             </button>
 
             <button type="button" onClick={() => { setMostrarRecuperar(false); setMsgRecuperar(''); }}
-              style={{ width: '100%', padding: '0.75rem', background: 'none', color: '#667eea', border: '1px solid #667eea', borderRadius: '4px', fontSize: '1rem', cursor: 'pointer' }}>
+              style={{ width: '100%', padding: '0.75rem', background: 'none', color: '#0F1923', border: '1px solid #E2E5EA', borderRadius: '4px', fontSize: '1rem', cursor: 'pointer' }}>
               Volver al login
             </button>
           </form>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
+import PageHero from "../components/PageHero";
 
 export default function CitasPage() {
   const navigate = useNavigate();
@@ -210,20 +211,18 @@ export default function CitasPage() {
 
 
   return (
-    <div className="citas-page">
-      {/* Header */}
-      <div className="citas-header">
-        <div>
-          <h2>Agenda de Citas</h2>
-          <p className="subtitle">Gestiona las citas programadas del taller</p>
-        </div>
-        <button
-          className="btn-nueva-cita"
-          onClick={() => setMostrarForm(!mostrarForm)}
-        >
-          {mostrarForm ? "Cerrar" : "+ Nueva Cita"}
-        </button>
-      </div>
+    <>
+      <PageHero
+        titulo="Agenda de Citas"
+        subtitulo="Gestiona las citas programadas del taller"
+        badge={citas.length > 0 ? `${citas.length} citas` : null}
+        action={
+          <button className="btn-nueva-cita" onClick={() => setMostrarForm(!mostrarForm)}>
+            {mostrarForm ? "Cerrar" : "+ Nueva Cita"}
+          </button>
+        }
+      />
+      <div className="citas-page">
 
       {/* Formulario de nueva cita */}
       {mostrarForm && (
@@ -613,6 +612,7 @@ export default function CitasPage() {
 
       {msg && <p className={`status ${msg.startsWith("✓") ? "success" : "error"}`}>{msg}</p>}
     </div>
+    </>
   );
 }
 
@@ -695,3 +695,4 @@ function CitaCard({ cita, onGenerarTicket, onConfirmar, onCancelar, loading }) {
     </div>
   );
 }
+

@@ -18,3 +18,4 @@ class ConfiguracionTaller(Base):
     smtp_user         = Column(String(200), nullable=True)
     smtp_password     = Column(Text, nullable=True)
     smtp_from         = Column(String(200), nullable=True)
+    logo_url          = Column(String(255), nullable=True)
