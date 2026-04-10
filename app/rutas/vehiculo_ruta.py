@@ -2,9 +2,10 @@ from datetime import datetime, timezone
 from typing import List
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db
 from app.esquemas.ticket_schema import TicketIngresoCrear, TicketRespuesta, VehiculoFichaRespuesta
@@ -42,10 +43,13 @@ def buscar_por_placa(
 
 
 @router.post("/", response_model=VehiculoRespuesta)
-def crear_vehiculo(
+async def crear_vehiculo(
+    request: Request,
     datos: VehiculoCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     payload = datos.model_dump()
     payload["placa"] = _normalizar_placa(payload["placa"])
 
@@ -74,11 +78,14 @@ def listar_vehiculos(
 
 
 @router.put("/{placa}", response_model=VehiculoRespuesta)
-def actualizar_vehiculo_por_placa(
+async def actualizar_vehiculo_por_placa(
+    request: Request,
     placa: str,
     datos: VehiculoActualizar,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     placa_norm = _normalizar_placa(placa)
     vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
     if not vehiculo:
@@ -137,11 +144,14 @@ def obtener_ficha_vehiculo(
 
 
 @router.post("/{placa}/ticket-ingreso", response_model=TicketRespuesta)
-def crear_ticket_ingreso(
+async def crear_ticket_ingreso(
+    request: Request,
     placa: str,
     datos: TicketIngresoCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     placa_norm = _normalizar_placa(placa)
     vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
     if not vehiculo:

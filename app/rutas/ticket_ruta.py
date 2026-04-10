@@ -8,6 +8,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Query, Header, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db
 from app.seguridad.dependencias import requerir_password_admin
@@ -88,20 +89,40 @@ def listar_procesos_rapidos():
     return {"items": PROCESOS_RAPIDOS}
 
 
-@router.get("/abiertos", response_model=List[TicketRespuesta])
+@router.get("/abiertos", response_model=dict)
 def listar_tickets_abiertos(
     db: Session = Depends(obtener_db),
     placa: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
 ):
+    """
+    Lista tickets abiertos/en proceso con paginación.
+    Requirements: 2.13
+    """
     query = db.query(Ticket).filter(Ticket.estado.in_(["ABIERTO", "EN_PROCESO"]))
     if placa:
         query = query.filter(Ticket.placa == placa.strip().upper())
-    return query.order_by(Ticket.fecha_ingreso.desc()).offset(skip).limit(limit).all()
+    
+    total = query.count()
+    tickets_orm = query.order_by(Ticket.fecha_ingreso.desc())\
+        .offset((page - 1) * per_page)\
+        .limit(per_page)\
+        .all()
+    
+    # Convertir a schemas de Pydantic
+    tickets = [TicketRespuesta.model_validate(t) for t in tickets_orm]
+    
+    return {
+        "tickets": tickets,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": (total + per_page - 1) // per_page
+    }
 
 
-@router.get("/buscar", response_model=List[TicketRespuesta])
+@router.get("/buscar", response_model=dict)
 def buscar_tickets(
     db: Session = Depends(obtener_db),
     ticket_codigo: Optional[str] = Query(None),
@@ -109,21 +130,48 @@ def buscar_tickets(
     estado: Optional[str] = Query(None),
     fecha_desde: Optional[str] = Query(None),
     fecha_hasta: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
 ):
-    query = db.query(Ticket)
-    if ticket_codigo:
-        query = query.filter(Ticket.ticket_codigo == ticket_codigo.strip().upper())
-    if placa:
-        query = query.filter(Ticket.placa.ilike(f"%{placa.strip()}%"))
-    if estado:
-        query = query.filter(Ticket.estado == estado.upper())
-    if fecha_desde:
-        query = query.filter(Ticket.fecha_ingreso >= datetime.fromisoformat(fecha_desde))
-    if fecha_hasta:
-        # incluir todo el día hasta
-        hasta = datetime.fromisoformat(fecha_hasta).replace(hour=23, minute=59, second=59)
-        query = query.filter(Ticket.fecha_ingreso <= hasta)
-    return query.order_by(Ticket.fecha_ingreso.desc()).limit(200).all()
+    """
+    Busca tickets con paginación obligatoria.
+    Requirements: 2.13
+    """
+    ticket_service = TicketService(db)
+    
+    # Si hay filtros específicos, usar find_by_criteria (legacy)
+    if ticket_codigo or fecha_desde or fecha_hasta:
+        query = db.query(Ticket)
+        if ticket_codigo:
+            query = query.filter(Ticket.ticket_codigo == ticket_codigo.strip().upper())
+        if placa:
+            query = query.filter(Ticket.placa.ilike(f"%{placa.strip()}%"))
+        if estado:
+            query = query.filter(Ticket.estado == estado.upper())
+        if fecha_desde:
+            query = query.filter(Ticket.fecha_ingreso >= datetime.fromisoformat(fecha_desde))
+        if fecha_hasta:
+            hasta = datetime.fromisoformat(fecha_hasta).replace(hour=23, minute=59, second=59)
+            query = query.filter(Ticket.fecha_ingreso <= hasta)
+        
+        total = query.count()
+        tickets_orm = query.order_by(Ticket.fecha_ingreso.desc())\
+            .offset((page - 1) * per_page)\
+            .limit(per_page)\
+            .all()
+        tickets = [TicketRespuesta.model_validate(t) for t in tickets_orm]
+    else:
+        # Usar paginación del servicio
+        tickets_orm, total = ticket_service.get_tickets_paginated(page, per_page, estado, placa)
+        tickets = [TicketRespuesta.model_validate(t) for t in tickets_orm]
+    
+    return {
+        "tickets": tickets,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": (total + per_page - 1) // per_page
+    }
 
 
 @router.get("/{ticket_id}", response_model=TicketRespuesta)
@@ -150,11 +198,14 @@ def obtener_resumen_ticket(ticket_id: int, db: Session = Depends(obtener_db)):
 
 
 @router.post("/{ticket_id}/procesos", response_model=TicketProcesoRespuesta)
-def agregar_proceso(
+async def agregar_proceso(
+    request: Request,
     ticket_id: int,
     datos: TicketProcesoCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
@@ -166,11 +217,14 @@ def agregar_proceso(
 
 
 @router.delete("/{ticket_id}/procesos/{proceso_id}")
-def eliminar_proceso(
+async def eliminar_proceso(
+    request: Request,
     ticket_id: int,
     proceso_id: int,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     proceso = db.query(TicketProceso).filter(TicketProceso.id == proceso_id, TicketProceso.ticket_id == ticket_id).first()
@@ -182,11 +236,14 @@ def eliminar_proceso(
 
 
 @router.post("/{ticket_id}/repuestos", response_model=TicketRepuestoRespuesta)
-def agregar_repuesto(
+async def agregar_repuesto(
+    request: Request,
     ticket_id: int,
     datos: TicketRepuestoCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
@@ -198,11 +255,14 @@ def agregar_repuesto(
 
 
 @router.delete("/{ticket_id}/repuestos/{repuesto_id}")
-def eliminar_repuesto(
+async def eliminar_repuesto(
+    request: Request,
     ticket_id: int,
     repuesto_id: int,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     repuesto = db.query(TicketRepuesto).filter(TicketRepuesto.id == repuesto_id, TicketRepuesto.ticket_id == ticket_id).first()
     if not repuesto:
@@ -216,11 +276,14 @@ def eliminar_repuesto(
 
 
 @router.delete("/{ticket_id}/compras/{compra_id}")
-def eliminar_compra(
+async def eliminar_compra(
+    request: Request,
     ticket_id: int,
     compra_id: int,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     compra = db.query(TicketCompra).filter(TicketCompra.id == compra_id, TicketCompra.ticket_id == ticket_id).first()
@@ -232,11 +295,14 @@ def eliminar_compra(
 
 
 @router.post("/{ticket_id}/fotos", response_model=TicketFotoRespuesta)
-def agregar_foto(
+async def agregar_foto(
+    request: Request,
     ticket_id: int,
     datos: TicketFotoCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
@@ -248,11 +314,14 @@ def agregar_foto(
 
 
 @router.delete("/{ticket_id}/fotos/{foto_id}")
-def eliminar_foto(
+async def eliminar_foto(
+    request: Request,
     ticket_id: int,
     foto_id: int,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     foto = db.query(TicketFoto).filter(TicketFoto.id == foto_id, TicketFoto.ticket_id == ticket_id).first()
@@ -264,11 +333,14 @@ def eliminar_foto(
 
 
 @router.post("/{ticket_id}/compras", response_model=TicketCompraRespuesta)
-def agregar_compra(
+async def agregar_compra(
+    request: Request,
     ticket_id: int,
     datos: TicketCompraCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     
     # Usar servicio para crear compra con movimiento
@@ -287,11 +359,14 @@ def agregar_compra(
 
 
 @router.post("/{ticket_id}/cobros", response_model=TicketCobroRespuesta)
-def agregar_cobro(
+async def agregar_cobro(
+    request: Request,
     ticket_id: int,
     datos: TicketCobroCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
@@ -304,11 +379,14 @@ def agregar_cobro(
 
 
 @router.delete("/{ticket_id}/cobros/{cobro_id}")
-def eliminar_cobro(
+async def eliminar_cobro(
+    request: Request,
     ticket_id: int,
     cobro_id: int,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     cobro = db.query(TicketCobro).filter(TicketCobro.id == cobro_id, TicketCobro.ticket_id == ticket_id).first()
@@ -320,11 +398,14 @@ def eliminar_cobro(
 
 
 @router.put("/{ticket_id}/finanzas", response_model=TicketRespuesta)
-def actualizar_finanzas_ticket(
+async def actualizar_finanzas_ticket(
+    request: Request,
     ticket_id: int,
     datos: TicketFinanzasActualizar,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     
     # Usar servicio para actualizar finanzas
@@ -340,11 +421,14 @@ def actualizar_finanzas_ticket(
 
 
 @router.put("/{ticket_id}/observaciones-finales", response_model=TicketRespuesta)
-def actualizar_observaciones_finales(
+async def actualizar_observaciones_finales(
+    request: Request,
     ticket_id: int,
     datos: TicketObservacionesFinalesActualizar,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     _asegurar_editable(ticket)
     payload = datos.model_dump(exclude_unset=True)
@@ -356,10 +440,13 @@ def actualizar_observaciones_finales(
 
 
 @router.post("/{ticket_id}/finalizar", response_model=TicketRespuesta)
-def finalizar_ticket(
+async def finalizar_ticket(
+    request: Request,
     ticket_id: int,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     if ticket.estado in ("FINALIZADO", "ENTREGADO"):
         return ticket
@@ -458,11 +545,14 @@ def generar_pdf_cliente(
 
 
 @router.post("/{ticket_id}/entregar", response_model=TicketRespuesta)
-def marcar_entregado(
+async def marcar_entregado(
+    request: Request,
     ticket_id: int,
     datos: TicketEntregarPayload,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = _obtener_ticket_o_404(db, ticket_id)
     
     # Usar servicio para entregar ticket

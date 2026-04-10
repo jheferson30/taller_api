@@ -35,3 +35,6 @@ class Ticket(Base):
     fecha_cierre = Column(DateTime(timezone=True), nullable=True)
     fecha_entrega = Column(DateTime(timezone=True), nullable=True)
     fecha_actualizacion = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Note: Relationships are defined dynamically in the repository using joinedload
+    # to avoid circular import issues. See ticket_repository.py for eager loading implementation.

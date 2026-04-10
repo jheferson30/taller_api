@@ -1,10 +1,12 @@
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_cache import FastAPICache
 
 from app.configuracion.base_datos import obtener_db
 from app.esquemas.movimiento_caja_schema import (
@@ -70,10 +72,22 @@ def listar_cobros_rapidos(
 
 
 @router.post("/cobro-rapido", response_model=MovimientoCajaRespuesta)
-def crear_cobro_rapido(
+async def crear_cobro_rapido(
+    request: Request,
     datos: CobroRapidoCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    # Debug: Verificar headers
+    print(f"[DEBUG] Headers recibidos: {dict(request.headers)}")
+    print(f"[DEBUG] Cookies recibidas: {request.cookies}")
+    
+    try:
+        await csrf_protect.validate_csrf(request)
+    except Exception as e:
+        print(f"[ERROR] CSRF validation failed: {type(e).__name__}: {str(e)}")
+        raise
+    
     nuevo = MovimientoCaja(
         tipo=TipoMovimiento.INGRESO_RAPIDO,
         placa=datos.placa.upper().strip(),
@@ -84,19 +98,36 @@ def crear_cobro_rapido(
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+    
+    # Invalidar caché de estadísticas después de crear movimiento
+    try:
+        await FastAPICache.clear(namespace="fastapi-cache:obtener_estadisticas")
+    except Exception as e:
+        print(f"[ADVERTENCIA] No se pudo invalidar caché: {e}")
+    
     return nuevo
 
 
 @router.post("/", response_model=MovimientoCajaRespuesta)
-def crear_movimiento_caja(
+async def crear_movimiento_caja(
+    request: Request,
     datos: MovimientoCajaCrear,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     _validar_movimiento(datos)
     nuevo = MovimientoCaja(**datos.model_dump())
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+    
+    # Invalidar caché de estadísticas después de crear movimiento
+    try:
+        await FastAPICache.clear(namespace="fastapi-cache:obtener_estadisticas")
+    except Exception as e:
+        print(f"[ADVERTENCIA] No se pudo invalidar caché: {e}")
+    
     return nuevo
 
 
@@ -136,12 +167,15 @@ def listar_movimientos_caja(
 
 
 @router.put("/{movimiento_id}/corregir", response_model=MovimientoCajaRespuesta)
-def corregir_movimiento_caja(
+async def corregir_movimiento_caja(
+    request: Request,
     movimiento_id: int,
     datos: MovimientoCajaCorregir,
     db: Session = Depends(obtener_db),
     _: bool = Depends(requerir_password_admin),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     movimiento = db.query(MovimientoCaja).filter(MovimientoCaja.id == movimiento_id).first()
     if not movimiento:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado")
@@ -162,6 +196,13 @@ def corregir_movimiento_caja(
     db.add(cambio)
     db.commit()
     db.refresh(movimiento)
+    
+    # Invalidar caché de estadísticas después de actualizar movimiento
+    try:
+        await FastAPICache.clear(namespace="fastapi-cache:obtener_estadisticas")
+    except Exception as e:
+        print(f"[ADVERTENCIA] No se pudo invalidar caché: {e}")
+    
     return movimiento
 
 

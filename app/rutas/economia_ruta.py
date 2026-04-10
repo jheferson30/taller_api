@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
+from fastapi_cache.decorator import cache
 
 from app.configuracion.base_datos import obtener_db
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
@@ -219,6 +220,7 @@ def obtener_detalle_egresos_dia(
 
 
 @router.get("/estadisticas")
+@cache(expire=300)  # Cachear por 5 minutos (300 segundos)
 def obtener_estadisticas(
     periodo: str = Query(default="semana", pattern="^(semana|mes)$"),
     db: Session = Depends(obtener_db),

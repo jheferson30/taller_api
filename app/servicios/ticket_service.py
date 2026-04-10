@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple, List
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from app.modelos.ticket import Ticket
 from app.modelos.ticket_cobro import TicketCobro
 from app.modelos.ticket_compra import TicketCompra
 from app.modelos.ticket_repuesto import TicketRepuesto
+from app.repositorios.ticket_repository import TicketRepository
 
 
 class TicketService:
@@ -21,6 +22,20 @@ class TicketService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.repository = TicketRepository(db)
+
+    def get_tickets_paginated(
+        self,
+        page: int = 1,
+        per_page: int = 50,
+        estado: Optional[str] = None,
+        placa: Optional[str] = None,
+    ) -> Tuple[List[Ticket], int]:
+        """
+        Obtiene tickets con paginación.
+        Requirements: 2.13
+        """
+        return self.repository.get_tickets_paginated(page, per_page, estado, placa)
 
     def calcular_saldo_pendiente(self, ticket: Ticket) -> int:
         """Calcula el saldo pendiente de un ticket."""

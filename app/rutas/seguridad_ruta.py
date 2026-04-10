@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db
 from app.configuracion.limiter import limiter
@@ -61,7 +62,13 @@ def verificar_tiene_password(db: Session = Depends(obtener_db)):
 
 @router.post("/economia/crear-password")
 @limiter.limit("10/minute")
-def crear_password_economia(request: Request, payload: CrearPasswordPayload, db: Session = Depends(obtener_db)):
+async def crear_password_economia(
+    request: Request,
+    payload: CrearPasswordPayload,
+    db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Crea la contraseña inicial para acceder a economía"""
     # Verificar que no exista ya
     if _obtener_config(db, "economia_password"):
@@ -83,7 +90,13 @@ def crear_password_economia(request: Request, payload: CrearPasswordPayload, db:
 
 @router.post("/economia/validar-password")
 @limiter.limit("10/minute")
-def validar_password_economia(request: Request, payload: ValidarPasswordPayload, db: Session = Depends(obtener_db)):
+async def validar_password_economia(
+    request: Request,
+    payload: ValidarPasswordPayload,
+    db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Valida la contraseña para acceder a economía"""
     config = _obtener_config(db, "economia_password")
     
@@ -100,7 +113,13 @@ def validar_password_economia(request: Request, payload: ValidarPasswordPayload,
 
 @router.post("/economia/recuperar-password")
 @limiter.limit("10/minute")
-def recuperar_password_economia(request: Request, payload: RecuperarPasswordPayload, db: Session = Depends(obtener_db)):
+async def recuperar_password_economia(
+    request: Request,
+    payload: RecuperarPasswordPayload,
+    db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Recupera/cambia la contraseña usando la palabra clave"""
     config_password = _obtener_config(db, "economia_password")
     config_palabra = _obtener_config(db, "economia_palabra_clave")

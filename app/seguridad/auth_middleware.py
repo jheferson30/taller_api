@@ -62,6 +62,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Returns:
             Response del handler o error 401
         """
+        # Permitir todas las peticiones OPTIONS (CORS preflight) sin autenticación
+        if request.method == "OPTIONS":
+            print(f"[AuthMiddleware] OPTIONS request to {request.url.path} - allowing without auth")
+            return await call_next(request)
+        
         # Rutas públicas que no requieren autenticación
         public_paths = [
             "/docs",
@@ -75,6 +80,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/auth/refresh",
             "/auth/forgot-password",
             "/auth/reset-password",
+            "/csrf-token",  # Token CSRF debe ser accesible sin autenticación
         ]
         
         # Verificar si la ruta es pública

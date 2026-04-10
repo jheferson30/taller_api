@@ -10,3 +10,13 @@ zeroconf
 slowapi
 bcrypt
 pyjwt
+# Dependencias actualizadas para cerrar CVEs
+Werkzeug==3.1.7  # Cierra CVE-2026-27199, CVE-2025-66221, CVE-2026-21860
+Flask==3.1.3  # Cierra CVE-2026-27205
+ecdsa==0.19.2  # Cierra CVE-2024-23342
+safety==3.7.0  # Auditoría continua de vulnerabilidades
+# Protección CSRF
+fastapi-csrf-protect==0.3.4  # Protección contra ataques CSRF
+# Caché con Redis
+redis==4.6.0  # Cliente Redis para caché (compatible con fastapi-cache2)
+fastapi-cache2[redis]==0.2.2  # Caché con soporte Redis

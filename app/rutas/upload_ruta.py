@@ -3,8 +3,9 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Request, Depends
 from fastapi.responses import FileResponse
+from fastapi_csrf_protect import CsrfProtect
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -56,7 +57,12 @@ def _generar_nombre_archivo(original_filename: str) -> str:
 
 
 @router.post("/foto")
-async def subir_foto(file: UploadFile = File(...)):
+async def subir_foto(
+    request: Request,
+    file: UploadFile = File(...),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Sube una foto de evidencia del ticket"""
     _validar_archivo(file)
     
@@ -81,7 +87,12 @@ async def subir_foto(file: UploadFile = File(...)):
 
 
 @router.post("/compra")
-async def subir_soporte_compra(file: UploadFile = File(...)):
+async def subir_soporte_compra(
+    request: Request,
+    file: UploadFile = File(...),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Sube un soporte de compra (factura, recibo)"""
     _validar_archivo(file)
     
@@ -106,7 +117,12 @@ async def subir_soporte_compra(file: UploadFile = File(...)):
 
 
 @router.post("/firma")
-async def subir_firma(file: UploadFile = File(...)):
+async def subir_firma(
+    request: Request,
+    file: UploadFile = File(...),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Sube una firma de entrega"""
     _validar_archivo(file)
     

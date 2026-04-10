@@ -8,6 +8,7 @@ import os
 from typing import Optional
 from fastapi import APIRouter, Request, HTTPException, status, Depends, Query
 from sqlalchemy.orm import Session
+from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db
 from app.configuracion.limiter import limiter
@@ -58,8 +59,10 @@ async def create_user(
     request: Request,
     user_data: CreateUserRequest,
     db: Session = Depends(obtener_db),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     """
     Crea un nuevo usuario (requiere rol ADMIN).
     
@@ -297,8 +300,10 @@ async def delete_user(
     request: Request,
     user_id: int,
     db: Session = Depends(obtener_db),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     """
     Desactiva un usuario - soft delete (requiere rol ADMIN).
     
@@ -344,8 +349,10 @@ async def change_password(
     request: Request,
     password_data: ChangePasswordRequest,
     db: Session = Depends(obtener_db),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     """
     Cambia la contraseña del usuario autenticado.
     

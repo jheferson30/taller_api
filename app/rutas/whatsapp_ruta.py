@@ -4,6 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Query, HTTPException, Depends, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
+from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db
 from app.esquemas.whatsapp_schema import LogNotificacionResponse, MensajeManualRequest
@@ -61,10 +62,13 @@ async def recibir_webhook(request: Request, db: Session = Depends(obtener_db)):
 
 @router.post("/api/mobile/tickets/{ticket_id}/whatsapp")
 async def enviar_whatsapp_mobile(
+    request: Request,
     ticket_id: int,
     body: MensajeManualRequest,
     db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         return {"ok": False, "error": "ticket_no_encontrado"}

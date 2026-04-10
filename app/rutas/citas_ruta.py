@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db
 from app.esquemas.cita_schema import CitaCrear, CitaActualizar, CitaRespuesta
@@ -52,7 +53,13 @@ def listar_citas_proximas(
 
 
 @router.post("", response_model=CitaRespuesta)
-def crear_cita(datos: CitaCrear, db: Session = Depends(obtener_db)):
+async def crear_cita(
+    request: Request,
+    datos: CitaCrear,
+    db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Crea una nueva cita y opcionalmente crea o actualiza el vehículo"""
     placa_norm = datos.placa.strip().upper()
     
@@ -125,11 +132,14 @@ def obtener_cita(cita_id: int, db: Session = Depends(obtener_db)):
 
 
 @router.put("/{cita_id}", response_model=CitaRespuesta)
-def actualizar_cita(
+async def actualizar_cita(
+    request: Request,
     cita_id: int,
     datos: CitaActualizar,
-    db: Session = Depends(obtener_db)
+    db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
 ):
+    await csrf_protect.validate_csrf(request)
     """Actualiza una cita"""
     cita = db.query(Cita).filter(Cita.id == cita_id).first()
     if not cita:
@@ -149,7 +159,13 @@ def actualizar_cita(
 
 
 @router.delete("/{cita_id}")
-def cancelar_cita(cita_id: int, db: Session = Depends(obtener_db)):
+async def cancelar_cita(
+    request: Request,
+    cita_id: int,
+    db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Cancela una cita (cambia estado a CANCELADA)"""
     cita = db.query(Cita).filter(Cita.id == cita_id).first()
     if not cita:
@@ -164,7 +180,13 @@ def cancelar_cita(cita_id: int, db: Session = Depends(obtener_db)):
 
 
 @router.post("/{cita_id}/generar-ticket")
-def generar_ticket_desde_cita(cita_id: int, db: Session = Depends(obtener_db)):
+async def generar_ticket_desde_cita(
+    request: Request,
+    cita_id: int,
+    db: Session = Depends(obtener_db),
+    csrf_protect: CsrfProtect = Depends(),
+):
+    await csrf_protect.validate_csrf(request)
     """Convierte una cita en un ticket de ingreso"""
     cita = db.query(Cita).filter(Cita.id == cita_id).first()
     if not cita:

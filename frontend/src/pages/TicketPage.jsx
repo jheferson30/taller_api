@@ -46,9 +46,10 @@ export default function TicketPage() {
   async function loadTickets() {
     try {
       const data = await api.ticketsAbiertos();
-      setTickets(data);
-      if (!selectedId && data.length) {
-        setSelectedId(data[0].id);
+      // El endpoint ahora retorna {tickets: [...], total, page, per_page, pages}
+      setTickets(data.tickets || []);
+      if (!selectedId && data.tickets && data.tickets.length) {
+        setSelectedId(data.tickets[0].id);
       }
     } catch (e) {
       setMsg("Error al cargar tickets: " + e.message);

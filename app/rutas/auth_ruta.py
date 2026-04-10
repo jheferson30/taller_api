@@ -6,7 +6,8 @@ y reset password usando AuthService.
 """
 
 import os
-from fastapi import APIRouter, Request, Depends, HTTPException, status
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -93,6 +94,7 @@ def get_client_info(request: Request) -> dict:
 @limiter.limit(f"{os.getenv('RATE_LIMIT_AUTH_PER_MINUTE', '5')}/minute")
 async def login(
     request: Request,
+    response: Response,
     login_data: LoginRequest,
     auth_service: AuthService = Depends(get_auth_service)
 ):
@@ -106,9 +108,11 @@ async def login(
     2. Genera access_token y refresh_token
     3. Registra evento LOGIN en audit_log con IP y user agent
     4. Retorna tokens y datos del usuario
+    5. Configura refresh_token como cookie segura en producción
     
     Args:
         request: Request de FastAPI (para obtener IP y user agent)
+        response: Response de FastAPI (para configurar cookies)
         login_data: Credenciales del usuario
         auth_service: Servicio de autenticación
         
@@ -127,6 +131,17 @@ async def login(
             password=login_data.password,
             ip_address=client_info["ip_address"],
             user_agent=client_info["user_agent"]
+        )
+        
+        # Configurar refresh_token como cookie segura
+        is_production = os.getenv("ENVIRONMENT") == "production"
+        response.set_cookie(
+            key="refresh_token",
+            value=result["refresh_token"],
+            httponly=True,
+            secure=is_production,  # Solo HTTPS en producción
+            samesite="strict",     # Protección CSRF
+            max_age=7*24*60*60     # 7 días
         )
         
         return LoginResponse(**result)

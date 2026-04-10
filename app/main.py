@@ -7,15 +7,38 @@ import warnings
 import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
+from pydantic_settings import BaseSettings
 
 load_dotenv()
+
+# ── CSRF Configuration ────────────────────────────────────────────────────────
+class CsrfSettings(BaseSettings):
+    """Configuración de protección CSRF"""
+    secret_key: str = os.getenv("CSRF_SECRET_KEY", "")
+    cookie_samesite: str = "strict"
+    cookie_secure: bool = os.getenv("ENVIRONMENT") == "production"
+    # httponly=False permite que JavaScript lea el token CSRF
+    # Esto es seguro: el token CSRF no es sensible como un JWT
+    # Solo valida que la petición viene del mismo origen (protección CSRF)
+    cookie_httponly: bool = False
+    # Deshabilitar protección automática - solo validar cuando se llama explícitamente
+    # Esto evita que OPTIONS (CORS preflight) sean bloqueadas
+    methods: list = []  # Lista vacía = no validar automáticamente ningún método
+
+@CsrfProtect.load_config
+def get_csrf_config():
+    return CsrfSettings()
 
 # Validar configuración al iniciar
 from app.configuracion.config_validator import validate_config, ConfigValidationError
@@ -92,6 +115,14 @@ async def lifespan(app: FastAPI):
             "Define ALLOWED_ORIGINS en .env para producción.",
             stacklevel=2,
         )
+
+    # Inicializar caché Redis
+    try:
+        from app.configuracion.cache import init_cache
+        await init_cache()
+    except Exception as e:
+        print(f"[ADVERTENCIA] No se pudo inicializar caché Redis: {e}")
+        print("La aplicación continuará sin caché. Asegúrate de que Redis esté corriendo.")
 
     # mDNS
     threading.Thread(target=_anunciar_mdns, daemon=True).start()
@@ -296,21 +327,51 @@ async def generic_exception_handler(request: Request, exc: Exception):
         )
 
 
+@app.exception_handler(CsrfProtectError)
+async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    """
+    Maneja errores de validación CSRF (403 Forbidden).
+    
+    Cuando una petición no incluye un token CSRF válido, se rechaza con 403.
+    Las peticiones OPTIONS (CORS preflight) se permiten sin validación CSRF.
+    """
+    # Permitir peticiones OPTIONS sin validación CSRF (CORS preflight)
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "OK"}
+        )
+    
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "csrf_validation_failed",
+            "message": "Token CSRF inválido o ausente. Por favor recargue la página e intente nuevamente.",
+            "details": {"csrf_error": str(exc)} if ENVIRONMENT == "development" else {},
+        },
+    )
+
+
 # ── Rate limiting ─────────────────────────────────────────────────────────────
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# ── Auth Middleware ───────────────────────────────────────────────────────────
-from app.seguridad.auth_middleware import AuthMiddleware
-app.add_middleware(AuthMiddleware)
-
-# ── CORS ─────────────────────────────────────────────────────────────────────
+# ── CORS (DEBE IR PRIMERO - se ejecuta último en la cadena) ──────────────────
+# IMPORTANTE: En FastAPI, los middlewares se ejecutan en orden inverso al que se agregan.
+# El último middleware agregado es el primero en ejecutarse.
+# CORS debe ejecutarse PRIMERO para agregar headers antes que cualquier otro middleware.
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
 if _raw_origins and _raw_origins != "*":
     _origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 else:
-    # Orígenes seguros por defecto (localhost dev + red local)
-    _origins = ["*"]  # Permitir todos los orígenes en desarrollo
+    # En producción, ALLOWED_ORIGINS debe estar configurado explícitamente
+    if os.getenv("ENVIRONMENT") == "production":
+        raise RuntimeError(
+            "ALLOWED_ORIGINS must be set in production environment. "
+            "Configure ALLOWED_ORIGINS in .env with specific origins (e.g., https://taller.com,https://app.taller.com)"
+        )
+    # En desarrollo, usar orígenes seguros por defecto
+    _origins = ["http://localhost:5173", "http://localhost:3000"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -321,6 +382,24 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,
 )
+
+# ── Auth Middleware ───────────────────────────────────────────────────────────
+from app.seguridad.auth_middleware import AuthMiddleware
+app.add_middleware(AuthMiddleware)
+
+# ── HTTPS and Security Middleware (Production Only) ───────────────────────────
+if os.getenv("ENVIRONMENT") == "production":
+    # Redirigir HTTP → HTTPS automáticamente
+    app.add_middleware(HTTPSRedirectMiddleware)
+    
+    # Validar hosts confiables
+    allowed_hosts = os.getenv("ALLOWED_HOSTS", "").strip()
+    if allowed_hosts:
+        hosts_list = [h.strip() for o in allowed_hosts.split(",") if h.strip()]
+        app.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=hosts_list
+        )
 
 # ── Directorios y archivos estáticos ─────────────────────────────────────────
 os.makedirs("uploads", exist_ok=True)
@@ -404,6 +483,22 @@ def info_sistema():
             "correo": "jefersoncely0@gmail.com",
         }
     }
+
+
+@app.get("/csrf-token")
+def get_csrf_token(request: Request, csrf_protect: CsrfProtect = Depends()):
+    """
+    Endpoint para obtener el token CSRF.
+    Genera y envía el token como cookie Y en el response body.
+    """
+    # Generar el token CSRF
+    csrf_token, signed_token = csrf_protect.generate_csrf_tokens()
+    response = JSONResponse(content={
+        "message": "CSRF token set",
+        "csrf_token": csrf_token  # Enviar también en el body para que el frontend lo use
+    })
+    csrf_protect.set_csrf_cookie(signed_token, response)
+    return response
 
 
 @app.get("/info/conexion-qr")
