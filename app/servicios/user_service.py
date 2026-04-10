@@ -6,38 +6,39 @@ creación, actualización de roles, desactivación y cambio de contraseña.
 """
 
 import re
-from typing import List, Optional
+
 from sqlalchemy.orm import Session
 
 from app.modelos.user import User
-from app.modelos.role import Role
 from app.modelos.user_role import UserRole
-from app.repositorios.user_repository import UserRepository
 from app.repositorios.role_repository import RoleRepository
 from app.repositorios.token_blacklist_repository import TokenBlacklistRepository
-from app.servicios.audit_service import AuditService
+from app.repositorios.user_repository import UserRepository
 from app.seguridad.password_hasher import PasswordHasher
+from app.servicios.audit_service import AuditService
 
 
 class ValidationError(Exception):
     """Excepción para errores de validación de datos."""
+
     pass
 
 
 class DuplicateError(Exception):
     """Excepción para errores de duplicación de datos únicos."""
+
     pass
 
 
 class UserService:
     """
     Servicio de gestión de usuarios.
-    
+
     Maneja la creación, actualización, desactivación y gestión de roles
     de usuarios del sistema. Incluye validaciones de negocio y registro
     de auditoría.
     """
-    
+
     def __init__(
         self,
         user_repo: UserRepository,
@@ -45,11 +46,11 @@ class UserService:
         token_blacklist_repo: TokenBlacklistRepository,
         password_hasher: PasswordHasher,
         audit_service: AuditService,
-        db: Session
+        db: Session,
     ):
         """
         Inicializa el servicio de usuarios.
-        
+
         Args:
             user_repo: Repositorio de usuarios
             role_repo: Repositorio de roles
@@ -64,36 +65,36 @@ class UserService:
         self.password_hasher = password_hasher
         self.audit_service = audit_service
         self.db = db
-    
+
     def create_user(
         self,
         username: str,
         email: str,
         password: str,
-        roles: List[str],
+        roles: list[str],
         created_by: int,
         ip_address: str,
         user_agent: str,
-        nombre_completo: str = None,
-        telefono: str = None,
-        direccion: str = None
+        nombre_completo: str | None = None,
+        telefono: str | None = None,
+        direccion: str | None = None,
     ) -> User:
         """
         Crea un nuevo usuario.
-        
+
         Validaciones:
         - Username único
         - Email válido y único
         - Contraseña cumple requisitos (8+ chars, mayúscula, minúscula, número)
         - Roles existen
-        
+
         Proceso:
         1. Valida datos
         2. Hashea contraseña con bcrypt
         3. Crea usuario en DB
         4. Asigna roles
         5. Registra evento USER_CREATE en audit_log
-        
+
         Args:
             username: Nombre de usuario único
             email: Email válido
@@ -102,10 +103,10 @@ class UserService:
             created_by: ID del usuario que crea
             ip_address: IP del cliente
             user_agent: User agent del cliente
-            
+
         Returns:
             Usuario creado
-            
+
         Raises:
             ValidationError: Si los datos son inválidos
             DuplicateError: Si username o email ya existen
@@ -149,7 +150,7 @@ class UserService:
                 created_by=created_by,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                roles=roles
+                roles=roles,
             )
 
         # Verificar si el email ya existe (activo o inactivo)
@@ -169,7 +170,7 @@ class UserService:
                 created_by=created_by,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                roles=roles
+                roles=roles,
             )
 
         # Crear usuario nuevo
@@ -181,7 +182,7 @@ class UserService:
             is_migrated=True,
             nombre_completo=nombre_completo,
             telefono=telefono,
-            direccion=direccion
+            direccion=direccion,
         )
 
         user = self.user_repo.create(user)
@@ -202,43 +203,34 @@ class UserService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={
-                "username": username,
-                "email": email,
-                "roles": roles
-            }
+            details={"username": username, "email": email, "roles": roles},
         )
-        
+
         return user
-    
+
     def update_user_roles(
-        self,
-        user_id: int,
-        roles: List[str],
-        updated_by: int,
-        ip_address: str,
-        user_agent: str
+        self, user_id: int, roles: list[str], updated_by: int, ip_address: str, user_agent: str
     ) -> User:
         """
         Actualiza los roles de un usuario.
-        
+
         Proceso:
         1. Valida que usuario existe
         2. Valida que roles existen
         3. Elimina roles actuales
         4. Asigna nuevos roles
         5. Registra evento ROLE_CHANGE en audit_log
-        
+
         Args:
             user_id: ID del usuario
             roles: Nueva lista de roles
             updated_by: ID del usuario que actualiza
             ip_address: IP del cliente
             user_agent: User agent del cliente
-            
+
         Returns:
             Usuario actualizado
-            
+
         Raises:
             ValidationError: Si el usuario no existe o los roles son inválidos
         """
@@ -246,7 +238,7 @@ class UserService:
         user = self.user_repo.get_by_id(user_id)
         if not user:
             raise ValidationError(f"El usuario con ID {user_id} no existe")
-        
+
         # Validar que roles existen
         role_objects = []
         for role_name in roles:
@@ -254,21 +246,21 @@ class UserService:
             if not role:
                 raise ValidationError(f"El rol '{role_name}' no existe")
             role_objects.append(role)
-        
+
         # Obtener roles actuales para el log
         old_roles = [role.name for role in user.roles]
-        
+
         # Eliminar roles actuales
         self.db.query(UserRole).filter(UserRole.user_id == user_id).delete()
-        
+
         # Asignar nuevos roles
         for role in role_objects:
             user_role = UserRole(user_id=user.id, role_id=role.id)
             self.db.add(user_role)
-        
+
         self.db.commit()
         self.db.refresh(user)
-        
+
         # Registrar en audit log
         self.audit_service.log_event(
             user_id=updated_by,
@@ -277,36 +269,28 @@ class UserService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={
-                "username": user.username,
-                "old_roles": old_roles,
-                "new_roles": roles
-            }
+            details={"username": user.username, "old_roles": old_roles, "new_roles": roles},
         )
-        
+
         return user
-    
+
     def deactivate_user(
-        self,
-        user_id: int,
-        deactivated_by: int,
-        ip_address: str,
-        user_agent: str
-    ):
+        self, user_id: int, deactivated_by: int, ip_address: str, user_agent: str
+    ) -> None:
         """
         Desactiva un usuario (soft delete).
-        
+
         Proceso:
         1. Marca usuario como inactivo
         2. Invalida todos sus tokens activos
         3. Registra evento USER_DEACTIVATE en audit_log
-        
+
         Args:
             user_id: ID del usuario
             deactivated_by: ID del usuario que desactiva
             ip_address: IP del cliente
             user_agent: User agent del cliente
-            
+
         Raises:
             ValidationError: Si el usuario no existe
         """
@@ -314,16 +298,16 @@ class UserService:
         user = self.user_repo.get_by_id(user_id)
         if not user:
             raise ValidationError(f"El usuario con ID {user_id} no existe")
-        
+
         # Desactivar usuario
         user.is_active = False
         self.user_repo.update(user)
-        
+
         # Invalidar todos los tokens del usuario
         # Nota: En una implementación real, necesitaríamos obtener todos los tokens
         # activos del usuario y agregarlos a la lista negra. Por ahora, la lógica
         # de validación de tokens verificará is_active del usuario.
-        
+
         # Registrar en audit log
         self.audit_service.log_event(
             user_id=deactivated_by,
@@ -332,37 +316,34 @@ class UserService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={
-                "username": user.username,
-                "email": user.email
-            }
+            details={"username": user.username, "email": user.email},
         )
-    
+
     def change_password(
         self,
         user_id: int,
         current_password: str,
         new_password: str,
         ip_address: str,
-        user_agent: str
-    ):
+        user_agent: str,
+    ) -> None:
         """
         Cambia la contraseña de un usuario.
-        
+
         Proceso:
         1. Valida que usuario existe
         2. Verifica contraseña actual
         3. Valida que nueva contraseña cumple requisitos
         4. Hashea y actualiza contraseña
         5. Registra evento PASSWORD_CHANGE en audit_log
-        
+
         Args:
             user_id: ID del usuario
             current_password: Contraseña actual
             new_password: Nueva contraseña
             ip_address: IP del cliente
             user_agent: User agent del cliente
-            
+
         Raises:
             ValidationError: Si el usuario no existe, la contraseña actual es incorrecta,
                            o la nueva contraseña no cumple requisitos
@@ -371,23 +352,23 @@ class UserService:
         user = self.user_repo.get_by_id(user_id)
         if not user:
             raise ValidationError(f"El usuario con ID {user_id} no existe")
-        
+
         # Verificar contraseña actual
         if not self.password_hasher.verify_password(current_password, user.password_hash):
             raise ValidationError("La contraseña actual es incorrecta")
-        
+
         # Validar nueva contraseña
         if not self._is_complex_password(new_password):
             raise ValidationError(
                 "La nueva contraseña debe tener al menos 8 caracteres, "
                 "incluyendo mayúscula, minúscula y número"
             )
-        
+
         # Hashear y actualizar contraseña
         user.password_hash = self.password_hasher.hash_password(new_password)
         user.is_migrated = True
         self.user_repo.update(user)
-        
+
         # Registrar en audit log
         self.audit_service.log_event(
             user_id=user_id,
@@ -396,13 +377,23 @@ class UserService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={
-                "username": user.username
-            }
+            details={"username": user.username},
         )
-    
-    def _reactivate_user(self, user, email, password_hash, role_objects, nombre_completo,
-                         telefono, direccion, created_by, ip_address, user_agent, roles):
+
+    def _reactivate_user(
+        self,
+        user: User,
+        email: str,
+        password_hash: str,
+        role_objects: list,
+        nombre_completo: str | None,
+        telefono: str | None,
+        direccion: str | None,
+        created_by: int,
+        ip_address: str,
+        user_agent: str,
+        roles: list[str],
+    ) -> User:
         """Reactiva un usuario inactivo con nuevos datos."""
         # Actualizar datos
         user.email = email
@@ -429,44 +420,44 @@ class UserService:
             resource_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={"username": user.username, "email": email, "roles": roles}
+            details={"username": user.username, "email": email, "roles": roles},
         )
         return user
 
     def _is_valid_email(self, email: str) -> bool:
         """
         Valida formato de email.
-        
+
         Args:
             email: Email a validar
-            
+
         Returns:
             True si el email es válido
         """
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         return re.match(pattern, email) is not None
-    
+
     def _is_complex_password(self, password: str) -> bool:
         """
         Valida que la contraseña cumpla requisitos de complejidad.
-        
+
         Requisitos:
         - Al menos 8 caracteres
         - Al menos una mayúscula
         - Al menos una minúscula
         - Al menos un número
-        
+
         Args:
             password: Contraseña a validar
-            
+
         Returns:
             True si la contraseña cumple requisitos
         """
         if len(password) < 8:
             return False
-        
+
         has_upper = any(c.isupper() for c in password)
         has_lower = any(c.islower() for c in password)
         has_digit = any(c.isdigit() for c in password)
-        
+
         return has_upper and has_lower and has_digit

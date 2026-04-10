@@ -1,59 +1,38 @@
 import os
 import socket
 import threading
-import uuid
 import time
-import warnings
 import traceback
+import uuid
+import warnings
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status, Depends
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from fastapi_csrf_protect import CsrfProtect
-from fastapi_csrf_protect.exceptions import CsrfProtectError
-from pydantic_settings import BaseSettings
 
 load_dotenv()
 
-# ── CSRF Configuration ────────────────────────────────────────────────────────
-class CsrfSettings(BaseSettings):
-    """Configuración de protección CSRF"""
-    secret_key: str = os.getenv("CSRF_SECRET_KEY", "")
-    cookie_samesite: str = "strict"
-    cookie_secure: bool = os.getenv("ENVIRONMENT") == "production"
-    # httponly=False permite que JavaScript lea el token CSRF
-    # Esto es seguro: el token CSRF no es sensible como un JWT
-    # Solo valida que la petición viene del mismo origen (protección CSRF)
-    cookie_httponly: bool = False
-    # Deshabilitar protección automática - solo validar cuando se llama explícitamente
-    # Esto evita que OPTIONS (CORS preflight) sean bloqueadas
-    methods: list = []  # Lista vacía = no validar automáticamente ningún método
-
-@CsrfProtect.load_config
-def get_csrf_config():
-    return CsrfSettings()
-
 # Validar configuración al iniciar
-from app.configuracion.config_validator import validate_config, ConfigValidationError
+from app.configuracion.config_validator import ConfigValidationError, validate_config
 from app.utils.exceptions import (
-    DomainException,
-    InvalidCredentialsError,
-    InsufficientPermissionsError,
-    ValidationError,
-    ResourceNotFoundError,
-    DuplicateError,
-    RateLimitExceededError,
-    TokenBlacklistedError,
-    SecurityAlertError,
-    ConflictError,
     ConfigurationError,
+    ConflictError,
+    DomainException,
+    DuplicateError,
+    InsufficientPermissionsError,
+    InvalidCredentialsError,
+    RateLimitExceededError,
+    ResourceNotFoundError,
+    SecurityAlertError,
+    TokenBlacklistedError,
+    ValidationError,
 )
 
 try:
@@ -63,22 +42,34 @@ except ConfigValidationError as e:
     print("La aplicación no puede iniciar. Por favor corrija el archivo .env\n")
     exit(1)
 
+import app.modelos.configuracion_taller  # noqa
+import app.modelos.log_notificacion  # noqa
+import app.modelos.mecanico  # noqa
 from app.configuracion.base_datos import Base, engine
 from app.configuracion.limiter import limiter
 from app.rutas import (
-    economia_ruta, movimiento_caja_ruta, ticket_ruta, upload_ruta,
-    vehiculo_ruta, seguridad_ruta, citas_ruta, mobile_api_ruta, configuracion_ruta,
-    whatsapp_ruta, auth_ruta, users_ruta, audit_ruta,
+    audit_ruta,
+    auth_ruta,
+    citas_ruta,
+    configuracion_ruta,
+    economia_ruta,
+    mobile_api_ruta,
+    movimiento_caja_ruta,
+    pdf_ruta,
+    seguridad_ruta,
+    ticket_ruta,
+    upload_ruta,
+    users_ruta,
+    vehiculo_ruta,
+    whatsapp_ruta,
 )
-import app.modelos.mecanico  # noqa
-import app.modelos.configuracion_taller  # noqa
-import app.modelos.log_notificacion  # noqa
 
 Base.metadata.create_all(bind=engine)
 
 # ── Tokens temporales para QR (UUID → expira en 5 min) ──────────────────────
 _qr_tokens: dict[str, float] = {}
 _QR_TTL = 300  # segundos
+
 
 def _generar_token_qr() -> str:
     token = str(uuid.uuid4())
@@ -89,6 +80,7 @@ def _generar_token_qr() -> str:
     for t in expirados:
         del _qr_tokens[t]
     return token
+
 
 def validar_token_qr(token: str) -> bool:
     exp = _qr_tokens.get(token)
@@ -101,11 +93,22 @@ def validar_token_qr(token: str) -> bool:
 # ── Ciclo de vida (reemplaza @app.on_event deprecado) ───────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Inicializar SecretsManager
+    from app.configuracion.secrets_manager import SecretsManager
+
+    secrets_manager = SecretsManager()
+    app.state.secrets_manager = secrets_manager
+
     # Validar variables de entorno
-    if not os.getenv("PDF_PASSWORD"):
-        raise RuntimeError("PDF_PASSWORD env var is required")
-    if not os.getenv("ADMIN_PASSWORD"):
-        raise RuntimeError("ADMIN_PASSWORD env var is required")
+    try:
+        secrets_manager.get_secret("pdf-password", fallback_env_var="PDF_PASSWORD")
+    except RuntimeError:
+        raise RuntimeError("PDF_PASSWORD not found in secrets or environment")
+
+    try:
+        secrets_manager.get_secret("admin-password", fallback_env_var="ADMIN_PASSWORD")
+    except RuntimeError:
+        raise RuntimeError("ADMIN_PASSWORD not found in secrets or environment")
 
     # CORS warning
     allowed = os.getenv("ALLOWED_ORIGINS", "")
@@ -119,6 +122,7 @@ async def lifespan(app: FastAPI):
     # Inicializar caché Redis
     try:
         from app.configuracion.cache import init_cache
+
         await init_cache()
     except Exception as e:
         print(f"[ADVERTENCIA] No se pudo inicializar caché Redis: {e}")
@@ -130,6 +134,242 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="API Taller Mecanico", lifespan=lifespan)
+
+
+# ── Custom OpenAPI Schema ─────────────────────────────────────────────────────
+def custom_openapi():
+    """
+    Customize OpenAPI schema with comprehensive API documentation.
+
+    Adds:
+    - Detailed API description with authentication guide
+    - JWT Bearer security scheme
+    - Rate limiting documentation
+    - Role-based access control information
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    from fastapi.openapi.utils import get_openapi
+
+    openapi_schema = get_openapi(
+        title="Taller Mecánico API",
+        version="1.1.0",
+        description="""
+# API de Gestión de Taller Mecánico
+
+Sistema completo para gestión de talleres de motos con control de tickets, vehículos,
+procesos, repuestos, pagos y auditoría.
+
+## Características Principales
+
+- **Gestión de Tickets**: Creación y seguimiento de órdenes de servicio
+- **Control de Vehículos**: Registro de motos y propietarios
+- **Procesos y Repuestos**: Documentación detallada de trabajos realizados
+- **Sistema de Pagos**: Control de anticipos, cobros y movimientos de caja
+- **Autenticación JWT**: Seguridad con tokens de acceso y refresh
+- **Auditoría Completa**: Registro de todos los eventos del sistema
+- **Notificaciones WhatsApp**: Alertas automáticas a clientes
+
+## Autenticación
+
+La API usa JWT (JSON Web Tokens) para autenticación:
+
+### 1. Obtener Tokens
+```
+POST /auth/login
+{
+  "username": "admin",
+  "password": "your_password"
+}
+```
+
+Respuesta:
+```json
+{
+  "access_token": "eyJhbGci...",
+  "refresh_token": "eyJhbGci...",
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "roles": ["ADMIN"]
+  }
+}
+```
+
+### 2. Usar Access Token
+Incluir en header de todas las peticiones autenticadas:
+```
+Authorization: Bearer <access_token>
+```
+
+### 3. Refrescar Token
+Cuando el access_token expire (15 minutos):
+```
+POST /auth/refresh
+{
+  "refresh_token": "eyJhbGci..."
+}
+```
+
+### 4. Cerrar Sesión
+```
+POST /auth/logout
+{
+  "refresh_token": "eyJhbGci..."
+}
+```
+
+## Roles y Permisos
+
+### ADMIN
+- Acceso completo al sistema
+- Gestión de usuarios
+- Configuración del taller
+- Acceso a auditoría
+
+### MECANICO
+- Gestión de tickets y procesos
+- Agregar repuestos y fotos
+- Finalizar trabajos
+- Consultar información
+
+### RECEPCIONISTA
+- Crear tickets de ingreso
+- Registrar vehículos
+- Consultar información
+- Generar reportes
+
+### SOLO_LECTURA
+- Solo consultas
+- Sin permisos de escritura
+
+## Rate Limiting
+
+Límites por categoría de endpoint:
+
+### Autenticación
+- **Login**: 5 req/min por IP
+- **Refresh**: 10 req/min por IP
+- **Forgot Password**: 3 req/hora por IP
+
+### Operaciones de Escritura
+- **Crear recursos**: 30 req/min por usuario
+- **Actualizar recursos**: 30 req/min por usuario
+- **Eliminar recursos**: 30 req/min por usuario
+
+### Operaciones de Lectura
+- **Consultas generales**: 100 req/min por usuario
+- **Búsquedas**: 100 req/min por usuario
+
+### Generación de PDFs
+- **PDF de tickets**: 20 req/min por usuario
+
+## Códigos de Estado HTTP
+
+### Éxito
+- **200 OK**: Operación exitosa
+- **201 Created**: Recurso creado exitosamente
+- **204 No Content**: Operación exitosa sin contenido de respuesta
+
+### Errores del Cliente
+- **400 Bad Request**: Datos de entrada inválidos
+- **401 Unauthorized**: Autenticación requerida o token inválido
+- **403 Forbidden**: Permisos insuficientes
+- **404 Not Found**: Recurso no encontrado
+- **409 Conflict**: Conflicto (ej: placa duplicada)
+- **413 Payload Too Large**: Archivo muy grande (>10MB)
+- **415 Unsupported Media Type**: Tipo de archivo no permitido
+- **422 Unprocessable Entity**: Error de validación de Pydantic
+- **429 Too Many Requests**: Rate limit excedido
+
+### Errores del Servidor
+- **500 Internal Server Error**: Error interno del servidor
+
+## Formato de Errores
+
+Todos los errores siguen este formato:
+```json
+{
+  "error": "error_code",
+  "message": "Descripción del error",
+  "details": {}
+}
+```
+
+## Paginación
+
+Endpoints de listado soportan paginación:
+```
+GET /tickets/buscar?page=1&per_page=50
+```
+
+Respuesta:
+```json
+{
+  "tickets": [...],
+  "total": 150,
+  "page": 1,
+  "per_page": 50,
+  "pages": 3
+}
+```
+
+## Filtros
+
+Muchos endpoints soportan filtros por query params:
+```
+GET /movimientos-caja/?tipo=INGRESO_ANTICIPO&fecha_desde=2026-04-01&fecha_hasta=2026-04-30
+```
+
+## Compresión HTTP
+
+Todas las respuestas >1KB son comprimidas con GZip automáticamente.
+Incluir header: `Accept-Encoding: gzip`
+
+## CORS
+
+Configurado para permitir orígenes específicos en producción.
+En desarrollo: localhost:5173, localhost:3000
+
+## Seguridad
+
+- Contraseñas hasheadas con bcrypt
+- Tokens JWT firmados con HS256
+- CSRF protection en endpoints de escritura
+- HTTPS forzado en producción
+- Rate limiting por IP y usuario
+- Auditoría completa de eventos de seguridad
+
+## Soporte
+
+Para soporte técnico:
+- Email: jefersoncely0@gmail.com
+- WhatsApp: +57 314 571 9752
+        """,
+        routes=app.routes,
+    )
+
+    # Add security schemes
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT token obtenido del endpoint /auth/login. Formato: Bearer <token>",
+        }
+    }
+
+    # Add global security requirement (can be overridden per endpoint)
+    # Note: Some endpoints like /auth/login don't require auth, they override this
+    openapi_schema["security"] = [{"BearerAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
 
 # ── Global Exception Handlers ────────────────────────────────────────────────
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
@@ -261,7 +501,9 @@ async def configuration_error_handler(request: Request, exc: ConfigurationError)
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "configuration_error",
-            "message": "Error de configuración del sistema" if ENVIRONMENT == "production" else exc.message,
+            "message": "Error de configuración del sistema"
+            if ENVIRONMENT == "production"
+            else exc.message,
             "details": exc.details if ENVIRONMENT == "development" else {},
         },
     )
@@ -284,7 +526,7 @@ async def domain_exception_handler(request: Request, exc: DomainException):
 async def generic_exception_handler(request: Request, exc: Exception):
     """
     Maneja todas las excepciones no capturadas.
-    
+
     En producción: Oculta stack traces y retorna mensaje genérico.
     En desarrollo: Incluye stack trace completo para debugging.
     """
@@ -298,13 +540,13 @@ async def generic_exception_handler(request: Request, exc: Exception):
         "exception_type": type(exc).__name__,
         "exception_message": str(exc),
     }
-    
+
     if ENVIRONMENT == "development":
         error_context["traceback"] = traceback.format_exc()
-    
+
     # En producción, esto debería ir a un sistema de logging centralizado
     print(f"[ERROR {error_id}] Unhandled exception: {error_context}")
-    
+
     # Respuesta al cliente
     if ENVIRONMENT == "production":
         return JSONResponse(
@@ -325,31 +567,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
                 "traceback": traceback.format_exc().split("\n"),
             },
         )
-
-
-@app.exception_handler(CsrfProtectError)
-async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
-    """
-    Maneja errores de validación CSRF (403 Forbidden).
-    
-    Cuando una petición no incluye un token CSRF válido, se rechaza con 403.
-    Las peticiones OPTIONS (CORS preflight) se permiten sin validación CSRF.
-    """
-    # Permitir peticiones OPTIONS sin validación CSRF (CORS preflight)
-    if request.method == "OPTIONS":
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"message": "OK"}
-        )
-    
-    return JSONResponse(
-        status_code=status.HTTP_403_FORBIDDEN,
-        content={
-            "error": "csrf_validation_failed",
-            "message": "Token CSRF inválido o ausente. Por favor recargue la página e intente nuevamente.",
-            "details": {"csrf_error": str(exc)} if ENVIRONMENT == "development" else {},
-        },
-    )
 
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
@@ -383,23 +600,30 @@ app.add_middleware(
     max_age=3600,
 )
 
+# ── GZip Compression Middleware ───────────────────────────────────────────────
+from fastapi.middleware.gzip import GZipMiddleware
+
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1000,  # Only compress responses > 1KB
+    compresslevel=6,  # Balance between speed and compression ratio (1-9)
+)
+
 # ── Auth Middleware ───────────────────────────────────────────────────────────
 from app.seguridad.auth_middleware import AuthMiddleware
+
 app.add_middleware(AuthMiddleware)
 
 # ── HTTPS and Security Middleware (Production Only) ───────────────────────────
 if os.getenv("ENVIRONMENT") == "production":
     # Redirigir HTTP → HTTPS automáticamente
     app.add_middleware(HTTPSRedirectMiddleware)
-    
+
     # Validar hosts confiables
     allowed_hosts = os.getenv("ALLOWED_HOSTS", "").strip()
     if allowed_hosts:
-        hosts_list = [h.strip() for o in allowed_hosts.split(",") if h.strip()]
-        app.add_middleware(
-            TrustedHostMiddleware,
-            allowed_hosts=hosts_list
-        )
+        hosts_list = [h.strip() for h in allowed_hosts.split(",") if h.strip()]
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts_list)
 
 # ── Directorios y archivos estáticos ─────────────────────────────────────────
 os.makedirs("uploads", exist_ok=True)
@@ -410,7 +634,11 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 FRONTEND_DIST = os.path.join("frontend", "dist")
 if os.path.isdir(FRONTEND_DIST):
-    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="frontend-assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")),
+        name="frontend-assets",
+    )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_ruta.router)
@@ -422,6 +650,7 @@ app.include_router(movimiento_caja_ruta.router)
 app.include_router(ticket_ruta.router)
 app.include_router(ticket_ruta.router_pdf)
 app.include_router(upload_ruta.router)
+app.include_router(pdf_ruta.router)
 app.include_router(seguridad_ruta.router)
 app.include_router(citas_ruta.router)
 app.include_router(mobile_api_ruta.router)
@@ -432,8 +661,10 @@ app.include_router(whatsapp_ruta.router)
 # ── mDNS ──────────────────────────────────────────────────────────────────────
 def _anunciar_mdns():
     try:
-        from zeroconf import Zeroconf, ServiceInfo
         import socket as _socket
+
+        from zeroconf import ServiceInfo, Zeroconf
+
         zc = Zeroconf()
         try:
             s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
@@ -481,24 +712,8 @@ def info_sistema():
             "whatsapp": "3145719752",
             "telefono": "3145719752",
             "correo": "jefersoncely0@gmail.com",
-        }
+        },
     }
-
-
-@app.get("/csrf-token")
-def get_csrf_token(request: Request, csrf_protect: CsrfProtect = Depends()):
-    """
-    Endpoint para obtener el token CSRF.
-    Genera y envía el token como cookie Y en el response body.
-    """
-    # Generar el token CSRF
-    csrf_token, signed_token = csrf_protect.generate_csrf_tokens()
-    response = JSONResponse(content={
-        "message": "CSRF token set",
-        "csrf_token": csrf_token  # Enviar también en el body para que el frontend lo use
-    })
-    csrf_protect.set_csrf_cookie(signed_token, response)
-    return response
 
 
 @app.get("/info/conexion-qr")
@@ -507,7 +722,9 @@ def info_conexion_qr():
     Devuelve un token temporal de un solo uso (TTL 5 min).
     La app móvil usa el token para autenticarse, NO la contraseña real.
     """
-    import json, base64
+    import base64
+    import json
+
     ip_local = _get_ip_local()
     token = _generar_token_qr()
     payload = json.dumps({"ip": ip_local, "puerto": 8000, "token": token})
@@ -526,11 +743,21 @@ def inicio():
 @app.get("/{full_path:path}")
 def servir_frontend(full_path: str):
     api_prefixes = (
-        "tickets", "vehiculos", "economia-dia", "movimientos", "upload",
-        "seguridad", "citas", "api", "uploads", "configuracion", "info",
+        "tickets",
+        "vehiculos",
+        "economia-dia",
+        "movimientos",
+        "upload",
+        "seguridad",
+        "citas",
+        "api",
+        "uploads",
+        "configuracion",
+        "info",
     )
     if any(full_path.startswith(p) for p in api_prefixes):
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404)
     index_path = os.path.join(FRONTEND_DIST, "index.html")
     if os.path.isfile(index_path):

@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -11,8 +10,8 @@ class TicketListResponse(BaseModel):
     motivo_visita: str
     estado: str
     fecha_ingreso: datetime
-    nombre_propietario: Optional[str] = None
-    telefono_propietario: Optional[str] = None
+    nombre_propietario: str | None = None
+    telefono_propietario: str | None = None
 
     class Config:
         from_attributes = True
@@ -25,14 +24,14 @@ class TicketDetailResponse(BaseModel):
     motivo_visita: str
     estado: str
     fecha_ingreso: datetime
-    observaciones_recepcion: Optional[str] = None
-    kilometraje: Optional[int] = None
-    estado_inicial: Optional[str] = None
+    observaciones_recepcion: str | None = None
+    kilometraje: int | None = None
+    estado_inicial: str | None = None
     anticipo_recibido: int
-    total_servicio: Optional[int] = None
-    saldo_pendiente: Optional[int] = None
-    nombre_propietario: Optional[str] = None
-    telefono_propietario: Optional[str] = None
+    total_servicio: int | None = None
+    saldo_pendiente: int | None = None
+    nombre_propietario: str | None = None
+    telefono_propietario: str | None = None
 
     class Config:
         from_attributes = True
@@ -41,9 +40,9 @@ class TicketDetailResponse(BaseModel):
 class ProcesoResponse(BaseModel):
     id: int
     nombre: str
-    descripcion: Optional[str] = None
-    mecanico: Optional[str] = None
-    foto_url: Optional[str] = None
+    descripcion: str | None = None
+    mecanico: str | None = None
+    foto_url: str | None = None
 
     class Config:
         from_attributes = True
@@ -53,7 +52,7 @@ class RepuestoResponse(BaseModel):
     id: int
     nombre: str
     cantidad: int
-    marca_referencia: Optional[str] = None
+    marca_referencia: str | None = None
 
     class Config:
         from_attributes = True
@@ -63,7 +62,7 @@ class FotoResponse(BaseModel):
     id: int
     tipo: str
     archivo_url: str
-    descripcion: Optional[str] = None
+    descripcion: str | None = None
 
     class Config:
         from_attributes = True
@@ -71,15 +70,15 @@ class FotoResponse(BaseModel):
 
 class ProcesoCreate(BaseModel):
     nombre: str
-    descripcion: Optional[str] = None
-    mecanico: Optional[str] = None
+    descripcion: str | None = None
+    mecanico: str | None = None
 
 
 class RepuestoCreate(BaseModel):
     nombre: str
     cantidad: int = 1
-    marca_referencia: Optional[str] = None
-    proceso_id: Optional[int] = None
+    marca_referencia: str | None = None
+    proceso_id: int | None = None
 
 
 class ActualizarEstadoTicket(BaseModel):
@@ -88,18 +87,18 @@ class ActualizarEstadoTicket(BaseModel):
 
 class EntregarTicketData(BaseModel):
     confirmado_entrega_por: str
-    observaciones_finales: Optional[str] = None
-    recomendaciones: Optional[str] = None
-    proximo_mantenimiento: Optional[str] = None
+    observaciones_finales: str | None = None
+    recomendaciones: str | None = None
+    proximo_mantenimiento: str | None = None
 
 
 class CompraResponse(BaseModel):
     id: int
     descripcion: str
     valor: int
-    soporte_url: Optional[str] = None
-    nota: Optional[str] = None
-    responsable: Optional[str] = None
+    soporte_url: str | None = None
+    nota: str | None = None
+    responsable: str | None = None
 
     class Config:
         from_attributes = True
@@ -108,8 +107,8 @@ class CompraResponse(BaseModel):
 class CompraCreate(BaseModel):
     descripcion: str
     valor: int
-    nota: Optional[str] = None
-    responsable: Optional[str] = None
+    nota: str | None = None
+    responsable: str | None = None
 
 
 class CobroResponse(BaseModel):
@@ -128,4 +127,4 @@ class CobroCreate(BaseModel):
 
 class ActualizarFinanzasData(BaseModel):
     total_servicio: int
-    metodo_pago_final: Optional[str] = None
+    metodo_pago_final: str | None = None

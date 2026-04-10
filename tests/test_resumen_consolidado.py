@@ -9,6 +9,7 @@ usando contadores y sumas calculados con func.count() y func.coalesce(func.sum(.
 """
 
 import os
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -16,30 +17,29 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.configuracion.base_datos import Base, obtener_db
-import app.modelos.vehiculo  # noqa: F401
-import app.modelos.ticket  # noqa: F401
-import app.modelos.ticket_cobro  # noqa: F401
-import app.modelos.ticket_proceso  # noqa: F401
-import app.modelos.ticket_repuesto  # noqa: F401
-import app.modelos.ticket_foto  # noqa: F401
-import app.modelos.ticket_compra  # noqa: F401
-import app.modelos.movimiento_caja  # noqa: F401
 import app.modelos.cita  # noqa: F401
 import app.modelos.configuracion_seguridad  # noqa: F401
-
+import app.modelos.movimiento_caja  # noqa: F401
+import app.modelos.ticket  # noqa: F401
+import app.modelos.ticket_cobro  # noqa: F401
+import app.modelos.ticket_compra  # noqa: F401
+import app.modelos.ticket_foto  # noqa: F401
+import app.modelos.ticket_proceso  # noqa: F401
+import app.modelos.ticket_repuesto  # noqa: F401
+import app.modelos.vehiculo  # noqa: F401
+from app.configuracion.base_datos import Base, obtener_db
 from app.modelos.ticket import Ticket
-from app.modelos.vehiculo import Vehiculo
+from app.modelos.ticket_cobro import TicketCobro
+from app.modelos.ticket_compra import TicketCompra
+from app.modelos.ticket_foto import TicketFoto
 from app.modelos.ticket_proceso import TicketProceso
 from app.modelos.ticket_repuesto import TicketRepuesto
-from app.modelos.ticket_foto import TicketFoto
-from app.modelos.ticket_compra import TicketCompra
-from app.modelos.ticket_cobro import TicketCobro
-
+from app.modelos.vehiculo import Vehiculo
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def client_and_db():
@@ -110,6 +110,7 @@ def _admin_headers():
 # ---------------------------------------------------------------------------
 # Tests principales
 # ---------------------------------------------------------------------------
+
 
 class TestResumenConContadores:
     """
@@ -195,7 +196,9 @@ class TestResumenConContadores:
         ticket_id, ticket_codigo, placa, estado, contadores y finanzas.
         """
         client, db = client_and_db
-        ticket = _crear_ticket(db, codigo="TK-STRUCT-001", placa="TST003", anticipo=5_000, total_servicio=100_000)
+        ticket = _crear_ticket(
+            db, codigo="TK-STRUCT-001", placa="TST003", anticipo=5_000, total_servicio=100_000
+        )
         db.commit()
 
         response = client.get(f"/api/mobile/tickets/{ticket.id}/resumen", headers=_admin_headers())
@@ -228,6 +231,7 @@ class TestResumenConContadores:
 # ---------------------------------------------------------------------------
 # Edge case: ticket sin registros relacionados
 # ---------------------------------------------------------------------------
+
 
 class TestResumenTicketVacio:
     """

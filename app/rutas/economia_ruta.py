@@ -1,17 +1,16 @@
 from datetime import date, timedelta
-from typing import Dict, List
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy import func, case
-from sqlalchemy.orm import Session
 from fastapi_cache.decorator import cache
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
+from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
 from app.modelos.ticket import Ticket
 from app.modelos.ticket_proceso import TicketProceso
-from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.seguridad.dependencias import requerir_password_admin
 from app.utils.pdf_economia import generar_pdf_economia_profesional
 
@@ -19,7 +18,9 @@ router = APIRouter(prefix="/economia-dia", tags=["Economia"])
 
 
 def _base_query_dia(db: Session, fecha_objetivo: date):
-    return db.query(MovimientoCaja).filter(func.date(MovimientoCaja.fecha_creacion) == fecha_objetivo)
+    return db.query(MovimientoCaja).filter(
+        func.date(MovimientoCaja.fecha_creacion) == fecha_objetivo
+    )
 
 
 def _sumar_por_tipo(db: Session, fecha_objetivo: date, tipo: TipoMovimiento) -> int:
@@ -34,7 +35,7 @@ def _sumar_por_tipo(db: Session, fecha_objetivo: date, tipo: TipoMovimiento) -> 
     return int(total or 0)
 
 
-def _resumen_economia(db: Session, fecha_objetivo: date) -> Dict[str, int]:
+def _resumen_economia(db: Session, fecha_objetivo: date) -> dict[str, int]:
     ingreso_anticipo = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_ANTICIPO)
     ingreso_final = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_FINAL)
     ingreso_rapido = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_RAPIDO)
@@ -184,7 +185,7 @@ def generar_pdf_economia_dia(
         egresos=egresos_list,
         datos_taller=datos_taller,
     )
-    
+
     nombre_archivo = f"economia_{fecha.isoformat()}.pdf"
 
     return Response(
@@ -231,7 +232,11 @@ def obtener_estadisticas(
     fecha_desde = hoy - timedelta(days=dias - 1)
 
     # Ingresos por día
-    tipos_ingreso = [TipoMovimiento.INGRESO_ANTICIPO, TipoMovimiento.INGRESO_FINAL, TipoMovimiento.INGRESO_RAPIDO]
+    tipos_ingreso = [
+        TipoMovimiento.INGRESO_ANTICIPO,
+        TipoMovimiento.INGRESO_FINAL,
+        TipoMovimiento.INGRESO_RAPIDO,
+    ]
     rows_ingresos = (
         db.query(
             func.date(MovimientoCaja.fecha_creacion).label("dia"),
@@ -249,7 +254,9 @@ def obtener_estadisticas(
     ingresos_por_dia = []
     actual = fecha_desde
     while actual <= hoy:
-        ingresos_por_dia.append({"fecha": actual.isoformat(), "total": ingresos_map.get(actual.isoformat(), 0)})
+        ingresos_por_dia.append(
+            {"fecha": actual.isoformat(), "total": ingresos_map.get(actual.isoformat(), 0)}
+        )
         actual += timedelta(days=1)
 
     # Top servicios (motivo_visita de tickets en el período)
@@ -267,7 +274,9 @@ def obtener_estadisticas(
         .limit(5)
         .all()
     )
-    servicios_frecuentes = [{"servicio": r.motivo_visita, "cantidad": int(r.cantidad)} for r in rows_servicios]
+    servicios_frecuentes = [
+        {"servicio": r.motivo_visita, "cantidad": int(r.cantidad)} for r in rows_servicios
+    ]
 
     # Ranking mecánicos por procesos en el período
     rows_mecanicos = (
@@ -286,7 +295,9 @@ def obtener_estadisticas(
         .limit(5)
         .all()
     )
-    mecanicos_ranking = [{"mecanico": r.mecanico, "procesos": int(r.procesos)} for r in rows_mecanicos]
+    mecanicos_ranking = [
+        {"mecanico": r.mecanico, "procesos": int(r.procesos)} for r in rows_mecanicos
+    ]
 
     return {
         "periodo": periodo,
@@ -310,7 +321,12 @@ def obtener_historico_economia(
 
     # Usar query optimizada del repositorio con GROUP BY
     from app.repositorios.movimiento_caja_repository import MovimientoCajaRepository
+
     repo = MovimientoCajaRepository(db)
     items = repo.get_historico_economico(fecha_desde, fecha_hasta)
-    
-    return {"fecha_desde": fecha_desde.isoformat(), "fecha_hasta": fecha_hasta.isoformat(), "items": items}
+
+    return {
+        "fecha_desde": fecha_desde.isoformat(),
+        "fecha_hasta": fecha_hasta.isoformat(),
+        "items": items,
+    }

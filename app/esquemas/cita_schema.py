@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -7,50 +6,50 @@ from pydantic import BaseModel
 class CitaCrear(BaseModel):
     # Datos del vehículo (obligatorios)
     placa: str
-    marca: Optional[str] = None
-    modelo: Optional[str] = None
-    anio: Optional[int] = None
-    cilindraje: Optional[str] = None
-    color: Optional[str] = None
-    
+    marca: str | None = None
+    modelo: str | None = None
+    anio: int | None = None
+    cilindraje: str | None = None
+    color: str | None = None
+
     # Datos del cliente
     nombre_cliente: str
     telefono_cliente: str
-    
+
     # Datos de la cita
     fecha_cita: datetime
     motivo: str
-    observaciones: Optional[str] = None
-    creado_por: Optional[str] = None
+    observaciones: str | None = None
+    creado_por: str | None = None
 
 
 class CitaActualizar(BaseModel):
-    fecha_cita: Optional[datetime] = None
-    motivo: Optional[str] = None
-    observaciones: Optional[str] = None
-    estado: Optional[str] = None
+    fecha_cita: datetime | None = None
+    motivo: str | None = None
+    observaciones: str | None = None
+    estado: str | None = None
 
 
 class CitaRespuesta(BaseModel):
     id: int
-    vehiculo_id: Optional[int]
-    placa: Optional[str]
-    
+    vehiculo_id: int | None
+    placa: str | None
+
     # Datos del vehículo (si están disponibles)
-    marca: Optional[str] = None
-    modelo: Optional[str] = None
-    anio: Optional[int] = None
-    cilindraje: Optional[str] = None
-    color: Optional[str] = None
-    
+    marca: str | None = None
+    modelo: str | None = None
+    anio: int | None = None
+    cilindraje: str | None = None
+    color: str | None = None
+
     nombre_cliente: str
     telefono_cliente: str
     fecha_cita: datetime
     motivo: str
-    observaciones: Optional[str]
+    observaciones: str | None
     estado: str
-    ticket_id: Optional[int]
-    ticket_codigo: Optional[str]
+    ticket_id: int | None
+    ticket_codigo: str | None
     fecha_creacion: datetime
 
     class Config:

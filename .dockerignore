@@ -1,0 +1,90 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Testing
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.tox/
+*.cover
+
+# Environment files
+.env
+.env.test
+.env.local
+.env.*.local
+
+# Uploads and data
+uploads/
+*.db
+*.sqlite3
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
+
+# Mobile
+mobile_app/node_modules/
+mobile_app/.expo/
+mobile_app/dist/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Docker
+docker-compose.override.yml
+Dockerfile.dev
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Kiro
+.kiro/

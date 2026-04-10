@@ -9,54 +9,6 @@ axios.defaults.baseURL = API_BASE;
 axios.defaults.timeout = TIMEOUT_MS;
 axios.defaults.withCredentials = true; // Importante para que envíe y reciba cookies
 
-// ── CSRF Token Handling ──────────────────────────────────────────────────────
-/**
- * Obtiene el token CSRF del servidor y lo almacena en cookies
- */
-async function initCsrfToken() {
-  try {
-    await axios.get('/csrf-token');
-    // El token ahora se almacena en una cookie accesible desde JavaScript
-  } catch (error) {
-    console.warn('No se pudo obtener el token CSRF:', error);
-  }
-}
-
-// Inicializar token CSRF al cargar la aplicación
-initCsrfToken();
-
-/**
- * Obtiene el token CSRF de las cookies
- * @returns {string|null} Token CSRF o null si no existe
- */
-function getCsrfToken() {
-  const name = 'fastapi-csrf-token';
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    return parts.pop().split(';').shift();
-  }
-  return null;
-}
-
-// Interceptor para agregar token CSRF en peticiones de escritura
-axios.interceptors.request.use(
-  (config) => {
-    // Solo agregar CSRF token en métodos de escritura
-    const writeMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
-    if (writeMethods.includes(config.method?.toUpperCase())) {
-      const csrfToken = getCsrfToken();
-      if (csrfToken) {
-        config.headers['X-CSRF-Token'] = csrfToken;
-      }
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
 // IMPORTANTE: Los interceptores de axios ya están configurados en authService
 // No necesitamos configurarlos aquí de nuevo
 

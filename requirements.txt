@@ -20,3 +20,20 @@ fastapi-csrf-protect==0.3.4  # Protección contra ataques CSRF
 # Caché con Redis
 redis==4.6.0  # Cliente Redis para caché (compatible con fastapi-cache2)
 fastapi-cache2[redis]==0.2.2  # Caché con soporte Redis
+# Azure Key Vault para gestión de secretos
+azure-identity
+azure-keyvault-secrets
+# Procesamiento asíncrono con Celery
+celery[redis]
+# Migraciones de base de datos
+alembic
+# Validación y sanitización de entrada
+bleach
+python-magic
+# Herramientas de calidad de código
+mypy
+ruff
+pre-commit
+# Servidor de producción
+gunicorn
+requests  # Para health checks

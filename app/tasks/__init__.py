@@ -1,0 +1,3 @@
+"""
+Tareas asíncronas con Celery.
+"""

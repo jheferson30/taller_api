@@ -32,20 +32,25 @@ export default function EntregadosPage() {
     try {
       let data;
       if (estado === "TODOS") {
-        const [entregados, finalizados, rapidos] = await Promise.all([
+        const [entregadosResp, finalizadosResp, rapidos] = await Promise.all([
           api.buscarTickets({ estado: "ENTREGADO", placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
           api.buscarTickets({ estado: "FINALIZADO", placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
           api.listarCobrosRapidos({ placa: placa.trim() || undefined, fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined }),
         ]);
+        // Extraer los arrays de tickets de la respuesta
+        const entregados = entregadosResp.tickets || entregadosResp || [];
+        const finalizados = finalizadosResp.tickets || finalizadosResp || [];
         data = [...entregados, ...finalizados].sort((a, b) => new Date(b.fecha_ingreso) - new Date(a.fecha_ingreso));
         setCobrosRapidos(rapidos);
       } else {
-        data = await api.buscarTickets({
+        const resp = await api.buscarTickets({
           estado,
           placa: placa.trim() || undefined,
           fecha_desde: fechaDesde || undefined,
           fecha_hasta: fechaHasta || undefined,
         });
+        // Extraer el array de tickets de la respuesta
+        data = resp.tickets || resp || [];
         setCobrosRapidos([]);
       }
       setTickets(data);

@@ -7,7 +7,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.configuracion.base_datos import Base, obtener_db
 import app.modelos.cita  # noqa: F401
 import app.modelos.configuracion_seguridad  # noqa: F401
 import app.modelos.configuracion_taller  # noqa: F401
@@ -19,6 +18,7 @@ import app.modelos.ticket_foto  # noqa: F401
 import app.modelos.ticket_proceso  # noqa: F401
 import app.modelos.ticket_repuesto  # noqa: F401
 import app.modelos.vehiculo  # noqa: F401
+from app.configuracion.base_datos import Base, obtener_db
 from app.modelos.configuracion_seguridad import ConfiguracionSeguridad
 from app.modelos.ticket import Ticket
 from app.modelos.ticket_cobro import TicketCobro

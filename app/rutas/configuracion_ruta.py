@@ -1,13 +1,12 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Request
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Optional
-from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db as get_db
-from app.modelos.mecanico import Mecanico
 from app.modelos.configuracion_taller import ConfiguracionTaller
+from app.modelos.mecanico import Mecanico
 from app.seguridad.dependencias import requerir_password_admin as verificar_admin
 
 router = APIRouter(prefix="/configuracion", tags=["configuracion"])
@@ -15,33 +14,40 @@ router = APIRouter(prefix="/configuracion", tags=["configuracion"])
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
+
 class MecanicoCreate(BaseModel):
     nombre: str
 
+
 class TallerUpdate(BaseModel):
     nombre_taller: str
-    direccion: Optional[str] = None
-    telefono: Optional[str] = None
-    nit: Optional[str] = None
+    direccion: str | None = None
+    telefono: str | None = None
+    nit: str | None = None
+
 
 class ProcesosRapidosUpdate(BaseModel):
     procesos: list[str]
 
+
 class CobrosRapidosUpdate(BaseModel):
     cobros: list[str]
 
+
 class WhatsAppConfigUpdate(BaseModel):
-    whatsapp_token: Optional[str] = None
-    whatsapp_phone_id: Optional[str] = None
+    whatsapp_token: str | None = None
+    whatsapp_phone_id: str | None = None
     whatsapp_enabled: bool = False
 
+
 class EmailConfigUpdate(BaseModel):
-    smtp_user: Optional[str] = None
-    smtp_password: Optional[str] = None
-    smtp_from: Optional[str] = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
 
 
 # ── Mecánicos ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/mecanicos")
 def listar_mecanicos(db: Session = Depends(get_db)):
@@ -53,9 +59,7 @@ async def crear_mecanico(
     request: Request,
     body: MecanicoCreate,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     nombre = body.nombre.strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
@@ -74,9 +78,7 @@ async def toggle_mecanico(
     request: Request,
     mecanico_id: int,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     m = db.query(Mecanico).filter(Mecanico.id == mecanico_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Mecánico no encontrado")
@@ -91,9 +93,7 @@ async def eliminar_mecanico(
     request: Request,
     mecanico_id: int,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     m = db.query(Mecanico).filter(Mecanico.id == mecanico_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Mecánico no encontrado")
@@ -103,6 +103,7 @@ async def eliminar_mecanico(
 
 
 # ── Configuración del taller ──────────────────────────────────────────────────
+
 
 def _get_config(db: Session) -> ConfiguracionTaller:
     cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
@@ -130,9 +131,7 @@ async def actualizar_config_taller(
     request: Request,
     body: TallerUpdate,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     cfg = _get_config(db)
     cfg.nombre_taller = body.nombre_taller.strip() or "Taller Mecánico"
     cfg.direccion = body.direccion
@@ -144,6 +143,7 @@ async def actualizar_config_taller(
 
 
 # ── Procesos rápidos ──────────────────────────────────────────────────────────
+
 
 @router.get("/procesos-rapidos")
 def obtener_procesos_rapidos(db: Session = Depends(get_db)):
@@ -160,9 +160,7 @@ async def actualizar_procesos_rapidos(
     request: Request,
     body: ProcesosRapidosUpdate,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     cfg = _get_config(db)
     limpios = [p.strip() for p in body.procesos if p.strip()]
     cfg.procesos_rapidos = json.dumps(limpios, ensure_ascii=False)
@@ -171,6 +169,7 @@ async def actualizar_procesos_rapidos(
 
 
 # ── Cobros rápidos ────────────────────────────────────────────────────────────
+
 
 @router.get("/cobros-rapidos")
 def obtener_cobros_rapidos(db: Session = Depends(get_db)):
@@ -187,9 +186,7 @@ async def actualizar_cobros_rapidos(
     request: Request,
     body: CobrosRapidosUpdate,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     cfg = _get_config(db)
     limpios = [c.strip() for c in body.cobros if c.strip()]
     cfg.cobros_rapidos = json.dumps(limpios, ensure_ascii=False)
@@ -198,6 +195,7 @@ async def actualizar_cobros_rapidos(
 
 
 # ── WhatsApp ──────────────────────────────────────────────────────────────────
+
 
 @router.get("/whatsapp")
 def obtener_config_whatsapp(db: Session = Depends(get_db)):
@@ -214,9 +212,7 @@ async def actualizar_config_whatsapp(
     request: Request,
     body: WhatsAppConfigUpdate,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     if body.whatsapp_phone_id and not body.whatsapp_phone_id.isdigit():
         raise HTTPException(status_code=422, detail="whatsapp_phone_id debe ser numérico")
     cfg = _get_config(db)
@@ -228,6 +224,7 @@ async def actualizar_config_whatsapp(
 
 
 # ── Email / SMTP ──────────────────────────────────────────────────────────────
+
 
 @router.get("/email")
 def obtener_config_email(db: Session = Depends(get_db)):
@@ -245,9 +242,7 @@ async def actualizar_config_email(
     request: Request,
     body: EmailConfigUpdate,
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     cfg = _get_config(db)
     if body.smtp_user is not None:
         cfg.smtp_user = body.smtp_user.strip() or None
@@ -261,6 +256,7 @@ async def actualizar_config_email(
 
 # ── Logo del taller ───────────────────────────────────────────────────────────
 
+
 @router.get("/logo")
 def obtener_logo(db: Session = Depends(get_db)):
     cfg = _get_config(db)
@@ -272,10 +268,11 @@ async def subir_logo(
     request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
-    import uuid, os, shutil
+    import os
+    import shutil
+    import uuid
+
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise HTTPException(status_code=400, detail="Solo se permiten jpg, png o webp")

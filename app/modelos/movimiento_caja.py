@@ -1,24 +1,26 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, Text
-from sqlalchemy.sql import func
-from app.configuracion.base_datos import Base
 import enum
 
+from sqlalchemy import Column, DateTime, Enum, Integer, String, Text
+from sqlalchemy.sql import func
 
-class TipoMovimiento(str, enum.Enum):
+from app.configuracion.base_datos import Base
+
+
+class TipoMovimiento(enum.StrEnum):
     INGRESO_ANTICIPO = "INGRESO_ANTICIPO"
     INGRESO_FINAL = "INGRESO_FINAL"
     INGRESO_RAPIDO = "INGRESO_RAPIDO"
     EGRESO = "EGRESO"
 
 
-class EstadoTicket(str, enum.Enum):
+class EstadoTicket(enum.StrEnum):
     ABIERTO = "ABIERTO"
     EN_PROCESO = "EN_PROCESO"
     FINALIZADO = "FINALIZADO"
     ENTREGADO = "ENTREGADO"
 
 
-class CategoriaEgreso(str, enum.Enum):
+class CategoriaEgreso(enum.StrEnum):
     REPUESTO = "REPUESTO"
     PARTE = "PARTE"
     INSUMO = "INSUMO"

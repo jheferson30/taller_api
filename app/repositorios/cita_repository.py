@@ -2,7 +2,7 @@
 Repositorio para operaciones de acceso a datos de Citas.
 Requirements: 9.1, 9.2, 9.3
 """
-from typing import List, Optional
+
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -16,16 +16,16 @@ class CitaRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, cita_id: int) -> Optional[Cita]:
+    def get_by_id(self, cita_id: int) -> Cita | None:
         """Obtiene una cita por ID."""
         return self.db.query(Cita).filter(Cita.id == cita_id).first()
 
     def get_all(
         self,
-        fecha_desde: Optional[datetime] = None,
-        fecha_hasta: Optional[datetime] = None,
-        estado: Optional[str] = None,
-    ) -> List[Cita]:
+        fecha_desde: datetime | None = None,
+        fecha_hasta: datetime | None = None,
+        estado: str | None = None,
+    ) -> list[Cita]:
         """
         Lista citas con filtros opcionales.
         Requirements: 9.3
@@ -41,7 +41,7 @@ class CitaRepository:
 
         return query.order_by(Cita.fecha_cita.asc()).all()
 
-    def get_proximas(self, dias: int = 7) -> List[Cita]:
+    def get_proximas(self, dias: int = 7) -> list[Cita]:
         """
         Lista citas de hoy y los próximos N días.
         Requirements: 9.3
@@ -77,7 +77,7 @@ class CitaRepository:
         self.db.flush()
         return cita
 
-    def delete(self, cita: Cita):
+    def delete(self, cita: Cita) -> None:
         """Elimina una cita (soft delete cambiando estado)."""
-        cita.estado = "CANCELADA"
+        cita.estado = "CANCELADA"  # type: ignore[assignment]
         self.db.flush()

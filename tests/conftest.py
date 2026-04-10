@@ -6,6 +6,7 @@ los módulos de la aplicación, de modo que las dependencias de seguridad
 funcionen correctamente durante los tests.
 """
 import os
+
 from dotenv import load_dotenv
 
 # Cargar variables desde .env.test si existe (excluido de git)
@@ -23,6 +24,7 @@ os.environ.setdefault("RATE_LIMIT_REFRESH_PER_MINUTE", "1000")
 os.environ.setdefault("RATE_LIMIT_FORGOT_PASSWORD_PER_HOUR", "1000")
 os.environ.setdefault("RATE_LIMIT_CREATE_PER_MINUTE", "1000")
 os.environ.setdefault("RATE_LIMIT_READ_PER_MINUTE", "1000")
+
 
 def pytest_configure(config):
     """

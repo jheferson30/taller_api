@@ -7,38 +7,38 @@ Tasks 23 y 24 del spec whatsapp-business-integration.
 """
 
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.modelos.cita  # noqa: F401
+import app.modelos.configuracion_seguridad  # noqa: F401
+import app.modelos.configuracion_taller  # noqa: F401
+import app.modelos.log_notificacion  # noqa: F401
+import app.modelos.movimiento_caja  # noqa: F401
+import app.modelos.ticket  # noqa: F401
+import app.modelos.ticket_cobro  # noqa: F401
+import app.modelos.ticket_compra  # noqa: F401
+import app.modelos.ticket_foto  # noqa: F401
+import app.modelos.ticket_proceso  # noqa: F401
+import app.modelos.ticket_repuesto  # noqa: F401
+import app.modelos.vehiculo  # noqa: F401
+
 # Importar TODOS los modelos antes de create_all para que SQLAlchemy resuelva FKs
 from app.configuracion.base_datos import Base
-import app.modelos.vehiculo          # noqa: F401
-import app.modelos.ticket            # noqa: F401
-import app.modelos.ticket_cobro      # noqa: F401
-import app.modelos.ticket_proceso    # noqa: F401
-import app.modelos.ticket_repuesto   # noqa: F401
-import app.modelos.ticket_foto       # noqa: F401
-import app.modelos.ticket_compra     # noqa: F401
-import app.modelos.movimiento_caja   # noqa: F401
-import app.modelos.cita              # noqa: F401
-import app.modelos.configuracion_seguridad  # noqa: F401
-import app.modelos.configuracion_taller     # noqa: F401
-import app.modelos.log_notificacion         # noqa: F401
-
-from app.modelos.vehiculo import Vehiculo
-from app.modelos.ticket import Ticket
 from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.modelos.log_notificacion import LogNotificacion
+from app.modelos.ticket import Ticket
+from app.modelos.vehiculo import Vehiculo
 from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
-from app.servicios.whatsapp_service import TipoEvento, ResultadoEnvio
-
+from app.servicios.whatsapp_service import ResultadoEnvio, TipoEvento
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_session():
     """Crea una sesión SQLite en memoria con todas las tablas."""
@@ -78,8 +78,15 @@ def _vehiculo(db, placa="ABC123", nombre="Juan Pérez", telefono="3001234567"):
     return v
 
 
-def _ticket(db, vehiculo_id, codigo="T-001", motivo="Revisión general",
-            total=100000, saldo=50000, recomendaciones=None):
+def _ticket(
+    db,
+    vehiculo_id,
+    codigo="T-001",
+    motivo="Revisión general",
+    total=100000,
+    saldo=50000,
+    recomendaciones=None,
+):
     """Persiste y retorna un Ticket."""
     t = Ticket(
         vehiculo_id=vehiculo_id,
@@ -99,6 +106,7 @@ def _ticket(db, vehiculo_id, codigo="T-001", motivo="Revisión general",
 # Task 23.1 — Servicio deshabilitado retorna OMITIDO sin llamada HTTP (req 1.3)
 # ---------------------------------------------------------------------------
 
+
 def test_servicio_deshabilitado_retorna_omitido_sin_http():
     """
     Si whatsapp_enabled=False, enviar_notificacion debe retornar OMITIDO
@@ -114,9 +122,7 @@ def test_servicio_deshabilitado_retorna_omitido_sin_http():
     service = TwilioWhatsAppService()
 
     with patch("httpx.AsyncClient") as mock_client_cls:
-        resultado = asyncio.run(
-            service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db)
-        )
+        resultado = asyncio.run(service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db))
 
     assert resultado == ResultadoEnvio.OMITIDO
     mock_client_cls.assert_not_called()
@@ -125,6 +131,7 @@ def test_servicio_deshabilitado_retorna_omitido_sin_http():
 # ---------------------------------------------------------------------------
 # Task 23.2 — Token vacío retorna ERROR sin llamada HTTP (req 1.4)
 # ---------------------------------------------------------------------------
+
 
 def test_token_vacio_retorna_error_sin_http():
     """
@@ -141,9 +148,7 @@ def test_token_vacio_retorna_error_sin_http():
     service = TwilioWhatsAppService()
 
     with patch("httpx.AsyncClient") as mock_client_cls:
-        resultado = asyncio.run(
-            service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db)
-        )
+        resultado = asyncio.run(service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db))
 
     assert resultado == ResultadoEnvio.ERROR
     mock_client_cls.assert_not_called()
@@ -163,9 +168,7 @@ def test_token_solo_espacios_retorna_error_sin_http():
     service = TwilioWhatsAppService()
 
     with patch("httpx.AsyncClient") as mock_client_cls:
-        resultado = asyncio.run(
-            service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db)
-        )
+        resultado = asyncio.run(service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db))
 
     assert resultado == ResultadoEnvio.ERROR
     mock_client_cls.assert_not_called()
@@ -174,6 +177,7 @@ def test_token_solo_espacios_retorna_error_sin_http():
 # ---------------------------------------------------------------------------
 # Task 23.3 — Teléfono ausente retorna OMITIDO con motivo "sin_telefono" (req 2.3)
 # ---------------------------------------------------------------------------
+
 
 def test_telefono_ausente_retorna_omitido_con_motivo_sin_telefono():
     """
@@ -190,9 +194,7 @@ def test_telefono_ausente_retorna_omitido_con_motivo_sin_telefono():
     service = TwilioWhatsAppService()
 
     with patch("httpx.AsyncClient") as mock_client_cls:
-        resultado = asyncio.run(
-            service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db)
-        )
+        resultado = asyncio.run(service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db))
 
     assert resultado == ResultadoEnvio.OMITIDO
     mock_client_cls.assert_not_called()
@@ -217,9 +219,7 @@ def test_telefono_vacio_retorna_omitido_con_motivo_sin_telefono():
     service = TwilioWhatsAppService()
 
     with patch("httpx.AsyncClient") as mock_client_cls:
-        resultado = asyncio.run(
-            service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db)
-        )
+        resultado = asyncio.run(service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db))
 
     assert resultado == ResultadoEnvio.OMITIDO
     mock_client_cls.assert_not_called()
@@ -231,6 +231,7 @@ def test_telefono_vacio_retorna_omitido_con_motivo_sin_telefono():
 # ---------------------------------------------------------------------------
 # Task 24.1 — Mensaje RECEPCION contiene nombre, placa, código, motivo (req 2.2)
 # ---------------------------------------------------------------------------
+
 
 def test_mensaje_recepcion_contiene_campos_requeridos():
     """
@@ -260,6 +261,7 @@ def test_mensaje_recepcion_contiene_campos_requeridos():
 # ---------------------------------------------------------------------------
 # Task 24.2 — Mensaje FINALIZACION contiene total y saldo (req 3.2)
 # ---------------------------------------------------------------------------
+
 
 def test_mensaje_finalizacion_contiene_total_y_saldo():
     """
@@ -310,6 +312,7 @@ def test_mensaje_finalizacion_saldo_cero_indica_pagado():
 # ---------------------------------------------------------------------------
 # Task 24.3 — Mensaje ENTREGA omite recomendaciones si están vacías (req 4.3)
 # ---------------------------------------------------------------------------
+
 
 def test_mensaje_entrega_omite_recomendaciones_si_vacias():
     """
@@ -365,6 +368,7 @@ def test_mensaje_entrega_incluye_recomendaciones_si_existen():
 # Task 24.4 — Log persiste tipo_evento, resultado y created_at no nulos (req 7.1)
 # ---------------------------------------------------------------------------
 
+
 def test_log_persiste_campos_requeridos_no_nulos():
     """
     Después de enviar_notificacion, el log debe tener tipo_evento,
@@ -380,9 +384,7 @@ def test_log_persiste_campos_requeridos_no_nulos():
     service = TwilioWhatsAppService()
 
     with patch("httpx.AsyncClient"):
-        asyncio.run(
-            service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db)
-        )
+        asyncio.run(service.enviar_notificacion(TipoEvento.RECEPCION, t, v, db))
 
     log = db.query(LogNotificacion).order_by(LogNotificacion.id.desc()).first()
     assert log is not None
@@ -408,9 +410,7 @@ def test_log_persiste_ticket_id_y_tipo_evento():
     service = TwilioWhatsAppService()
 
     with patch("httpx.AsyncClient"):
-        asyncio.run(
-            service.enviar_notificacion(TipoEvento.FINALIZACION, t, v, db)
-        )
+        asyncio.run(service.enviar_notificacion(TipoEvento.FINALIZACION, t, v, db))
 
     log = db.query(LogNotificacion).order_by(LogNotificacion.id.desc()).first()
     assert log is not None

@@ -2,13 +2,15 @@
 Servicio de lógica de negocio para Citas.
 Requirements: 8.1, 8.2, 8.3
 """
+
 from datetime import datetime
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.modelos.cita import Cita
-from app.modelos.vehiculo import Vehiculo
 from app.modelos.ticket import Ticket
+from app.modelos.vehiculo import Vehiculo
 
 
 class CitaService:
@@ -20,13 +22,13 @@ class CitaService:
     def crear_o_actualizar_vehiculo(
         self,
         placa: str,
-        marca: str = None,
-        modelo: str = None,
-        anio: int = None,
-        cilindraje: int = None,
-        color: str = None,
-        nombre_cliente: str = None,
-        telefono_cliente: str = None,
+        marca: str | None = None,
+        modelo: str | None = None,
+        anio: int | None = None,
+        cilindraje: int | None = None,
+        color: str | None = None,
+        nombre_cliente: str | None = None,
+        telefono_cliente: str | None = None,
     ) -> Vehiculo:
         """
         Crea o actualiza un vehículo al crear una cita.
@@ -72,26 +74,24 @@ class CitaService:
 
         return vehiculo
 
-    def validar_editable(self, cita: Cita):
+    def validar_editable(self, cita: Cita) -> None:
         """
         Valida que una cita pueda ser editada.
         Requirements: 8.3
         """
         if cita.estado == "CONVERTIDA":
             raise HTTPException(
-                status_code=400,
-                detail="No se puede editar una cita ya convertida en ticket"
+                status_code=400, detail="No se puede editar una cita ya convertida en ticket"
             )
 
-    def cancelar_cita(self, cita: Cita):
+    def cancelar_cita(self, cita: Cita) -> None:
         """
         Cancela una cita.
         Requirements: 8.3
         """
         if cita.estado == "CONVERTIDA":
             raise HTTPException(
-                status_code=400,
-                detail="No se puede cancelar una cita ya convertida"
+                status_code=400, detail="No se puede cancelar una cita ya convertida"
             )
 
         cita.estado = "CANCELADA"
@@ -102,15 +102,11 @@ class CitaService:
         Requirements: 8.1, 8.2, 8.3
         """
         if cita.estado == "CONVERTIDA":
-            raise HTTPException(
-                status_code=400,
-                detail="Esta cita ya fue convertida en ticket"
-            )
+            raise HTTPException(status_code=400, detail="Esta cita ya fue convertida en ticket")
 
         if not cita.placa:
             raise HTTPException(
-                status_code=400,
-                detail="La cita debe tener una placa para generar ticket"
+                status_code=400, detail="La cita debe tener una placa para generar ticket"
             )
 
         # El vehículo ya debe existir porque se creó/actualizó al crear la cita

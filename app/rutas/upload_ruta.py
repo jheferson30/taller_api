@@ -1,11 +1,11 @@
 import os
 import uuid
 from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Request, Depends
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from fastapi_csrf_protect import CsrfProtect
+
+from app.utils.input_validator import FileValidator
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -20,33 +20,6 @@ os.makedirs(FOTOS_DIR, exist_ok=True)
 os.makedirs(COMPRAS_DIR, exist_ok=True)
 os.makedirs(FIRMAS_DIR, exist_ok=True)
 
-# Extensiones permitidas
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-
-
-def _validar_archivo(file: UploadFile):
-    """Valida extensión y tamaño del archivo"""
-    # Validar extensión
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Extensión no permitida. Permitidas: {', '.join(ALLOWED_EXTENSIONS)}"
-        )
-    
-    # Validar tamaño (si es posible)
-    if hasattr(file.file, 'seek') and hasattr(file.file, 'tell'):
-        file.file.seek(0, 2)  # Ir al final
-        size = file.file.tell()
-        file.file.seek(0)  # Volver al inicio
-        
-        if size > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Archivo muy grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024}MB"
-            )
-
 
 def _generar_nombre_archivo(original_filename: str) -> str:
     """Genera un nombre único para el archivo"""
@@ -60,16 +33,15 @@ def _generar_nombre_archivo(original_filename: str) -> str:
 async def subir_foto(
     request: Request,
     file: UploadFile = File(...),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     """Sube una foto de evidencia del ticket"""
-    _validar_archivo(file)
-    
+    # Validate file using FileValidator (checks size and MIME type)
+    await FileValidator.validate_file(file)
+
     # Generar nombre único
     filename = _generar_nombre_archivo(file.filename)
     filepath = os.path.join(FOTOS_DIR, filename)
-    
+
     # Guardar archivo
     try:
         with open(filepath, "wb") as f:
@@ -77,29 +49,24 @@ async def subir_foto(
             f.write(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al guardar archivo: {str(e)}")
-    
+
     # Retornar URL relativa
-    return {
-        "filename": filename,
-        "url": f"/uploads/fotos/{filename}",
-        "size": len(content)
-    }
+    return {"filename": filename, "url": f"/uploads/fotos/{filename}", "size": len(content)}
 
 
 @router.post("/compra")
 async def subir_soporte_compra(
     request: Request,
     file: UploadFile = File(...),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     """Sube un soporte de compra (factura, recibo)"""
-    _validar_archivo(file)
-    
+    # Validate file using FileValidator (checks size and MIME type)
+    await FileValidator.validate_file(file)
+
     # Generar nombre único
     filename = _generar_nombre_archivo(file.filename)
     filepath = os.path.join(COMPRAS_DIR, filename)
-    
+
     # Guardar archivo
     try:
         with open(filepath, "wb") as f:
@@ -107,29 +74,24 @@ async def subir_soporte_compra(
             f.write(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al guardar archivo: {str(e)}")
-    
+
     # Retornar URL relativa
-    return {
-        "filename": filename,
-        "url": f"/uploads/compras/{filename}",
-        "size": len(content)
-    }
+    return {"filename": filename, "url": f"/uploads/compras/{filename}", "size": len(content)}
 
 
 @router.post("/firma")
 async def subir_firma(
     request: Request,
     file: UploadFile = File(...),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     """Sube una firma de entrega"""
-    _validar_archivo(file)
-    
+    # Validate file using FileValidator (checks size and MIME type)
+    await FileValidator.validate_file(file)
+
     # Generar nombre único
     filename = _generar_nombre_archivo(file.filename)
     filepath = os.path.join(FIRMAS_DIR, filename)
-    
+
     # Guardar archivo
     try:
         with open(filepath, "wb") as f:
@@ -137,13 +99,9 @@ async def subir_firma(
             f.write(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al guardar archivo: {str(e)}")
-    
+
     # Retornar URL relativa
-    return {
-        "filename": filename,
-        "url": f"/uploads/firmas/{filename}",
-        "size": len(content)
-    }
+    return {"filename": filename, "url": f"/uploads/firmas/{filename}", "size": len(content)}
 
 
 def _safe_filepath(base_dir: str, filename: str) -> str:

@@ -7,12 +7,12 @@ Uso:
     python scripts/cleanup_blacklist.py
 """
 
-import sys
 import os
-from datetime import datetime, timezone
+import sys
+from datetime import UTC, datetime
 
 # Agregar el directorio raíz al path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.base_datos import SessionLocal
 from app.repositorios.token_blacklist_repository import TokenBlacklistRepository
@@ -20,18 +20,18 @@ from app.repositorios.token_blacklist_repository import TokenBlacklistRepository
 
 def cleanup_expired_tokens():
     """Limpia tokens blacklisted que ya expiraron."""
-    print(f"[{datetime.now(timezone.utc)}] Iniciando limpieza de tokens blacklisted expirados...")
-    
+    print(f"[{datetime.now(UTC)}] Iniciando limpieza de tokens blacklisted expirados...")
+
     db = SessionLocal()
     try:
         repo = TokenBlacklistRepository(db)
         deleted_count = repo.cleanup_expired()
-        
-        print(f"[{datetime.now(timezone.utc)}] Limpieza completada: {deleted_count} tokens eliminados.")
-        
+
+        print(f"[{datetime.now(UTC)}] Limpieza completada: {deleted_count} tokens eliminados.")
+
         return deleted_count
     except Exception as e:
-        print(f"[{datetime.now(timezone.utc)}] ERROR: {str(e)}")
+        print(f"[{datetime.now(UTC)}] ERROR: {str(e)}")
         raise
     finally:
         db.close()

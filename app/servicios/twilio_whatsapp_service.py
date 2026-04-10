@@ -1,8 +1,8 @@
 import httpx
 
-from app.servicios.whatsapp_service import WhatsAppService, TipoEvento, ResultadoEnvio
-from app.modelos.log_notificacion import LogNotificacion
 from app.modelos.configuracion_taller import ConfiguracionTaller
+from app.modelos.log_notificacion import LogNotificacion
+from app.servicios.whatsapp_service import ResultadoEnvio, TipoEvento, WhatsAppService
 
 
 class TwilioWhatsAppService(WhatsAppService):
@@ -62,10 +62,7 @@ class TwilioWhatsAppService(WhatsAppService):
 
         # 4. Construir mensaje y llamar a Twilio API
         mensaje = self._construir_mensaje(tipo, ticket, vehiculo)
-        url = (
-            f"https://api.twilio.com/2010-04-01/Accounts/"
-            f"{config.whatsapp_phone_id}/Messages.json"
-        )
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{config.whatsapp_phone_id}/Messages.json"
         form_data = {
             "From": f"whatsapp:+{config.whatsapp_phone_id}",
             "To": f"whatsapp:+{telefono}",
@@ -133,7 +130,11 @@ class TwilioWhatsAppService(WhatsAppService):
         config = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
 
         # 2. WhatsApp deshabilitado o token vacío (req 1.3 / 1.4)
-        if config is None or not config.whatsapp_enabled or not (config.whatsapp_token or "").strip():
+        if (
+            config is None
+            or not config.whatsapp_enabled
+            or not (config.whatsapp_token or "").strip()
+        ):
             self._persistir_log(
                 db=db,
                 ticket_id=ticket_id,
@@ -146,10 +147,7 @@ class TwilioWhatsAppService(WhatsAppService):
             return {"ok": False, "error": "whatsapp_no_configurado"}
 
         phone_id = config.whatsapp_phone_id
-        url = (
-            f"https://api.twilio.com/2010-04-01/Accounts/"
-            f"{phone_id}/Messages.json"
-        )
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{phone_id}/Messages.json"
         form_data = {
             "From": f"whatsapp:+{phone_id}",
             "To": f"whatsapp:+{telefono}",

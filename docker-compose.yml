@@ -1,21 +1,115 @@
 version: '3.8'
 
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taller-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:${DB_PASSWORD:-postgres}@db:5432/taller_db?client_encoding=utf8
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=production
+      - AZURE_KEY_VAULT_URL=${AZURE_KEY_VAULT_URL:-}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - taller-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/info')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  db:
+    image: postgres:15-alpine
+    container_name: taller-db
+    environment:
+      POSTGRES_DB: taller_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taller_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - taller-network
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
-    container_name: taller_redis
+    container_name: taller-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taller-celery-worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:${DB_PASSWORD:-postgres}@db:5432/taller_db?client_encoding=utf8
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - AZURE_KEY_VAULT_URL=${AZURE_KEY_VAULT_URL:-}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - taller-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
       retries: 3
+      start_period: 30s
 
 volumes:
+  postgres_data:
+    driver: local
   redis_data:
     driver: local
+
+networks:
+  taller-network:
+    driver: bridge

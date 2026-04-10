@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -8,10 +8,11 @@ from app.configuracion.base_datos import Base
 class User(Base):
     """
     Modelo de usuario del sistema con autenticación JWT.
-    
+
     Almacena usuarios con contraseñas hasheadas usando bcrypt/argon2.
     Relacionado con roles mediante tabla intermedia user_roles.
     """
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -26,7 +27,7 @@ class User(Base):
     nombre_completo = Column(String(150), nullable=True)
     telefono = Column(String(20), nullable=True)
     direccion = Column(String(255), nullable=True)
-    
+
     # Relaciones
     roles = relationship("Role", secondary="user_roles", back_populates="users")
     audit_logs = relationship("AuditLog", back_populates="user")

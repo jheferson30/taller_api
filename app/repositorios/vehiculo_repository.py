@@ -2,7 +2,6 @@
 Repositorio para operaciones de acceso a datos de Vehículos.
 Requirements: 9.1, 9.2, 9.3
 """
-from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -15,25 +14,23 @@ class VehiculoRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, vehiculo_id: int) -> Optional[Vehiculo]:
+    def get_by_id(self, vehiculo_id: int) -> Vehiculo | None:
         """Obtiene un vehículo por ID."""
         return self.db.query(Vehiculo).filter(Vehiculo.id == vehiculo_id).first()
 
-    def get_by_placa(self, placa: str) -> Optional[Vehiculo]:
+    def get_by_placa(self, placa: str) -> Vehiculo | None:
         """
         Obtiene un vehículo por placa.
         Requirements: 9.3
         """
-        return self.db.query(Vehiculo).filter(
-            Vehiculo.placa == placa.strip().upper()
-        ).first()
+        return self.db.query(Vehiculo).filter(Vehiculo.placa == placa.strip().upper()).first()
 
     def get_all(
         self,
         skip: int = 0,
         limit: int = 50,
-        placa: Optional[str] = None,
-    ) -> List[Vehiculo]:
+        placa: str | None = None,
+    ) -> list[Vehiculo]:
         """
         Lista vehículos con paginación y filtros opcionales.
         Requirements: 9.3
@@ -62,7 +59,7 @@ class VehiculoRepository:
         self.db.flush()
         return vehiculo
 
-    def search(self, query: str, limit: int = 20) -> List[Vehiculo]:
+    def search(self, query: str, limit: int = 20) -> list[Vehiculo]:
         """Busca vehículos por placa, marca o modelo."""
         search_pattern = f"%{query.strip()}%"
         return (

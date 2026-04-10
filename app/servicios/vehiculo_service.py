@@ -2,6 +2,7 @@
 Servicio de lógica de negocio para Vehículos.
 Requirements: 8.1, 8.2
 """
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -14,7 +15,7 @@ class VehiculoService:
     def __init__(self, db: Session):
         self.db = db
 
-    def validar_placa_unica(self, placa: str, vehiculo_id: int = None):
+    def validar_placa_unica(self, placa: str, vehiculo_id: int | None = None) -> None:
         """
         Valida que la placa sea única.
         Requirements: 8.1
@@ -27,20 +28,19 @@ class VehiculoService:
 
         if query.first():
             raise HTTPException(
-                status_code=400,
-                detail=f"Ya existe un vehículo con la placa {placa_norm}"
+                status_code=400, detail=f"Ya existe un vehículo con la placa {placa_norm}"
             )
 
     def crear_vehiculo(
         self,
         placa: str,
-        marca: str = None,
-        modelo: str = None,
-        anio: int = None,
-        cilindraje: int = None,
-        color: str = None,
-        nombre_propietario: str = None,
-        telefono_propietario: str = None,
+        marca: str | None = None,
+        modelo: str | None = None,
+        anio: int | None = None,
+        cilindraje: int | None = None,
+        color: str | None = None,
+        nombre_propietario: str | None = None,
+        telefono_propietario: str | None = None,
     ) -> Vehiculo:
         """
         Crea un nuevo vehículo con validaciones.
@@ -69,14 +69,14 @@ class VehiculoService:
     def actualizar_vehiculo(
         self,
         vehiculo: Vehiculo,
-        placa: str = None,
-        marca: str = None,
-        modelo: str = None,
-        anio: int = None,
-        cilindraje: int = None,
-        color: str = None,
-        nombre_propietario: str = None,
-        telefono_propietario: str = None,
+        placa: str | None = None,
+        marca: str | None = None,
+        modelo: str | None = None,
+        anio: int | None = None,
+        cilindraje: int | None = None,
+        color: str | None = None,
+        nombre_propietario: str | None = None,
+        telefono_propietario: str | None = None,
     ) -> Vehiculo:
         """
         Actualiza un vehículo existente.

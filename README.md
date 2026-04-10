@@ -20,14 +20,168 @@ API REST para gestión de taller mecánico con autenticación JWT, sistema de ro
 
 ## Instalación
 
-### 1. Clonar el repositorio
+### Opción 1: Instalación con Docker (Recomendado)
+
+La forma más rápida de levantar el sistema completo con todos los servicios.
+
+#### Requisitos
+
+- Docker 20.10+
+- Docker Compose 2.0+
+
+#### Pasos
+
+1. **Clonar el repositorio**
 
 ```bash
 git clone <url-del-repositorio>
 cd taller_api
 ```
 
-### 2. Crear entorno virtual
+2. **Configurar variables de entorno**
+
+```bash
+cp .env.example .env
+```
+
+Edita `.env` y configura las variables mínimas requeridas:
+
+```env
+# Base de datos
+DB_PASSWORD=tu_password_seguro
+
+# JWT
+JWT_SECRET_KEY=tu_clave_secreta_minimo_32_caracteres
+
+# Azure Key Vault (opcional, para producción)
+AZURE_KEY_VAULT_URL=https://tu-vault.vault.azure.net/
+```
+
+3. **Levantar todos los servicios**
+
+```bash
+docker-compose up -d
+```
+
+Esto iniciará:
+- API (FastAPI) en `http://localhost:8000`
+- PostgreSQL en `localhost:5432`
+- Redis en `localhost:6379`
+- Celery Worker para procesamiento asíncrono
+
+4. **Verificar que los servicios están corriendo**
+
+```bash
+docker-compose ps
+```
+
+Deberías ver todos los servicios con estado `Up` y `healthy`.
+
+5. **Ver logs**
+
+```bash
+# Todos los servicios
+docker-compose logs -f
+
+# Solo API
+docker-compose logs -f api
+
+# Solo Celery worker
+docker-compose logs -f celery_worker
+```
+
+6. **Acceder a la documentación**
+
+Abre tu navegador en `http://localhost:8000/docs`
+
+#### Comandos útiles de Docker
+
+```bash
+# Detener todos los servicios
+docker-compose down
+
+# Detener y eliminar volúmenes (¡cuidado! elimina datos)
+docker-compose down -v
+
+# Reconstruir imágenes después de cambios en código
+docker-compose build
+
+# Reconstruir y reiniciar
+docker-compose up -d --build
+
+# Ver logs en tiempo real
+docker-compose logs -f
+
+# Ejecutar comando en contenedor
+docker-compose exec api python scripts/migrate_passwords.py
+
+# Acceder a shell del contenedor
+docker-compose exec api bash
+
+# Acceder a PostgreSQL
+docker-compose exec db psql -U postgres -d taller_db
+```
+
+#### Ejecutar migraciones de base de datos
+
+```bash
+# Aplicar migraciones
+docker-compose exec api alembic upgrade head
+
+# Crear nueva migración
+docker-compose exec api alembic revision --autogenerate -m "Descripción del cambio"
+
+# Ver historial de migraciones
+docker-compose exec api alembic history
+```
+
+#### Troubleshooting Docker
+
+**Problema: Puerto 8000 ya está en uso**
+
+```bash
+# Cambiar puerto en docker-compose.yml
+ports:
+  - "8001:8000"  # Usar puerto 8001 en host
+```
+
+**Problema: Base de datos no está lista**
+
+```bash
+# Ver logs de PostgreSQL
+docker-compose logs db
+
+# Reiniciar servicio de base de datos
+docker-compose restart db
+```
+
+**Problema: Cambios en código no se reflejan**
+
+```bash
+# Reconstruir imagen
+docker-compose up -d --build api
+```
+
+### Opción 2: Instalación Manual (Desarrollo Local)
+
+Para desarrollo local sin Docker.
+
+#### Requisitos
+
+- Python 3.9+
+- PostgreSQL 12+
+- Redis 6+ (opcional, para Celery)
+
+#### Pasos
+
+1. **Clonar el repositorio**
+
+```bash
+git clone <url-del-repositorio>
+cd taller_api
+```
+
+2. **Crear entorno virtual**
 
 ```bash
 python -m venv venv
@@ -39,13 +193,13 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-### 3. Instalar dependencias
+3. **Instalar dependencias**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configurar variables de entorno
+4. **Configurar variables de entorno**
 
 Copia el archivo de ejemplo y ajusta los valores:
 
@@ -55,7 +209,7 @@ cp .env.example .env
 
 Edita `.env` y configura las variables requeridas (ver sección Variables de Entorno más abajo).
 
-### 5. Configurar base de datos
+5. **Configurar base de datos**
 
 Crea la base de datos en PostgreSQL:
 
@@ -69,7 +223,7 @@ Ejecuta la migración:
 psql -U postgres -d taller_db -f db/migracion_jwt_auth_2026_03_28.sql
 ```
 
-### 6. Migrar contraseñas existentes (si aplica)
+6. **Migrar contraseñas existentes (si aplica)**
 
 Si tienes usuarios existentes con contraseñas SHA256:
 
@@ -83,7 +237,7 @@ Este script:
 - Marca usuarios como `is_migrated=False`
 - En el primer login exitoso, la contraseña se migra automáticamente a bcrypt
 
-### 7. Iniciar el servidor
+7. **Iniciar el servidor**
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -92,6 +246,205 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 La API estará disponible en `http://localhost:8000`
 
 Documentación interactiva: `http://localhost:8000/docs`
+
+8. **(Opcional) Iniciar Celery Worker**
+
+Si necesitas procesamiento asíncrono (generación de PDFs):
+
+```bash
+# En otra terminal
+celery -A app.tasks.celery_app worker --loglevel=info
+```
+
+## Configuración de Azure Key Vault
+
+Azure Key Vault proporciona gestión segura de secretos en producción, eliminando la necesidad de almacenar contraseñas y claves en archivos `.env` en texto plano.
+
+### ¿Cuándo usar Azure Key Vault?
+
+- **Producción**: Recomendado para todos los entornos de producción
+- **Staging**: Recomendado para entornos de staging/pre-producción
+- **Desarrollo local**: Opcional, el sistema usa fallback a variables de entorno
+
+### Requisitos previos
+
+- Cuenta de Azure activa
+- Azure CLI instalado: [Instalar Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+- Permisos para crear recursos en Azure
+
+### Paso 1: Crear Azure Key Vault
+
+```bash
+# Iniciar sesión en Azure
+az login
+
+# Crear grupo de recursos (si no existe)
+az group create --name taller-rg --location eastus
+
+# Crear Key Vault
+az keyvault create \
+  --name taller-vault \
+  --resource-group taller-rg \
+  --location eastus
+```
+
+**Nota**: El nombre del Key Vault debe ser único globalmente en Azure.
+
+### Paso 2: Almacenar secretos en Key Vault
+
+```bash
+# Almacenar contraseña de administrador
+az keyvault secret set \
+  --vault-name taller-vault \
+  --name "admin-password" \
+  --value "TuContraseñaSegura123!"
+
+# Almacenar contraseña para PDFs
+az keyvault secret set \
+  --vault-name taller-vault \
+  --name "pdf-password" \
+  --value "PDFPassword123!"
+
+# Almacenar clave secreta JWT (generar una segura)
+az keyvault secret set \
+  --vault-name taller-vault \
+  --name "jwt-secret-key" \
+  --value "$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+
+# Almacenar contraseña de base de datos
+az keyvault secret set \
+  --vault-name taller-vault \
+  --name "database-password" \
+  --value "TuPasswordDB123!"
+```
+
+### Paso 3: Configurar permisos de acceso
+
+#### Opción A: Managed Identity (Recomendado para Azure App Service)
+
+```bash
+# Habilitar Managed Identity en tu App Service
+az webapp identity assign \
+  --name tu-app-service \
+  --resource-group taller-rg
+
+# Obtener el Object ID de la Managed Identity
+IDENTITY_ID=$(az webapp identity show \
+  --name tu-app-service \
+  --resource-group taller-rg \
+  --query principalId -o tsv)
+
+# Otorgar permisos de lectura de secretos
+az keyvault set-policy \
+  --name taller-vault \
+  --object-id $IDENTITY_ID \
+  --secret-permissions get list
+```
+
+#### Opción B: Service Principal (Para servidores externos)
+
+```bash
+# Crear Service Principal
+az ad sp create-for-rbac \
+  --name taller-api-sp \
+  --role reader \
+  --scopes /subscriptions/{subscription-id}/resourceGroups/taller-rg
+
+# Otorgar permisos al Service Principal
+az keyvault set-policy \
+  --name taller-vault \
+  --spn {app-id-del-service-principal} \
+  --secret-permissions get list
+```
+
+**Nota**: Guarda las credenciales del Service Principal (appId, password, tenant) de forma segura.
+
+### Paso 4: Configurar variables de entorno
+
+Edita tu archivo `.env` y agrega:
+
+```env
+# URL del Key Vault
+AZURE_KEY_VAULT_URL=https://taller-vault.vault.azure.net/
+
+# Solo si usas Service Principal (Opción B)
+AZURE_CLIENT_ID=<app-id-del-service-principal>
+AZURE_CLIENT_SECRET=<password-del-service-principal>
+AZURE_TENANT_ID=<tenant-id>
+```
+
+**Nota**: Si usas Managed Identity (Opción A), solo necesitas `AZURE_KEY_VAULT_URL`.
+
+### Paso 5: Verificar configuración
+
+Inicia la aplicación y verifica que los secretos se recuperan correctamente:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Revisa los logs de inicio. Deberías ver mensajes indicando que los secretos se recuperaron desde Azure Key Vault.
+
+### Mapeo de secretos
+
+El sistema mapea automáticamente los secretos de Key Vault a las variables de entorno:
+
+| Secreto en Key Vault | Variable de entorno (fallback) | Uso |
+|----------------------|--------------------------------|-----|
+| `admin-password` | `ADMIN_PASSWORD` | Operaciones del sistema (legacy) |
+| `pdf-password` | `PDF_PASSWORD` | Generación de PDFs protegidos |
+| `jwt-secret-key` | `JWT_SECRET_KEY` | Firma de tokens JWT |
+| `database-password` | `DATABASE_PASSWORD` | Conexión a PostgreSQL |
+
+### Modo de fallback (desarrollo local)
+
+Si `AZURE_KEY_VAULT_URL` no está configurado, el sistema automáticamente usa variables de entorno del archivo `.env`:
+
+```env
+# Desarrollo local sin Key Vault
+# AZURE_KEY_VAULT_URL=  # Comentado o vacío
+
+# El sistema usará estas variables como fallback
+ADMIN_PASSWORD=dev_password
+PDF_PASSWORD=dev_password
+JWT_SECRET_KEY=dev_secret_key_at_least_32_chars
+```
+
+### Mejores prácticas
+
+1. **Nunca commits secretos**: No incluyas valores reales en `.env.example`
+2. **Rotación de secretos**: Actualiza secretos periódicamente en Key Vault
+3. **Auditoría**: Habilita logging de acceso a Key Vault para auditoría
+4. **Principio de mínimo privilegio**: Otorga solo permisos `get` y `list`, no `set` o `delete`
+5. **Separación de entornos**: Usa Key Vaults separados para dev, staging y producción
+
+### Troubleshooting
+
+#### Error: "DefaultAzureCredential failed to retrieve a token"
+
+**Causa**: La aplicación no puede autenticarse con Azure.
+
+**Solución**:
+- Si usas Managed Identity, verifica que está habilitada en tu App Service
+- Si usas Service Principal, verifica que `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` y `AZURE_TENANT_ID` están configurados
+- Ejecuta `az login` si estás en desarrollo local
+
+#### Error: "Secret 'xxx' not found in Key Vault"
+
+**Causa**: El secreto no existe en Key Vault o el nombre no coincide.
+
+**Solución**:
+- Verifica que el secreto existe: `az keyvault secret list --vault-name taller-vault`
+- Verifica el nombre exacto (Key Vault usa guiones, no guiones bajos)
+- Crea el secreto faltante con `az keyvault secret set`
+
+#### Error: "Access denied to Key Vault"
+
+**Causa**: La identidad no tiene permisos para leer secretos.
+
+**Solución**:
+- Verifica los permisos: `az keyvault show --name taller-vault`
+- Otorga permisos con `az keyvault set-policy` (ver Paso 3)
 
 ## Variables de Entorno
 
@@ -186,6 +539,16 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `ADMIN_PASSWORD` | Contraseña para operaciones del sistema (legacy) | - | ❌ |
 | `PDF_PASSWORD` | Contraseña para generar PDFs | - | ❌ |
 
+### Azure Key Vault (Gestión de Secretos)
+
+| Variable | Descripción | Valor por Defecto | Requerida |
+|----------|-------------|-------------------|-----------|
+| `AZURE_KEY_VAULT_URL` | URL del Azure Key Vault para gestión segura de secretos | - | ❌ |
+
+**Formato**: `https://<vault-name>.vault.azure.net/`
+
+**Nota**: Si no se configura, el sistema usará variables de entorno como fallback. Ver sección "Configuración de Azure Key Vault" para detalles de setup.
+
 ### CORS
 
 | Variable | Descripción | Valor por Defecto | Requerida |
@@ -193,6 +556,270 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `ALLOWED_ORIGINS` | Orígenes permitidos para CORS (separados por comas) | `*` | ❌ |
 
 **Ejemplo**: `http://localhost:3000,http://localhost:5173,https://taller.com`
+
+## Migraciones de Base de Datos con Alembic
+
+El proyecto usa Alembic para gestionar cambios en el esquema de la base de datos de forma versionada y controlada.
+
+### ¿Qué es Alembic?
+
+Alembic es una herramienta de migraciones de base de datos para SQLAlchemy que permite:
+- Versionar cambios en el esquema de la base de datos
+- Aplicar y revertir cambios de forma controlada
+- Generar migraciones automáticamente desde los modelos
+- Mantener historial de cambios en el esquema
+
+### Comandos Básicos
+
+#### Ver estado actual de migraciones
+
+```bash
+# Ver historial de migraciones
+alembic history
+
+# Ver migración actual aplicada
+alembic current
+
+# Ver migraciones pendientes
+alembic history --verbose
+```
+
+#### Aplicar migraciones
+
+```bash
+# Aplicar todas las migraciones pendientes
+alembic upgrade head
+
+# Aplicar una migración específica
+alembic upgrade <revision_id>
+
+# Aplicar siguiente migración
+alembic upgrade +1
+```
+
+#### Revertir migraciones
+
+```bash
+# Revertir última migración
+alembic downgrade -1
+
+# Revertir a una migración específica
+alembic downgrade <revision_id>
+
+# Revertir todas las migraciones (¡cuidado!)
+alembic downgrade base
+```
+
+#### Crear nuevas migraciones
+
+```bash
+# Generar migración automáticamente desde cambios en modelos
+alembic revision --autogenerate -m "Descripción del cambio"
+
+# Crear migración vacía (para editar manualmente)
+alembic revision -m "Descripción del cambio"
+```
+
+### Workflow de Desarrollo
+
+#### 1. Modificar modelos
+
+Edita los archivos en `app/modelos/` para agregar, modificar o eliminar tablas/columnas:
+
+```python
+# app/modelos/ticket.py
+class Ticket(Base):
+    __tablename__ = "tickets"
+    
+    id = Column(Integer, primary_key=True)
+    placa = Column(String(10), nullable=False)
+    # Agregar nueva columna
+    prioridad = Column(String(20), default="NORMAL")  # Nueva columna
+```
+
+#### 2. Generar migración
+
+```bash
+alembic revision --autogenerate -m "Add priority column to tickets"
+```
+
+Esto genera un archivo en `migrations/versions/` con el código de migración.
+
+#### 3. Revisar migración generada
+
+Abre el archivo generado y verifica que los cambios son correctos:
+
+```python
+# migrations/versions/xxxx_add_priority_column_to_tickets.py
+def upgrade() -> None:
+    op.add_column('tickets', sa.Column('prioridad', sa.String(20), nullable=True))
+
+def downgrade() -> None:
+    op.drop_column('tickets', 'prioridad')
+```
+
+**Importante**: Alembic no detecta todos los cambios automáticamente. Revisa siempre la migración generada.
+
+#### 4. Aplicar migración
+
+```bash
+# En desarrollo
+alembic upgrade head
+
+# En producción (con Docker)
+docker-compose exec api alembic upgrade head
+```
+
+#### 5. Verificar cambios
+
+```bash
+# Verificar que la migración se aplicó
+alembic current
+
+# Verificar en la base de datos
+psql -U postgres -d taller_db -c "\d tickets"
+```
+
+### Workflow en Docker
+
+Cuando usas Docker, ejecuta los comandos de Alembic dentro del contenedor:
+
+```bash
+# Aplicar migraciones
+docker-compose exec api alembic upgrade head
+
+# Ver historial
+docker-compose exec api alembic history
+
+# Generar nueva migración
+docker-compose exec api alembic revision --autogenerate -m "Descripción"
+
+# Revertir migración
+docker-compose exec api alembic downgrade -1
+```
+
+### Mejores Prácticas
+
+1. **Siempre revisa las migraciones autogeneradas**: Alembic puede no detectar todos los cambios o generar código incorrecto.
+
+2. **Usa nombres descriptivos**: `alembic revision -m "Add email column to users"` es mejor que `alembic revision -m "Update users"`
+
+3. **Una migración por cambio lógico**: No mezcles cambios no relacionados en una sola migración.
+
+4. **Prueba las migraciones en desarrollo primero**: Aplica y revierte la migración varias veces para asegurar que funciona correctamente.
+
+5. **Backup antes de aplicar en producción**: Siempre haz backup de la base de datos antes de aplicar migraciones en producción.
+
+6. **No modifiques migraciones ya aplicadas**: Si una migración ya fue aplicada en producción, crea una nueva migración para corregir errores.
+
+7. **Documenta cambios complejos**: Agrega comentarios en las migraciones para explicar cambios complejos.
+
+### Cambios que Alembic NO detecta automáticamente
+
+Alembic puede no detectar:
+- Cambios en nombres de tablas (usa `op.rename_table()`)
+- Cambios en nombres de columnas (usa `op.alter_column()`)
+- Cambios en tipos de datos (puede requerir conversión manual)
+- Cambios en constraints complejos
+- Cambios en índices personalizados
+
+Para estos casos, edita manualmente la migración generada.
+
+### Ejemplo: Migración Manual
+
+```python
+def upgrade() -> None:
+    # Renombrar tabla
+    op.rename_table('old_table_name', 'new_table_name')
+    
+    # Renombrar columna
+    op.alter_column('tickets', 'old_column', new_column_name='new_column')
+    
+    # Cambiar tipo de dato con conversión
+    op.execute("ALTER TABLE tickets ALTER COLUMN precio TYPE DECIMAL(10,2) USING precio::DECIMAL")
+    
+    # Agregar índice
+    op.create_index('idx_tickets_placa', 'tickets', ['placa'])
+    
+    # Agregar constraint
+    op.create_check_constraint(
+        'check_precio_positivo',
+        'tickets',
+        'precio > 0'
+    )
+
+def downgrade() -> None:
+    op.drop_constraint('check_precio_positivo', 'tickets')
+    op.drop_index('idx_tickets_placa')
+    op.execute("ALTER TABLE tickets ALTER COLUMN precio TYPE INTEGER USING precio::INTEGER")
+    op.alter_column('tickets', 'new_column', new_column_name='old_column')
+    op.rename_table('new_table_name', 'old_table_name')
+```
+
+### Troubleshooting
+
+#### Error: "Can't locate revision identified by 'xxxx'"
+
+**Causa**: La base de datos no tiene la tabla `alembic_version` o está desincronizada.
+
+**Solución**:
+```bash
+# Marcar la base de datos en una revisión específica (sin aplicar cambios)
+alembic stamp head
+
+# O marcar en una revisión específica
+alembic stamp <revision_id>
+```
+
+#### Error: "Target database is not up to date"
+
+**Causa**: Hay migraciones pendientes.
+
+**Solución**:
+```bash
+alembic upgrade head
+```
+
+#### Error: "Multiple head revisions are present"
+
+**Causa**: Hay múltiples ramas de migraciones.
+
+**Solución**:
+```bash
+# Ver las ramas
+alembic branches
+
+# Fusionar ramas
+alembic merge -m "Merge branches" <rev1> <rev2>
+```
+
+#### Revertir migración que falló
+
+Si una migración falla a mitad de aplicación:
+
+```bash
+# Marcar la base de datos en la revisión anterior
+alembic stamp <revision_anterior>
+
+# Corregir la migración
+# Editar el archivo de migración
+
+# Aplicar nuevamente
+alembic upgrade head
+```
+
+### Migración Inicial
+
+El proyecto incluye una migración inicial baseline (`7643f7cc1e15_initial_schema.py`) que representa el esquema creado por `db/migracion_jwt_auth_2026_03_28.sql`.
+
+Para bases de datos existentes:
+
+```bash
+# Marcar la base de datos como si tuviera la migración inicial aplicada
+alembic stamp head
+```
+
+Esto permite que Alembic gestione cambios futuros sin intentar recrear el esquema existente.
 
 ## Proceso de Deployment
 
@@ -202,6 +829,9 @@ Antes de hacer deployment a producción, verifica:
 
 - [ ] Todas las variables de entorno están configuradas en `.env`
 - [ ] `JWT_SECRET_KEY` es una clave segura de al menos 32 caracteres
+- [ ] Azure Key Vault está configurado y los secretos están almacenados (recomendado para producción)
+- [ ] `AZURE_KEY_VAULT_URL` está configurado en `.env` (si usas Key Vault)
+- [ ] Permisos de acceso a Key Vault están configurados correctamente
 - [ ] `ENVIRONMENT=production` está configurado
 - [ ] `BCRYPT_COST_FACTOR=12` para seguridad óptima
 - [ ] Base de datos PostgreSQL está configurada y accesible
@@ -536,6 +1166,91 @@ Estos tests validan propiedades como:
 - Rate limiting se aplica correctamente
 - Audit logs son inmutables
 - Y 52 propiedades más...
+
+## Code Quality
+
+### Linting y Formateo con Ruff
+
+El proyecto usa [Ruff](https://docs.astral.sh/ruff/) como linter y formateador de código Python. Ruff es extremadamente rápido y combina las funcionalidades de múltiples herramientas (flake8, isort, pyupgrade, etc.).
+
+#### Ejecutar Linter
+
+```bash
+# Verificar código sin hacer cambios
+ruff check app/
+
+# Auto-corregir problemas detectados
+ruff check app/ --fix
+```
+
+#### Formatear Código
+
+```bash
+# Formatear todos los archivos Python
+ruff format app/
+
+# Verificar formato sin hacer cambios
+ruff format app/ --check
+```
+
+#### Verificación Completa
+
+```bash
+# Ejecutar linter y formateador juntos
+ruff check app/ --fix && ruff format app/
+```
+
+### Type Checking con mypy
+
+El proyecto incluye type hints completos y usa mypy para verificación estática de tipos:
+
+```bash
+# Verificar tipos en todo el proyecto
+mypy app/
+
+# Verificar módulo específico
+mypy app/servicios/
+
+# Generar reporte HTML
+mypy app/ --html-report mypy-report/
+```
+
+### Pre-commit Hooks
+
+El proyecto está configurado con pre-commit hooks que ejecutan automáticamente Ruff y mypy antes de cada commit:
+
+```bash
+# Instalar hooks (solo una vez)
+pre-commit install
+
+# Ejecutar manualmente en todos los archivos
+pre-commit run --all-files
+
+# Los hooks se ejecutan automáticamente en cada commit
+git commit -m "mensaje"
+```
+
+Los hooks verifican:
+- ✅ Formato de código con Ruff
+- ✅ Calidad de código con Ruff linter
+- ✅ Errores de tipo con mypy (opcional)
+
+### Configuración
+
+La configuración de Ruff y mypy está en `pyproject.toml`:
+
+```toml
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+```
 
 ## Seguridad
 

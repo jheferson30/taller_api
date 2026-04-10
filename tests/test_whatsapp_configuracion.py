@@ -6,7 +6,7 @@ Cubre validación de mensajes manuales y envío exitoso.
 Task 26 del spec whatsapp-business-integration.
 """
 
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -14,30 +14,30 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.modelos.cita  # noqa: F401
+import app.modelos.configuracion_seguridad  # noqa: F401
+import app.modelos.configuracion_taller  # noqa: F401
+import app.modelos.log_notificacion  # noqa: F401
+import app.modelos.movimiento_caja  # noqa: F401
+import app.modelos.ticket  # noqa: F401
+import app.modelos.ticket_cobro  # noqa: F401
+import app.modelos.ticket_compra  # noqa: F401
+import app.modelos.ticket_foto  # noqa: F401
+import app.modelos.ticket_proceso  # noqa: F401
+import app.modelos.ticket_repuesto  # noqa: F401
+import app.modelos.vehiculo  # noqa: F401
+
 # Importar TODOS los modelos antes de create_all para que SQLAlchemy resuelva FKs
 from app.configuracion.base_datos import Base, obtener_db
-import app.modelos.vehiculo          # noqa: F401
-import app.modelos.ticket            # noqa: F401
-import app.modelos.ticket_cobro      # noqa: F401
-import app.modelos.ticket_proceso    # noqa: F401
-import app.modelos.ticket_repuesto   # noqa: F401
-import app.modelos.ticket_foto       # noqa: F401
-import app.modelos.ticket_compra     # noqa: F401
-import app.modelos.movimiento_caja   # noqa: F401
-import app.modelos.cita              # noqa: F401
-import app.modelos.configuracion_seguridad  # noqa: F401
-import app.modelos.configuracion_taller     # noqa: F401
-import app.modelos.log_notificacion         # noqa: F401
-
-from app.modelos.vehiculo import Vehiculo
-from app.modelos.ticket import Ticket
 from app.modelos.configuracion_taller import ConfiguracionTaller
+from app.modelos.ticket import Ticket
+from app.modelos.vehiculo import Vehiculo
 from app.rutas.whatsapp_ruta import router
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_test_app():
     """Crea una app FastAPI con SQLite en memoria y el router de WhatsApp."""
@@ -109,6 +109,7 @@ def _seed_configuracion(TestSession):
 # Task 26.1 — mensaje vacío retorna HTTP 422 (req 5.2, 6.3)
 # ---------------------------------------------------------------------------
 
+
 def test_envio_manual_mensaje_vacio_retorna_422_mobile():
     """
     POST /api/mobile/tickets/{id}/whatsapp con mensaje vacío debe retornar 422.
@@ -144,6 +145,7 @@ def test_envio_manual_mensaje_vacio_retorna_422_web():
 # ---------------------------------------------------------------------------
 # Task 26.2 — mensaje >1024 chars retorna HTTP 422 (req 5.2, 6.3)
 # ---------------------------------------------------------------------------
+
 
 def test_envio_manual_mensaje_largo_retorna_422_mobile():
     """
@@ -184,6 +186,7 @@ def test_envio_manual_mensaje_largo_retorna_422_web():
 # ---------------------------------------------------------------------------
 # Task 26.3 — envío exitoso retorna message_id (req 5.3, 6.4)
 # ---------------------------------------------------------------------------
+
 
 def test_envio_manual_exitoso_retorna_message_id_mobile():
     """

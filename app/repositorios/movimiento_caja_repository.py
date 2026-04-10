@@ -2,17 +2,18 @@
 Repositorio para operaciones de acceso a datos de Movimientos de Caja.
 Requirements: 9.1, 9.2, 9.3, 12.3
 """
-from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
 
-from sqlalchemy.orm import Session
+from datetime import date
+from typing import Any
+
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.modelos.movimiento_caja import (
+    CategoriaEgreso,
+    EstadoTicket,
     MovimientoCaja,
     TipoMovimiento,
-    EstadoTicket,
-    CategoriaEgreso,
 )
 
 
@@ -22,23 +23,21 @@ class MovimientoCajaRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, movimiento_id: int) -> Optional[MovimientoCaja]:
+    def get_by_id(self, movimiento_id: int) -> MovimientoCaja | None:
         """Obtiene un movimiento por ID."""
-        return self.db.query(MovimientoCaja).filter(
-            MovimientoCaja.id == movimiento_id
-        ).first()
+        return self.db.query(MovimientoCaja).filter(MovimientoCaja.id == movimiento_id).first()
 
     def get_all(
         self,
-        tipo: Optional[TipoMovimiento] = None,
-        estado_ticket: Optional[EstadoTicket] = None,
-        categoria_egreso: Optional[CategoriaEgreso] = None,
-        placa: Optional[str] = None,
-        fecha_desde: Optional[date] = None,
-        fecha_hasta: Optional[date] = None,
+        tipo: TipoMovimiento | None = None,
+        estado_ticket: EstadoTicket | None = None,
+        categoria_egreso: CategoriaEgreso | None = None,
+        placa: str | None = None,
+        fecha_desde: date | None = None,
+        fecha_hasta: date | None = None,
         skip: int = 0,
         limit: int = 50,
-    ) -> List[MovimientoCaja]:
+    ) -> list[MovimientoCaja]:
         """
         Lista movimientos con paginación y filtros.
         Requirements: 9.3
@@ -58,21 +57,16 @@ class MovimientoCajaRepository:
         if fecha_hasta is not None:
             query = query.filter(func.date(MovimientoCaja.fecha_creacion) <= fecha_hasta)
 
-        return (
-            query.order_by(MovimientoCaja.fecha_creacion.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        return query.order_by(MovimientoCaja.fecha_creacion.desc()).offset(skip).limit(limit).all()
 
     def get_cobros_rapidos(
         self,
-        placa: Optional[str] = None,
-        fecha_desde: Optional[date] = None,
-        fecha_hasta: Optional[date] = None,
+        placa: str | None = None,
+        fecha_desde: date | None = None,
+        fecha_hasta: date | None = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[MovimientoCaja]:
+    ) -> list[MovimientoCaja]:
         """Lista cobros rápidos con filtros."""
         query = self.db.query(MovimientoCaja).filter(
             MovimientoCaja.tipo == TipoMovimiento.INGRESO_RAPIDO
@@ -85,18 +79,13 @@ class MovimientoCajaRepository:
         if fecha_hasta:
             query = query.filter(func.date(MovimientoCaja.fecha_creacion) <= fecha_hasta)
 
-        return (
-            query.order_by(MovimientoCaja.fecha_creacion.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        return query.order_by(MovimientoCaja.fecha_creacion.desc()).offset(skip).limit(limit).all()
 
     def get_historico_economico(
         self,
         fecha_desde: date,
         fecha_hasta: date,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Obtiene histórico económico agrupado por fecha usando GROUP BY.
         Optimizado para reemplazar loop while en endpoint.
@@ -109,11 +98,13 @@ class MovimientoCajaRepository:
                 func.sum(
                     func.case(
                         (
-                            MovimientoCaja.tipo.in_([
-                                TipoMovimiento.INGRESO_ANTICIPO,
-                                TipoMovimiento.INGRESO_FINAL,
-                                TipoMovimiento.INGRESO_RAPIDO,
-                            ]),
+                            MovimientoCaja.tipo.in_(
+                                [
+                                    TipoMovimiento.INGRESO_ANTICIPO,
+                                    TipoMovimiento.INGRESO_FINAL,
+                                    TipoMovimiento.INGRESO_RAPIDO,
+                                ]
+                            ),
                             MovimientoCaja.valor,
                         ),
                         else_=0,

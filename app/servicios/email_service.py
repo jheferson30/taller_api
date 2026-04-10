@@ -8,8 +8,8 @@ fallback del .env.
 
 import os
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 
 def _get_smtp_config():
@@ -17,6 +17,7 @@ def _get_smtp_config():
     try:
         from app.configuracion.base_datos import SessionLocal
         from app.modelos.configuracion_taller import ConfiguracionTaller
+
         db = SessionLocal()
         cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
         db.close()

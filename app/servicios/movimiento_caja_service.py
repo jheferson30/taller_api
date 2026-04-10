@@ -2,6 +2,7 @@
 Servicio de lógica de negocio para Movimientos de Caja.
 Requirements: 8.1, 8.3, 8.4
 """
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -25,30 +26,21 @@ class MovimientoCajaService:
         if movimiento.tipo in (TipoMovimiento.INGRESO_ANTICIPO, TipoMovimiento.INGRESO_FINAL):
             if not movimiento.ticket_codigo:
                 raise HTTPException(
-                    status_code=400,
-                    detail="ticket_codigo es obligatorio para ingresos"
+                    status_code=400, detail="ticket_codigo es obligatorio para ingresos"
                 )
             if not movimiento.placa:
-                raise HTTPException(
-                    status_code=400,
-                    detail="placa es obligatoria para ingresos"
-                )
+                raise HTTPException(status_code=400, detail="placa es obligatoria para ingresos")
             if not movimiento.estado_ticket:
                 raise HTTPException(
-                    status_code=400,
-                    detail="estado_ticket es obligatorio para ingresos"
+                    status_code=400, detail="estado_ticket es obligatorio para ingresos"
                 )
 
         if movimiento.tipo == TipoMovimiento.EGRESO:
             if not movimiento.concepto:
-                raise HTTPException(
-                    status_code=400,
-                    detail="concepto es obligatorio para egresos"
-                )
+                raise HTTPException(status_code=400, detail="concepto es obligatorio para egresos")
             if not movimiento.categoria_egreso:
                 raise HTTPException(
-                    status_code=400,
-                    detail="categoria_egreso es obligatoria para egresos"
+                    status_code=400, detail="categoria_egreso es obligatoria para egresos"
                 )
 
     def crear_cobro_rapido(
@@ -63,10 +55,7 @@ class MovimientoCajaService:
         Requirements: 8.1, 8.4
         """
         if valor <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="El valor debe ser mayor a 0"
-            )
+            raise HTTPException(status_code=400, detail="El valor debe ser mayor a 0")
 
         movimiento = MovimientoCaja(
             tipo=TipoMovimiento.INGRESO_RAPIDO,

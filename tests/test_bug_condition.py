@@ -19,12 +19,11 @@ Caso B — PDF con propietario (Requirement: 2.7):
 
 import importlib
 import sys
-import pytest
-
 
 # ===========================================================================
 # CASO A — Lógica de finalización compartida
 # ===========================================================================
+
 
 class TestCasoA_LogicaDuplicada:
     """
@@ -54,12 +53,14 @@ class TestCasoA_LogicaDuplicada:
         sys.modules.pop("app.servicios.ticket_service", None)
 
         from app.servicios.ticket_service import finalizar_ticket  # noqa: F401
+
         assert callable(finalizar_ticket)
 
 
 # ===========================================================================
 # CASO B — PDF con propietario
 # ===========================================================================
+
 
 class TestCasoB_PDFSinPropietario:
     """

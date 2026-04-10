@@ -2,7 +2,7 @@
 Preservation Property Tests
 ============================
 Estos tests DEBEN PASAR en el código sin corregir.
-Documentan el 
+Documentan el
 
 Propiedades verificadas:
   - Para todo ticket con total_servicio > 0, después de finalizar:
@@ -17,37 +17,38 @@ Propiedades verificadas:
 """
 
 import os
+
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Importar TODOS los modelos antes de create_all para que SQLAlchemy resuelva FKs
-from app.configuracion.base_datos import Base
-import app.modelos.vehiculo  # noqa: F401
-import app.modelos.ticket  # noqa: F401
-import app.modelos.ticket_cobro  # noqa: F401
-import app.modelos.ticket_proceso  # noqa: F401
-import app.modelos.ticket_repuesto  # noqa: F401
-import app.modelos.ticket_foto  # noqa: F401
-import app.modelos.ticket_compra  # noqa: F401
-import app.modelos.movimiento_caja  # noqa: F401
 import app.modelos.cita  # noqa: F401
 import app.modelos.configuracion_seguridad  # noqa: F401
+import app.modelos.movimiento_caja  # noqa: F401
+import app.modelos.ticket  # noqa: F401
+import app.modelos.ticket_cobro  # noqa: F401
+import app.modelos.ticket_compra  # noqa: F401
+import app.modelos.ticket_foto  # noqa: F401
+import app.modelos.ticket_proceso  # noqa: F401
+import app.modelos.ticket_repuesto  # noqa: F401
+import app.modelos.vehiculo  # noqa: F401
 
-from app.modelos.ticket import Ticket
-from app.modelos.vehiculo import Vehiculo
-from app.modelos.ticket_cobro import TicketCobro
+# Importar TODOS los modelos antes de create_all para que SQLAlchemy resuelva FKs
+from app.configuracion.base_datos import Base
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
-
+from app.modelos.ticket import Ticket
+from app.modelos.ticket_cobro import TicketCobro
+from app.modelos.vehiculo import Vehiculo
 
 # ---------------------------------------------------------------------------
 # Helpers — SQLite en memoria
 # ---------------------------------------------------------------------------
+
 
 def _make_session():
     engine = create_engine(
@@ -90,6 +91,7 @@ def _ticket_base(db, total_servicio=None, anticipo=0):
 # ---------------------------------------------------------------------------
 # Property 3.1 — saldo_pendiente = max(0, total - anticipo - cobros)
 # ---------------------------------------------------------------------------
+
 
 class TestPreservacion31_SaldoPendiente:
     """
@@ -186,6 +188,7 @@ class TestPreservacion31_SaldoPendiente:
 # Property 3.2 — MovimientoCaja INGRESO_FINAL con valor = total - anticipo
 # ---------------------------------------------------------------------------
 
+
 class TestPreservacion32_MovimientoCaja:
     """
     Validates: Requirements 3.2
@@ -234,9 +237,9 @@ class TestPreservacion32_MovimientoCaja:
 
             valor_esperado = total - anticipo
             if valor_esperado > 0:
-                assert len(movimientos) == 1, (
-                    f"Se esperaba 1 MovimientoCaja INGRESO_FINAL, se encontraron {len(movimientos)}"
-                )
+                assert (
+                    len(movimientos) == 1
+                ), f"Se esperaba 1 MovimientoCaja INGRESO_FINAL, se encontraron {len(movimientos)}"
                 assert movimientos[0].valor == valor_esperado, (
                     f"valor={movimientos[0].valor} != esperado={valor_esperado} "
                     f"(total={total}, anticipo={anticipo})"
@@ -278,6 +281,7 @@ class TestPreservacion32_MovimientoCaja:
 # ---------------------------------------------------------------------------
 # Property 3.3 — Sin total_servicio → 400 Bad Request
 # ---------------------------------------------------------------------------
+
 
 class TestPreservacion33_SinTotalServicio:
     """
@@ -350,9 +354,11 @@ class TestPreservacion33_SinTotalServicio:
 # Shared test app fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_test_engine():
     """Crea un engine SQLite en memoria con todas las tablas creadas."""
     from sqlalchemy.pool import StaticPool
+
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -370,6 +376,7 @@ def _make_test_client_with_routers(*router_modules):
     Retorna (client, session_factory).
     """
     from fastapi import FastAPI
+
     from app.configuracion.base_datos import obtener_db
 
     engine = _make_test_engine()
@@ -395,6 +402,7 @@ def _make_test_client_with_routers(*router_modules):
 # Property 3.5 — Clientes autenticados correctamente siguen siendo procesados
 # ---------------------------------------------------------------------------
 
+
 class TestPreservacion35_AutenticacionNormal:
     """
     Validates: Requirements 3.5
@@ -412,6 +420,7 @@ class TestPreservacion35_AutenticacionNormal:
         GET /tickets/abiertos responde 200 con autenticación correcta.
         """
         from app.rutas import ticket_ruta, vehiculo_ruta
+
         password = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD", "")
         client, _ = _make_test_client_with_routers(ticket_ruta, vehiculo_ruta)
         response = client.get("/tickets/abiertos", headers={"X-Admin-Password": password})
@@ -422,6 +431,7 @@ class TestPreservacion35_AutenticacionNormal:
         GET /tickets/buscar responde 200 con autenticación correcta.
         """
         from app.rutas import ticket_ruta, vehiculo_ruta
+
         password = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD", "")
         client, _ = _make_test_client_with_routers(ticket_ruta, vehiculo_ruta)
         response = client.get("/tickets/buscar", headers={"X-Admin-Password": password})
@@ -435,6 +445,7 @@ class TestPreservacion35_AutenticacionNormal:
         Caso concreto del spec: total=100000, anticipo=20000 → saldo=80000.
         """
         from app.rutas import ticket_ruta, vehiculo_ruta
+
         client, TestSession = _make_test_client_with_routers(ticket_ruta, vehiculo_ruta)
 
         db = TestSession()
@@ -466,7 +477,9 @@ class TestPreservacion35_AutenticacionNormal:
             db.close()
 
         password = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD", "")
-        response = client.post(f"/tickets/{ticket_id}/finalizar", headers={"X-Admin-Password": password})
+        response = client.post(
+            f"/tickets/{ticket_id}/finalizar", headers={"X-Admin-Password": password}
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["estado"] == "FINALIZADO"
@@ -476,6 +489,7 @@ class TestPreservacion35_AutenticacionNormal:
 # ---------------------------------------------------------------------------
 # Property 3.6 — Otros routers no se ven afectados
 # ---------------------------------------------------------------------------
+
 
 class TestPreservacion36_OtrosRouters:
     """
@@ -491,6 +505,7 @@ class TestPreservacion36_OtrosRouters:
         GET /economia-dia responde 200 (sin autenticación requerida para resumen).
         """
         from app.rutas import economia_ruta
+
         client, _ = _make_test_client_with_routers(economia_ruta)
         response = client.get("/economia-dia")
         assert response.status_code == 200
@@ -500,6 +515,7 @@ class TestPreservacion36_OtrosRouters:
         GET /vehiculos/ responde 200.
         """
         from app.rutas import vehiculo_ruta
+
         client, _ = _make_test_client_with_routers(vehiculo_ruta)
         response = client.get("/vehiculos/")
         assert response.status_code == 200
@@ -509,6 +525,7 @@ class TestPreservacion36_OtrosRouters:
         GET /citas responde 200.
         """
         from app.rutas import citas_ruta
+
         client, _ = _make_test_client_with_routers(citas_ruta)
         response = client.get("/citas")
         assert response.status_code == 200
@@ -518,6 +535,7 @@ class TestPreservacion36_OtrosRouters:
         GET /seguridad/economia/tiene-password responde 200.
         """
         from app.rutas import seguridad_ruta
+
         client, _ = _make_test_client_with_routers(seguridad_ruta)
         response = client.get("/seguridad/economia/tiene-password")
         assert response.status_code == 200
@@ -527,6 +545,7 @@ class TestPreservacion36_OtrosRouters:
         GET /vehiculos/buscar?placa=XYZ999 responde 200 con existe=False.
         """
         from app.rutas import vehiculo_ruta
+
         client, _ = _make_test_client_with_routers(vehiculo_ruta)
         response = client.get("/vehiculos/buscar?placa=XYZ999")
         assert response.status_code == 200
@@ -537,6 +556,7 @@ class TestPreservacion36_OtrosRouters:
         GET /citas/proximas responde 200.
         """
         from app.rutas import citas_ruta
+
         client, _ = _make_test_client_with_routers(citas_ruta)
         response = client.get("/citas/proximas")
         assert response.status_code == 200

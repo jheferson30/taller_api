@@ -1,10 +1,8 @@
 import os
-from typing import List, Optional
 
-from fastapi import APIRouter, Query, HTTPException, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
-from fastapi_csrf_protect import CsrfProtect
 
 from app.configuracion.base_datos import obtener_db
 from app.esquemas.whatsapp_schema import LogNotificacionResponse, MensajeManualRequest
@@ -66,9 +64,7 @@ async def enviar_whatsapp_mobile(
     ticket_id: int,
     body: MensajeManualRequest,
     db: Session = Depends(obtener_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         return {"ok": False, "error": "ticket_no_encontrado"}
@@ -95,13 +91,15 @@ async def enviar_whatsapp_web(
         raise HTTPException(status_code=422, detail="El vehículo no tiene teléfono registrado")
     resultado = await whatsapp_service.enviar_mensaje_manual(ticket_id, telefono, body.mensaje, db)
     if not resultado.get("ok"):
-        raise HTTPException(status_code=500, detail=resultado.get("error", "Error al enviar mensaje"))
+        raise HTTPException(
+            status_code=500, detail=resultado.get("error", "Error al enviar mensaje")
+        )
     return resultado
 
 
-@router.get("/api/mobile/whatsapp/logs", response_model=List[LogNotificacionResponse])
+@router.get("/api/mobile/whatsapp/logs", response_model=list[LogNotificacionResponse])
 async def obtener_logs(
-    ticket_id: Optional[int] = None,
+    ticket_id: int | None = None,
     db: Session = Depends(obtener_db),
 ):
     query = db.query(LogNotificacion)
