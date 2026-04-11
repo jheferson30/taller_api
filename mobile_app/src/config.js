@@ -1,6 +1,6 @@
 ﻿import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_PASSWORD = 'la_pulga_fi';
+const DEFAULT_PASSWORD = 'mecaapp123';
 
 const KEY_IPS = '@taller_server_ips';
 const KEY_IP_ACTIVA = '@taller_server_ip';

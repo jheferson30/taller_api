@@ -28,7 +28,14 @@ class AuthService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || `Error ${response.status}`);
+      if (response.status === 429) {
+        const retryAfter = error.retry_after || 60;
+        const err = new Error(error.message || 'Demasiados intentos de inicio de sesión');
+        err.status = 429;
+        err.retryAfter = retryAfter;
+        throw err;
+      }
+      throw new Error(error.detail || error.message || `Error ${response.status}`);
     }
 
     const data = await response.json();

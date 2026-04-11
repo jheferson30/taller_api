@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "PULGA_FI",
+    "name": "MecaApp",
     "slug": "mobile_app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,7 +15,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.tallerpulga.app",
+      "package": "com.mecaapp.taller",
       "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",

@@ -8,7 +8,7 @@ import warnings
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -611,6 +611,7 @@ app.add_middleware(
 
 # ── Auth Middleware ───────────────────────────────────────────────────────────
 from app.seguridad.auth_middleware import AuthMiddleware
+from app.seguridad.dependencias import require_jwt_auth
 
 app.add_middleware(AuthMiddleware)
 
@@ -675,11 +676,11 @@ def _anunciar_mdns():
             ip_local = "127.0.0.1"
         info = ServiceInfo(
             "_http._tcp.local.",
-            "taller-pulga._http._tcp.local.",
+            "taller-mecaapp._http._tcp.local.",
             addresses=[_socket.inet_aton(ip_local)],
             port=8000,
             properties={"path": "/api/mobile"},
-            server="taller-pulga.local.",
+            server="taller-mecaapp.local.",
         )
         zc.register_service(info)
     except Exception as e:
@@ -702,15 +703,37 @@ def _get_ip_local() -> str:
 def info_sistema():
     ip_local = _get_ip_local()
     return {
-        "sistema": "Taller Manager",
+        "sistema": "MecaApp",
         "version": "1.1.0",
         "ip_servidor": ip_local,
         "puerto": 8000,
         "url_app_movil": f"http://{ip_local}:8000",
+    }
+
+
+@app.get(
+    "/admin/sistema-info",
+    dependencies=[Depends(require_jwt_auth)],
+    summary="Información del sistema (solo ADMIN)",
+)
+def admin_info_sistema(request: Request):
+    """Endpoint protegido con información del desarrollador para soporte técnico."""
+    user = request.state.user
+    roles = [r.get("nombre") if isinstance(r, dict) else str(r) for r in (user.get("roles") or [])]
+    if "ADMIN" not in roles:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden ver esta información"
+        )
+    ip_local = _get_ip_local()
+    return {
+        "sistema": "MecaApp",
+        "version": "1.1.0",
+        "ip_servidor": ip_local,
+        "puerto": 8000,
         "desarrollador": {
-            "nombre": "Jheferson Esney Cely Arango",
-            "whatsapp": "3145719752",
-            "telefono": "3145719752",
+            "empresa": "J&J Soluciones de Software",
             "correo": "jefersoncely0@gmail.com",
         },
     }

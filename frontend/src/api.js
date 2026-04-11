@@ -84,14 +84,28 @@ export const api = {
   subirFoto: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await axios.post("/upload/foto", formData);
-    return response.data;
+    try {
+      const response = await axios.post("/upload/foto", formData);
+      return response.data;
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 413) throw new Error('El archivo es demasiado grande. Máximo permitido: 10 MB.');
+      if (status === 415) throw new Error('Tipo de archivo no permitido. Usa JPG, PNG o PDF.');
+      throw new Error(error.response?.data?.detail || 'Error al subir la foto. Intenta de nuevo.');
+    }
   },
   subirSoporteCompra: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await axios.post("/upload/compra", formData);
-    return response.data;
+    try {
+      const response = await axios.post("/upload/compra", formData);
+      return response.data;
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 413) throw new Error('El archivo es demasiado grande. Máximo permitido: 10 MB.');
+      if (status === 415) throw new Error('Tipo de archivo no permitido. Usa JPG, PNG o PDF.');
+      throw new Error(error.response?.data?.detail || 'Error al subir el soporte. Intenta de nuevo.');
+    }
   },
   agregarCompra: (ticketId, body) =>
     request(`/tickets/${ticketId}/compras`, {

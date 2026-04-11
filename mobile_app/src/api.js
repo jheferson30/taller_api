@@ -2,6 +2,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl, getPdfBaseUrl, getAdminPassword } from './config';
 import authService from './services/authService';
 
+// Mensajes amigables por código de error HTTP
+function mensajeError(status, detalle = null) {
+  if (detalle && typeof detalle === 'string') return detalle;
+  switch (status) {
+    case 400: return 'Los datos enviados no son válidos. Revisa la información.';
+    case 401: return 'Sesión expirada. Por favor inicia sesión nuevamente.';
+    case 403: return 'No tienes permisos para realizar esta acción.';
+    case 404: return 'El recurso solicitado no fue encontrado.';
+    case 409: return 'Ya existe un registro con esos datos.';
+    case 413: return 'El archivo es demasiado grande. Máximo permitido: 10 MB.';
+    case 415: return 'Tipo de archivo no permitido. Usa JPG, PNG o PDF.';
+    case 422: return 'Los datos enviados tienen errores de validación.';
+    case 429: return 'Demasiadas solicitudes. Espera un momento e intenta de nuevo.';
+    case 500: return 'Error interno del servidor. Intenta más tarde.';
+    case 502: return 'El servidor no está disponible. Intenta más tarde.';
+    case 503: return 'Servicio temporalmente no disponible. Intenta más tarde.';
+    default:  return 'Ocurrió un error inesperado. Intenta de nuevo.';
+  }
+}
+
 async function request(path, options = {}) {
   try {
     const baseUrl = await getApiBaseUrl();
@@ -20,9 +40,7 @@ async function request(path, options = {}) {
       const detail = err.detail;
       const msg = Array.isArray(detail)
         ? detail.map(d => d.msg || JSON.stringify(d)).join(', ')
-        : typeof detail === 'string'
-          ? detail
-          : `Error ${response.status}`;
+        : mensajeError(response.status, typeof detail === 'string' ? detail : null);
       throw new Error(msg);
     }
     return await response.json();
@@ -74,7 +92,7 @@ export const api = {
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Error ${response.status}`);
+      throw new Error(err.detail || mensajeError(response.status));
     }
     return await response.json();
   },
@@ -102,7 +120,7 @@ export const api = {
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Error ${response.status}`);
+      throw new Error(err.detail || mensajeError(response.status));
     }
     return await response.json();
   },
@@ -124,7 +142,7 @@ export const api = {
       `${baseUrl}/tickets/${ticketId}/compras/${compraId}`,
       { method: 'DELETE' }
     );
-    if (!response.ok) throw new Error(`Error ${response.status}`);
+    if (!response.ok) throw new Error(mensajeError(response.status));
     return response.json();
   },
 
@@ -159,7 +177,7 @@ export const api = {
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Error ${response.status}`);
+      throw new Error(err.detail || mensajeError(response.status));
     }
     return response;
   },
@@ -183,7 +201,7 @@ export const api = {
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       const detail = err.detail;
-      const msg = Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join(', ') : typeof detail === 'string' ? detail : `Error ${response.status}`;
+      const msg = Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join(', ') : typeof detail === 'string' ? detail : mensajeError(response.status);
       throw new Error(msg);
     }
     return response.json();
@@ -195,7 +213,7 @@ export const api = {
       `${baseUrl}/tickets/${ticketId}/procesos/${procesoId}`,
       { method: 'DELETE' }
     );
-    if (!response.ok) throw new Error(`Error ${response.status}`);
+    if (!response.ok) throw new Error(mensajeError(response.status));
     return response.json();
   },
 
@@ -205,7 +223,7 @@ export const api = {
       `${baseUrl}/tickets/${ticketId}/repuestos/${repuestoId}`,
       { method: 'DELETE' }
     );
-    if (!response.ok) throw new Error(`Error ${response.status}`);
+    if (!response.ok) throw new Error(mensajeError(response.status));
     return response.json();
   },
 
@@ -226,7 +244,7 @@ export const api = {
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Error ${response.status} al subir foto`);
+      throw new Error(err.detail || mensajeError(response.status, 'Error al subir foto'));
     }
     return response.json();
   },
@@ -246,7 +264,7 @@ export const api = {
       const detail = err.detail;
       const msg = Array.isArray(detail)
         ? detail.map(d => d.msg || JSON.stringify(d)).join(', ')
-        : typeof detail === 'string' ? detail : `Error ${response.status}`;
+        : typeof detail === 'string' ? detail : mensajeError(response.status);
       throw new Error(msg);
     }
     return response.json();
@@ -274,7 +292,7 @@ export const api = {
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Error ${response.status}`);
+      throw new Error(err.detail || mensajeError(response.status));
     }
     return await response.json();
   },

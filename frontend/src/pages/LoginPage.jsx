@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiLock, FiClock } from 'react-icons/fi';
 import authService from '../services/authService';
 
 export default function LoginPage() {
@@ -9,6 +9,27 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [bloqueado, setBloqueado] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const countdownRef = useRef(null);
+
+  useEffect(() => {
+    if (countdown > 0) {
+      setBloqueado(true);
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownRef.current);
+            setBloqueado(false);
+            setError('');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(countdownRef.current);
+  }, [countdown]);
 
   // ── Recuperar contraseña ──
   const [mostrarRecuperar, setMostrarRecuperar] = useState(false);
@@ -25,7 +46,12 @@ export default function LoginPage() {
       await authService.login(username, password);
       navigate('/');
     } catch (err) {
-      setError(err.message);
+      if (err.retryAfter !== undefined) {
+        setCountdown(err.retryAfter || 60);
+        setError('');
+      } else {
+        setError(err.message || 'Error al iniciar sesión');
+      }
     } finally {
       setLoading(false);
     }
@@ -54,7 +80,7 @@ export default function LoginPage() {
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#0A1017' }}>
       <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <img src="/assets/logo.png" alt="PULGA Mecánica Fi" style={{ height: '120px', marginBottom: '1.5rem', filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15))' }} />
+          <img src="/assets/logo.png" alt="MecaApp" style={{ height: '120px', marginBottom: '1.5rem', filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15))' }} />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333' }}>Iniciar Sesión</h1>
         </div>
 
@@ -81,6 +107,19 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {bloqueado && (
+              <div style={{ padding: '0.75rem', marginBottom: '1rem', background: '#450a0a', border: '1px solid #991b1b', borderRadius: '6px', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                <FiLock size={18} color="#fca5a5" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                  <p style={{ color: '#fca5a5', fontWeight: '700', fontSize: '0.875rem', margin: 0 }}>Acceso bloqueado temporalmente</p>
+                  <p style={{ color: '#fecaca', fontSize: '0.8rem', margin: '4px 0 0 0' }}>
+                    Demasiados intentos fallidos. Intenta de nuevo en{' '}
+                    <span style={{ color: '#f87171', fontWeight: 'bold' }}>{countdown}s</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div style={{ padding: '0.75rem', marginBottom: '0.5rem', background: '#fee', border: '1px solid #fcc', borderRadius: '4px', color: '#c33', fontSize: '0.875rem' }}>
                 {error}
@@ -96,8 +135,8 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button type="submit" disabled={loading}
-              style={{ width: '100%', padding: '0.75rem', background: loading ? '#ccc' : '#D4920A', color: '#0A1017', border: 'none', borderRadius: '4px', fontSize: '1rem', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer' }}>
+            <button type="submit" disabled={loading || bloqueado}
+              style={{ width: '100%', padding: '0.75rem', background: (loading || bloqueado) ? '#ccc' : '#D4920A', color: '#0A1017', border: 'none', borderRadius: '4px', fontSize: '1rem', fontWeight: '600', cursor: (loading || bloqueado) ? 'not-allowed' : 'pointer' }}>
               {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </button>
           </form>

@@ -61,7 +61,7 @@ export default function ConfiguracionScreen({ navigation, route }) {
         <View style={s.section}>
           <Text style={s.title}>Servidor</Text>
           <Text style={s.label}>IP del Servidor</Text>
-          <TextInput style={s.input} placeholder="192.168.1.100" placeholderTextColor="#64748b" value={ip} onChangeText={setIp} keyboardType="numeric" />
+          <TextInput style={s.input} placeholder="192.168.1.100" placeholderTextColor="#64748b" value={ip} onChangeText={setIp} keyboardType="decimal-pad" autoCorrect={false} autoCapitalize="none" />
           <Text style={s.label}>Contrasena Admin</Text>
           <TextInput style={s.input} placeholder="Contrasena" placeholderTextColor="#64748b" value={password} onChangeText={setPassword} secureTextEntry />
           <TouchableOpacity style={s.btn} onPress={guardar}><Text style={s.btnTxt}>Guardar</Text></TouchableOpacity>

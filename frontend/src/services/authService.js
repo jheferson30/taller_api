@@ -107,9 +107,29 @@ class AuthService {
 
       return response.data;
     } catch (error) {
-      throw new Error(
-        error.response?.data?.detail || 'Error al iniciar sesión'
-      );
+      if (error.response?.status === 429) {
+        const retryAfter = error.response?.data?.retry_after || 60;
+        const err = new Error('Demasiados intentos de inicio de sesión');
+        err.status = 429;
+        err.retryAfter = retryAfter;
+        Object.defineProperty(err, 'retryAfter', { value: retryAfter, writable: true });
+        throw err;
+      }
+      // Extraer mensaje del servidor
+      const data = error.response?.data;
+      let msg = 'Error al iniciar sesión';
+      if (typeof data?.detail === 'string') {
+        msg = data.detail;
+      } else if (typeof data?.message === 'string') {
+        msg = data.message;
+      } else if (error.response?.status === 401) {
+        msg = 'Usuario o contraseña incorrectos';
+      } else if (error.response?.status === 403) {
+        msg = 'Tu cuenta no tiene permisos para acceder';
+      } else if (!error.response) {
+        msg = 'No se pudo conectar al servidor. Verifica tu conexión.';
+      }
+      throw new Error(msg);
     }
   }
 

@@ -104,7 +104,7 @@ class OfflineService {
                 body: JSON.stringify({ operations: [{ id: op.id, type: op.type, endpoint: op.endpoint, method: op.method, data: op.data, timestamp: op.timestamp }] }),
               }
             );
-            if (!response.ok) throw new Error(`Sync failed: ${response.status}`);
+            if (!response.ok) throw new Error(`Error de sincronización: ${response.status === 401 ? 'Sesión expirada' : response.status === 403 ? 'Sin permisos' : 'Intenta de nuevo'}`);
             const result = await response.json();
             if ((result.successful || []).includes(op.id)) {
               successIds.push(op.id);
@@ -164,7 +164,7 @@ class OfflineService {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Error ${response.status}`);
+      throw new Error(err.detail || 'Error al sincronizar proceso con foto');
     }
   }
 

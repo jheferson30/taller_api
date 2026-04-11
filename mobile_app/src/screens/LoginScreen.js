@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, StatusBar, Image,
@@ -20,6 +20,9 @@ export default function LoginScreen({ navigation, route }) {
   const [recordarUsuario, setRecordarUsuario] = useState(false);
   const [serverIp, setServerIp] = useState(null);
   const [checkingIp, setCheckingIp] = useState(true);
+  const [bloqueado, setBloqueado] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const countdownRef = useRef(null);
 
   const checkIp = async () => {
     setCheckingIp(true);
@@ -55,6 +58,25 @@ export default function LoginScreen({ navigation, route }) {
     return unsub;
   }, [navigation]);
 
+  // Cronómetro de bloqueo
+  useEffect(() => {
+    if (countdown > 0) {
+      setBloqueado(true);
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownRef.current);
+            setBloqueado(false);
+            setError('');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(countdownRef.current);
+  }, [countdown]);
+
   const handleLogin = async () => {
     if (!username || !password) {
       setError('Por favor ingresa usuario y contraseña');
@@ -81,7 +103,12 @@ export default function LoginScreen({ navigation, route }) {
       const returnTo = roles.includes('ADMIN') ? 'HomeAdmin' : (route.params?.returnTo || 'Home');
       navigation.replace(returnTo);
     } catch (err) {
-      setError(err.message || 'Error al iniciar sesión');
+      if (err.status === 429) {
+        setCountdown(err.retryAfter || 60);
+        setError('');
+      } else {
+        setError(err.message || 'Error al iniciar sesión');
+      }
     } finally {
       setLoading(false);
     }
@@ -151,6 +178,19 @@ export default function LoginScreen({ navigation, route }) {
 
           {error ? <Text style={s.error}>{error}</Text> : null}
 
+          {bloqueado && (
+            <View style={s.lockBanner}>
+              <Ionicons name="lock-closed" size={22} color="#fca5a5" />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={s.lockTitle}>Acceso bloqueado temporalmente</Text>
+                <Text style={s.lockText}>
+                  Demasiados intentos fallidos. Intenta de nuevo en{' '}
+                  <Text style={s.lockCountdown}>{countdown}s</Text>
+                </Text>
+              </View>
+            </View>
+          )}
+
           <TouchableOpacity 
             style={s.checkboxRow} 
             onPress={() => setRecordarUsuario(!recordarUsuario)}
@@ -162,7 +202,7 @@ export default function LoginScreen({ navigation, route }) {
             <Text style={s.checkboxLabel}>Recordar usuario</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[s.button, loading && s.buttonOff]} onPress={handleLogin} disabled={loading}>
+          <TouchableOpacity style={[s.button, (loading || bloqueado) && s.buttonOff]} onPress={handleLogin} disabled={loading || bloqueado}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonTxt}>Iniciar Sesión</Text>}
           </TouchableOpacity>
         </View>
@@ -239,4 +279,17 @@ const s = StyleSheet.create({
   buttonOff: { backgroundColor: '#475569' },
   buttonTxt: { color: '#0A1017', fontSize: 16, fontWeight: '700' },
   error: { color: '#ef4444', fontSize: 14, marginBottom: 12, textAlign: 'center' },
+  lockBanner: {
+    backgroundColor: '#450a0a',
+    borderWidth: 1,
+    borderColor: '#991b1b',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  lockTitle: { color: '#fca5a5', fontWeight: '700', fontSize: 13, marginBottom: 2 },
+  lockText: { color: '#fecaca', fontSize: 12, lineHeight: 18 },
+  lockCountdown: { color: '#f87171', fontWeight: 'bold', fontSize: 14 },
 });
