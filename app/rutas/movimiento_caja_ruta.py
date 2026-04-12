@@ -2,7 +2,6 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi_cache import FastAPICache
-from fastapi_csrf_protect import CsrfProtect
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -151,18 +150,7 @@ async def crear_cobro_rapido(
     request: Request,
     datos: CobroRapidoCrear,
     db: Session = Depends(obtener_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    # Debug: Verificar headers
-    print(f"[DEBUG] Headers recibidos: {dict(request.headers)}")
-    print(f"[DEBUG] Cookies recibidas: {request.cookies}")
-
-    try:
-        await csrf_protect.validate_csrf(request)
-    except Exception as e:
-        print(f"[ERROR] CSRF validation failed: {type(e).__name__}: {str(e)}")
-        raise
-
     nuevo = MovimientoCaja(
         tipo=TipoMovimiento.INGRESO_RAPIDO,
         placa=datos.placa.upper().strip(),
@@ -188,9 +176,7 @@ async def crear_movimiento_caja(
     request: Request,
     datos: MovimientoCajaCrear,
     db: Session = Depends(obtener_db),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     _validar_movimiento(datos)
     nuevo = MovimientoCaja(**datos.model_dump())
     db.add(nuevo)
@@ -317,9 +303,7 @@ async def corregir_movimiento_caja(
     datos: MovimientoCajaCorregir,
     db: Session = Depends(obtener_db),
     _: bool = Depends(requerir_password_admin),
-    csrf_protect: CsrfProtect = Depends(),
 ):
-    await csrf_protect.validate_csrf(request)
     movimiento = db.query(MovimientoCaja).filter(MovimientoCaja.id == movimiento_id).first()
     if not movimiento:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado")
