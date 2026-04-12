@@ -16,7 +16,7 @@ class SecretsManager:
 
     def __init__(self) -> None:
         self.vault_url: str | None = os.getenv("AZURE_KEY_VAULT_URL")
-        self.use_key_vault: bool = self.vault_url is not None
+        self.use_key_vault: bool = bool(self.vault_url)
         self.client: SecretClient | None = None
 
         if self.use_key_vault and self.vault_url is not None:

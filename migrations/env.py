@@ -37,6 +37,10 @@ from app.modelos.log_notificacion import LogNotificacion
 # access to the values within the .ini file in use.
 config = context.config
 
+# Load .env file for local/production deployments
+from dotenv import load_dotenv
+load_dotenv()
+
 # Override sqlalchemy.url from environment variable if present
 database_url = os.getenv("DATABASE_URL")
 if database_url:

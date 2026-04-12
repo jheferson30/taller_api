@@ -354,14 +354,62 @@ button.primary:hover:not(:disabled) {
     grid-template-columns: 1fr;
   }
   .sidebar {
-    position: sticky;
+    position: fixed;
+    left: -260px;
     top: 0;
-    z-index: 5;
+    height: 100vh;
+    z-index: 100;
+    transition: left 0.3s ease;
+    width: 240px;
+  }
+  .sidebar--open {
+    left: 0;
+  }
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+  }
+  .hamburger {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 101;
+    background: #0A1017;
+    border: 1px solid var(--brand-primary);
+    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .hamburger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--brand-primary);
+    border-radius: 2px;
+  }
+  .content {
+    padding-top: 4rem;
+  }
+  .content::after {
+    inset: 0;
   }
   .grid.two,
   .kpis {
     grid-template-columns: 1fr;
   }
+}
+
+.hamburger {
+  display: none;
 }
 
 /* ===== RECEPCION PAGE STYLES ===== */

@@ -32,6 +32,7 @@ function AppLayout({ children }) {
 
   const { isAdmin, isMecanico, isRecepcionista, username } = getRoles();
   const [logoUrl, setLogoUrl] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -62,7 +63,13 @@ function AppLayout({ children }) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {/* Botón hamburguesa para móvil */}
+      <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Menú">
+        <span /><span /><span />
+      </button>
+      {/* Overlay para cerrar sidebar en móvil */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`sidebar${sidebarOpen ? " sidebar--open" : ""}`}>
         <div className="brand" style={{ position: "relative", cursor: isAdmin ? "pointer" : "default" }}
           onClick={() => isAdmin && fileInputRef.current?.click()}
           title={isAdmin ? "Haz clic para cambiar el logo" : ""}
@@ -82,13 +89,13 @@ function AppLayout({ children }) {
         </div>
         {isAdmin && <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleLogoChange} />}
         <nav className="nav">
-          <NavLink to="/" end><FiGrid size={17} style={{marginRight:8, verticalAlign:'middle'}} />Recepcion</NavLink>
-          <NavLink to="/tickets"><FiClipboard size={17} style={{marginRight:8, verticalAlign:'middle'}} />Tickets</NavLink>
-          <NavLink to="/citas"><FiCalendar size={17} style={{marginRight:8, verticalAlign:'middle'}} />Citas</NavLink>
-          {(isAdmin || isRecepcionista) && <NavLink to="/entregados"><FiCheckSquare size={17} style={{marginRight:8, verticalAlign:'middle'}} />Entregados</NavLink>}
-          {isAdmin && <NavLink to="/economia"><FiTrendingUp size={17} style={{marginRight:8, verticalAlign:'middle'}} />Economia</NavLink>}
-          {(isAdmin || isMecanico || isRecepcionista) && <NavLink to="/configuracion"><FiSettings size={17} style={{marginRight:8, verticalAlign:'middle'}} />Configuracion</NavLink>}
-          <NavLink to="/info"><FiInfo size={17} style={{marginRight:8, verticalAlign:'middle'}} />Info</NavLink>
+          <NavLink to="/" end onClick={() => setSidebarOpen(false)}><FiGrid size={17} style={{marginRight:8, verticalAlign:'middle'}} />Recepcion</NavLink>
+          <NavLink to="/tickets" onClick={() => setSidebarOpen(false)}><FiClipboard size={17} style={{marginRight:8, verticalAlign:'middle'}} />Tickets</NavLink>
+          <NavLink to="/citas" onClick={() => setSidebarOpen(false)}><FiCalendar size={17} style={{marginRight:8, verticalAlign:'middle'}} />Citas</NavLink>
+          {(isAdmin || isRecepcionista) && <NavLink to="/entregados" onClick={() => setSidebarOpen(false)}><FiCheckSquare size={17} style={{marginRight:8, verticalAlign:'middle'}} />Entregados</NavLink>}
+          {isAdmin && <NavLink to="/economia" onClick={() => setSidebarOpen(false)}><FiTrendingUp size={17} style={{marginRight:8, verticalAlign:'middle'}} />Economia</NavLink>}
+          {(isAdmin || isMecanico || isRecepcionista) && <NavLink to="/configuracion" onClick={() => setSidebarOpen(false)}><FiSettings size={17} style={{marginRight:8, verticalAlign:'middle'}} />Configuracion</NavLink>}
+          <NavLink to="/info" onClick={() => setSidebarOpen(false)}><FiInfo size={17} style={{marginRight:8, verticalAlign:'middle'}} />Info</NavLink>
         </nav>
         <div className="sidebar-footer">
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
