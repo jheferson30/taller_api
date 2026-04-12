@@ -689,6 +689,9 @@ def _anunciar_mdns():
 
 # ── Endpoints de info ─────────────────────────────────────────────────────────
 def _get_ip_local() -> str:
+    public_ip = os.getenv("PUBLIC_IP")
+    if public_ip:
+        return public_ip
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
