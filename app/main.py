@@ -692,6 +692,15 @@ def _get_ip_local() -> str:
     public_ip = os.getenv("PUBLIC_IP")
     if public_ip:
         return public_ip
+    # Intentar obtener IP pública automáticamente
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen("https://api.ipify.org", timeout=2) as r:
+            return r.read().decode().strip()
+    except Exception:
+        pass
+    # Fallback a IP de interfaz de red (red local)
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
