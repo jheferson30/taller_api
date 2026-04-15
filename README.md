@@ -1380,3 +1380,210 @@ RATE_LIMIT_WHITELIST_IPS=127.0.0.1,::1,192.168.1.100
 ## Contacto
 
 [Información de contacto del equipo]
+
+---
+
+## Despliegue en Azure VM
+
+Guía paso a paso para desplegar el sistema en una máquina virtual de Azure.
+
+### Requisitos Previos
+
+- Cuenta de Azure (suscripción de estudiante o paga)
+- Azure CLI instalado (opcional, se puede usar Cloud Shell)
+- Git instalado en la VM
+
+### 1. Crear la VM en Azure
+
+1. Ve a [portal.azure.com](https://portal.azure.com)
+2. Crea una VM con:
+   - **Imagen**: Ubuntu Server 24.04 LTS
+   - **Tamaño**: Standard_B2s (recomendado para demo) o Standard_D2s_v3
+   - **Región**: mexicocentral, canadacentral u otra disponible para tu suscripción
+   - **Autenticación**: Clave SSH pública
+3. Abre los puertos: **22** (SSH), **80** (HTTP), **443** (HTTPS), **8000** (API)
+
+### 2. Conectarse a la VM
+
+```bash
+ssh -i ruta/a/tu-llave.pem azureuser@IP_PUBLICA_VM
+```
+
+### 3. Instalar Dependencias del Sistema
+
+```bash
+sudo apt update && sudo apt install -y python3 python3-pip python3-venv git nginx nodejs npm postgresql postgresql-contrib redis-server
+sudo systemctl enable postgresql redis-server
+sudo systemctl start postgresql redis-server
+```
+
+### 4. Configurar PostgreSQL
+
+```bash
+# Cambiar método de autenticación local
+sudo sed -i 's/local   all             postgres                                peer/local   all             postgres                                trust/' /etc/postgresql/16/main/pg_hba.conf
+sudo sed -i '/^host.*all.*all.*127.0.0.1/s/scram-sha-256/md5/' /etc/postgresql/16/main/pg_hba.conf
+sudo systemctl restart postgresql
+
+# Crear base de datos y usuario
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'tu_password_seguro';"
+sudo -u postgres psql -c "CREATE DATABASE taller_db;"
+
+# Restaurar autenticación segura
+sudo sed -i 's/local   all             postgres                                trust/local   all             postgres                                md5/' /etc/postgresql/16/main/pg_hba.conf
+sudo systemctl restart postgresql
+```
+
+### 5. Clonar el Repositorio
+
+```bash
+git clone https://TOKEN@github.com/jheferson30/taller_api.git
+cd taller_api
+```
+
+> **Nota**: Reemplaza `TOKEN` con un Personal Access Token de GitHub (Settings → Developer settings → Personal access tokens).
+
+### 6. Configurar Entorno Virtual e Instalar Dependencias
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install "pydantic[email]"
+```
+
+### 7. Configurar Variables de Entorno
+
+```bash
+cp .env.example .env
+```
+
+Edita `.env` con los valores correctos:
+
+```bash
+# Valores mínimos requeridos
+DATABASE_URL=postgresql+psycopg2://postgres:tu_password@127.0.0.1:5432/taller_db?client_encoding=utf8
+JWT_SECRET_KEY=  # Generar con: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+CSRF_SECRET_KEY= # Generar con: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+ENVIRONMENT=development
+ALLOWED_ORIGINS=http://IP_PUBLICA_VM:8000
+ALLOWED_HOSTS=IP_PUBLICA_VM
+ADMIN_PASSWORD=mecaapp123
+PDF_PASSWORD=mecaapp123
+AZURE_KEY_VAULT_URL=  # Dejar vacío si no usas Key Vault
+PUBLIC_IP=IP_PUBLICA_VM  # Para que el QR de la app móvil muestre la IP correcta
+```
+
+### 8. Ejecutar Migraciones
+
+```bash
+alembic upgrade head
+```
+
+### 9. Crear Usuario Admin Inicial
+
+```bash
+python scripts/seed_admin.py
+```
+
+Esto crea el usuario `admin` con contraseña `Admin1234!` si no existe.
+
+> **⚠️ IMPORTANTE**: Cambia la contraseña después del primer login.
+
+Puedes personalizar las credenciales con variables de entorno:
+
+```bash
+ADMIN_USERNAME=admin ADMIN_PASSWORD=MiPasswordSeguro123! python scripts/seed_admin.py
+```
+
+### 10. Compilar el Frontend
+
+```bash
+cd frontend
+npm install
+chmod +x node_modules/.bin/vite
+npm run build
+cd ..
+```
+
+### 11. Configurar Servicio Systemd (Arranque Automático)
+
+```bash
+sudo tee /etc/systemd/system/taller.service << 'EOF'
+[Unit]
+Description=Taller API
+After=network.target
+
+[Service]
+User=azureuser
+WorkingDirectory=/home/azureuser/taller_api
+Environment="PATH=/home/azureuser/taller_api/venv/bin"
+ExecStart=/home/azureuser/taller_api/venv/bin/gunicorn -w 2 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable taller
+sudo systemctl start taller
+```
+
+La app ahora:
+- ✅ Arranca automáticamente cuando la VM se enciende
+- ✅ Se reinicia sola si falla
+- ✅ Se apaga cuando apagas la VM
+
+### 12. Verificar que Funciona
+
+```bash
+sudo systemctl status taller
+curl http://localhost:8000
+```
+
+Abre en el navegador: `http://IP_PUBLICA_VM:8000`
+
+---
+
+### Actualizar el Código en la VM
+
+Cuando hagas cambios en el código y los subas a GitHub:
+
+```bash
+cd ~/taller_api
+git fetch origin && git reset --hard origin/main
+source venv/bin/activate
+pip install -r requirements.txt
+cd frontend && chmod +x node_modules/.bin/vite && npm run build && cd ..
+sudo systemctl restart taller
+```
+
+### Conectarse a la VM
+
+```bash
+ssh -i ruta/a/tu-llave.pem azureuser@IP_PUBLICA_VM
+```
+
+Si perdiste la llave SSH, genera una nueva desde tu PC:
+
+```bash
+ssh-keygen -t ed25519 -f ~/Downloads/nueva-llave
+```
+
+Y agrega la llave pública a la VM desde Azure Portal → VM → Operaciones → Ejecutar comando → RunShellScript:
+
+```bash
+echo "CONTENIDO_DE_nueva-llave.pub" >> /home/azureuser/.ssh/authorized_keys
+```
+
+### Apagar/Encender la VM para Ahorrar Crédito
+
+```bash
+# Apagar (deallocate para no cobrar)
+az vm deallocate --resource-group mecaapp-rg --name mecaapp-vm
+
+# Encender
+az vm start --resource-group mecaapp-rg --name mecaapp-vm
+```
+
+> **Nota**: La IP pública puede cambiar al reiniciar la VM si no tienes IP estática. Actualiza `PUBLIC_IP` en el `.env` si cambia.
