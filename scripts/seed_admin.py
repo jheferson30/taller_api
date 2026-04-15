@@ -61,21 +61,26 @@ def seed_admin():
         )
         user_id = result.fetchone()[0]
 
-        # Verificar si existe el rol ADMIN, si no crearlo
-        result = conn.execute(text("SELECT id FROM roles WHERE name = 'ADMIN'"))
-        role = result.fetchone()
-
-        if not role:
-            result = conn.execute(
+        # Crear todos los roles si no existen
+        roles_default = [
+            ("ADMIN", "Administrador del sistema"),
+            ("MECANICO", "Mecánico con acceso a tickets y procesos"),
+            ("RECEPCIONISTA", "Recepcionista con acceso a citas y tickets"),
+            ("SOLO_LECTURA", "Usuario con acceso de solo lectura"),
+        ]
+        for role_name, role_desc in roles_default:
+            conn.execute(
                 text(
-                    "INSERT INTO roles (name, description) "
-                    "VALUES ('ADMIN', 'Administrador del sistema') RETURNING id"
-                )
+                    "INSERT INTO roles (name, description) VALUES (:name, :desc) "
+                    "ON CONFLICT (name) DO NOTHING"
+                ),
+                {"name": role_name, "desc": role_desc},
             )
-            role_id = result.fetchone()[0]
-            print("✅ Rol ADMIN creado.")
-        else:
-            role_id = role[0]
+
+        # Obtener ID del rol ADMIN
+        result = conn.execute(text("SELECT id FROM roles WHERE name = 'ADMIN'"))
+        role_id = result.fetchone()[0]
+        print("✅ Roles verificados/creados: ADMIN, MECANICO, RECEPCIONISTA, SOLO_LECTURA")
 
         # Asignar rol ADMIN al usuario
         conn.execute(
