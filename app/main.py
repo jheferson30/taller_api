@@ -53,6 +53,7 @@ from app.rutas import (
     citas_ruta,
     configuracion_ruta,
     economia_ruta,
+    health,
     mobile_api_ruta,
     movimiento_caja_ruta,
     pdf_ruta,
@@ -642,6 +643,7 @@ if os.path.isdir(FRONTEND_DIST):
     )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(health.router)  # Health checks (sin autenticación)
 app.include_router(auth_ruta.router)
 app.include_router(users_ruta.router)
 app.include_router(audit_ruta.router)
