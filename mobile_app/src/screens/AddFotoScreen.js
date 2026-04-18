@@ -9,12 +9,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { colors } from '../theme';
 import { useToast } from '../components/Toast';
+import { useOffline } from '../hooks/useOffline';
+import offlineService from '../services/offlineService';
 
 const TIPOS = ['ANTES', 'DESPUES', 'OTRA'];
 
 export default function AddFotoScreen({ route, navigation }) {
   const { ticketId } = route.params;
   const toast = useToast();
+  const { isOnline } = useOffline();
   const [uri, setUri] = useState(null);
   const [descripcion, setDescripcion] = useState('');
   const [tipo, setTipo] = useState('OTRA');
@@ -54,6 +57,17 @@ export default function AddFotoScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
+      if (!isOnline) {
+        await offlineService.enqueueOperation({
+          type: 'CREATE_FOTO',
+          endpoint: `/tickets/${ticketId}/fotos`,
+          method: 'POST',
+          data: { ticketId, fotoUri: uri, descripcion: descripcion.trim() || null, tipo },
+        });
+        toast('Sin conexión — se subirá automáticamente cuando vuelva el internet', 'warning');
+        navigation.goBack();
+        return;
+      }
       await api.subirFoto(ticketId, uri, descripcion.trim() || null, tipo);
       navigation.goBack();
     } catch (e) {

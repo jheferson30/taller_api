@@ -91,27 +91,32 @@ class OfflineService {
 
       for (const op of [...this.pendingOperations]) {
         try {
+          // Operaciones multipart con archivo
           if (op.type === 'CREATE_PROCESO_CON_FOTO') {
-            // Operación especial: multipart con foto
             await this._syncProcesoConFoto(op, baseUrl);
+          } else if (op.type === 'CREATE_FOTO') {
+            await this._syncFoto(op, baseUrl);
+          } else if (op.type === 'CREATE_REPUESTO_CON_FOTO') {
+            await this._syncRepuestoConFoto(op, baseUrl);
+          } else if (op.type === 'CREATE_COMPRA_CON_SOPORTE') {
+            await this._syncCompraConSoporte(op, baseUrl);
           } else {
-            // Operación JSON normal via batch
+            // Operaciones JSON simples: POST, PATCH, DELETE
+            const method = op.method || 'POST';
+            const headers = { 'Content-Type': 'application/json' };
+            const body = method !== 'DELETE' ? JSON.stringify(op.data || {}) : undefined;
             const response = await authService.authenticatedRequest(
-              `${baseUrl}/sync/batch`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ operations: [{ id: op.id, type: op.type, endpoint: op.endpoint, method: op.method, data: op.data, timestamp: op.timestamp }] }),
-              }
+              `${baseUrl}${op.endpoint}`,
+              { method, headers, body }
             );
-            if (!response.ok) throw new Error(`Error de sincronización: ${response.status === 401 ? 'Sesión expirada' : response.status === 403 ? 'Sin permisos' : 'Intenta de nuevo'}`);
-            const result = await response.json();
-            if ((result.successful || []).includes(op.id)) {
-              successIds.push(op.id);
-            } else {
-              failedOps.push(op);
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(
+                err.detail ||
+                (response.status === 401 ? 'Sesión expirada' :
+                 response.status === 403 ? 'Sin permisos' : 'Error al sincronizar')
+              );
             }
-            continue;
           }
           successIds.push(op.id);
         } catch (err) {
@@ -144,27 +149,117 @@ class OfflineService {
    */
   async _syncProcesoConFoto(op, baseUrl) {
     const { ticketId, nombre, descripcion, mecanico, fotoUri } = op.data;
-
     const formData = new FormData();
     formData.append('nombre', nombre);
     if (descripcion) formData.append('descripcion', descripcion);
     if (mecanico) formData.append('mecanico', mecanico);
-
     if (fotoUri) {
       const filename = fotoUri.split('/').pop();
       const ext = filename.split('.').pop().toLowerCase();
-      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-      formData.append('file', { uri: fotoUri, name: filename, type: mimeType });
+      formData.append('file', { uri: fotoUri, name: filename, type: ext === 'png' ? 'image/png' : 'image/jpeg' });
     }
-
     const response = await authService.authenticatedRequest(
       `${baseUrl}/tickets/${ticketId}/procesos/con-foto`,
       { method: 'POST', body: formData }
     );
-
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || 'Error al sincronizar proceso con foto');
+    }
+  }
+
+  /**
+   * Sincroniza una foto de ticket usando multipart/form-data
+   */
+  async _syncFoto(op, baseUrl) {
+    const { ticketId, fotoUri, descripcion, tipo } = op.data;
+    const formData = new FormData();
+    const filename = fotoUri.split('/').pop();
+    const ext = filename.split('.').pop().toLowerCase();
+    formData.append('file', { uri: fotoUri, name: filename, type: ext === 'png' ? 'image/png' : 'image/jpeg' });
+    formData.append('tipo', tipo || 'OTRA');
+    if (descripcion) formData.append('descripcion', descripcion);
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/fotos`,
+      { method: 'POST', body: formData }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al sincronizar foto');
+    }
+  }
+
+  /**
+   * Sincroniza un repuesto con foto opcional
+   */
+  async _syncRepuestoConFoto(op, baseUrl) {
+    const { ticketId, nombre, cantidad, marcaReferencia, fotoUri,
+            fueComprado, valor, responsable, nota, soporteUri } = op.data;
+
+    // 1. Subir foto del repuesto si hay
+    let foto_url = null;
+    if (fotoUri) {
+      const filename = fotoUri.split('/').pop();
+      const ext = filename.split('.').pop().toLowerCase();
+      const fd = new FormData();
+      fd.append('file', { uri: fotoUri, name: filename, type: ext === 'png' ? 'image/png' : 'image/jpeg' });
+      const res = await authService.authenticatedRequest(`${baseUrl}/upload/foto`, { method: 'POST', body: fd });
+      if (res.ok) { const d = await res.json(); foto_url = d.url; }
+    }
+
+    // 2. Crear repuesto
+    const repRes = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/repuestos`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, cantidad, marca_referencia: marcaReferencia || null, foto_url }),
+      }
+    );
+    if (!repRes.ok) {
+      const err = await repRes.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al sincronizar repuesto');
+    }
+
+    // 3. Crear compra si fue comprado
+    if (fueComprado && valor > 0) {
+      const uriSoporte = soporteUri || fotoUri;
+      const fd2 = new FormData();
+      fd2.append('descripcion', nombre);
+      fd2.append('valor', String(valor));
+      if (responsable) fd2.append('responsable', responsable);
+      if (nota) fd2.append('nota', nota);
+      if (uriSoporte) {
+        const fn = uriSoporte.split('/').pop();
+        const ex = fn.split('.').pop().toLowerCase();
+        fd2.append('file', { uri: uriSoporte, name: fn, type: ex === 'png' ? 'image/png' : 'image/jpeg' });
+      }
+      await authService.authenticatedRequest(`${baseUrl}/tickets/${ticketId}/compras`, { method: 'POST', body: fd2 });
+    }
+  }
+
+  /**
+   * Sincroniza una compra con soporte opcional
+   */
+  async _syncCompraConSoporte(op, baseUrl) {
+    const { ticketId, descripcion, valor, responsable, nota, soporteUri } = op.data;
+    const formData = new FormData();
+    formData.append('descripcion', descripcion);
+    formData.append('valor', String(valor));
+    if (responsable) formData.append('responsable', responsable);
+    if (nota) formData.append('nota', nota);
+    if (soporteUri) {
+      const filename = soporteUri.split('/').pop();
+      const ext = filename.split('.').pop().toLowerCase();
+      formData.append('file', { uri: soporteUri, name: filename, type: ext === 'png' ? 'image/png' : 'image/jpeg' });
+    }
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/tickets/${ticketId}/compras`,
+      { method: 'POST', body: formData }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al sincronizar compra');
     }
   }
 

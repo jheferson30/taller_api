@@ -7,12 +7,15 @@ import { Picker } from '@react-native-picker/picker';
 import { colors } from '../theme';
 import { api } from '../api';
 import { useToast } from '../components/Toast';
+import { useOffline } from '../hooks/useOffline';
+import offlineService from '../services/offlineService';
 
 const METODOS = ['EFECTIVO', 'NEQUI', 'DAVIPLATA', 'TRANSFERENCIA', 'TARJETA'];
 
 export default function CobroRapidoScreen({ route, navigation }) {
   const { placa: placaInicial = '' } = route.params || {};
   const toast = useToast();
+  const { isOnline } = useOffline();
 
   const [placa, setPlaca] = useState(placaInicial.toUpperCase());
   const [descripcion, setDescripcion] = useState('');
@@ -28,6 +31,22 @@ export default function CobroRapidoScreen({ route, navigation }) {
 
     setLoading(true);
     try {
+      if (!isOnline) {
+        await offlineService.enqueueOperation({
+          type: 'COBRO_RAPIDO',
+          endpoint: '/movimientos-caja/cobro-rapido',
+          method: 'POST',
+          data: {
+            placa: placa.trim().toUpperCase(),
+            descripcion: descripcion.trim(),
+            valor: valorNum,
+            metodo_pago: metodo,
+          },
+        });
+        toast('Sin conexión — se registrará automáticamente cuando vuelva el internet', 'warning');
+        navigation.goBack();
+        return;
+      }
       await api.cobroRapido({
         placa: placa.trim().toUpperCase(),
         descripcion: descripcion.trim(),

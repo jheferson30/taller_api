@@ -12,12 +12,15 @@ import { colors } from '../theme';
 import { useToast } from '../components/Toast';
 import authService from '../services/authService';
 import { getApiBaseUrl, getPdfBaseUrl } from '../config';
+import { useOffline } from '../hooks/useOffline';
+import offlineService from '../services/offlineService';
 
 const METODOS = ['EFECTIVO', 'NEQUI', 'DAVIPLATA', 'TRANSFERENCIA', 'TARJETA'];
 
 export default function AddRepuestoScreen({ route, navigation }) {
   const { ticketId } = route.params;
   const toast = useToast();
+  const { isOnline } = useOffline();
 
   const [nombre, setNombre] = useState('');
   const [cantidad, setCantidad] = useState('1');
@@ -91,7 +94,31 @@ export default function AddRepuestoScreen({ route, navigation }) {
 
     setLoading(true);
     try {
-      // Subir foto del repuesto si hay
+      // Sin conexión: encolar
+      if (!isOnline) {
+        await offlineService.enqueueOperation({
+          type: 'CREATE_REPUESTO_CON_FOTO',
+          endpoint: `/tickets/${ticketId}/repuestos`,
+          method: 'POST',
+          data: {
+            ticketId,
+            nombre: nombre.trim(),
+            cantidad: cantidadNum,
+            marcaReferencia: marcaReferencia.trim() || null,
+            fotoUri: fotoRepuesto || null,
+            fueComprado,
+            valor: fueComprado ? parseInt(valor, 10) : 0,
+            responsable: responsable || null,
+            nota: nota.trim() || null,
+            soporteUri: uriSoporte || null,
+          },
+        });
+        toast('Sin conexión — se subirá automáticamente cuando vuelva el internet', 'warning');
+        navigation.goBack();
+        return;
+      }
+
+      // Con conexión: flujo normal
       let foto_url = null;
       if (fotoRepuesto) {
         const baseUrl = await getPdfBaseUrl();

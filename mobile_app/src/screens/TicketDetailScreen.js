@@ -12,6 +12,8 @@ import { api } from '../api';
 import { getApiBaseUrl, getPdfBaseUrl } from '../config';
 import { colors, estadoConfig } from '../theme';
 import { useToast } from '../components/Toast';
+import { useOffline } from '../hooks/useOffline';
+import offlineService from '../services/offlineService';
 
 const ESTADOS_SIGUIENTES = {
   ABIERTO: 'EN_PROCESO',
@@ -28,6 +30,7 @@ const LABELS_SIGUIENTE = {
 export default function TicketDetailScreen({ route, navigation }) {
   const { ticketId } = route.params;
   const toast = useToast();
+  const { isOnline } = useOffline();
   const [ticket, setTicket] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [procesos, setProcesos] = useState([]);
@@ -79,6 +82,17 @@ export default function TicketDetailScreen({ route, navigation }) {
           onPress: async () => {
             setUpdatingEstado(true);
             try {
+              if (!isOnline) {
+                await offlineService.enqueueOperation({
+                  type: 'CAMBIAR_ESTADO',
+                  endpoint: `/tickets/${ticketId}/estado`,
+                  method: 'PATCH',
+                  data: { estado: siguiente },
+                });
+                toast('Sin conexión — el cambio se aplicará cuando vuelva el internet', 'warning');
+                setUpdatingEstado(false);
+                return;
+              }
               await api.updateEstado(ticketId, siguiente);
               await loadData();
             } catch (e) {
@@ -186,15 +200,15 @@ export default function TicketDetailScreen({ route, navigation }) {
       >
         {tab === 'info' && <InfoTab ticket={ticket} fecha={fecha} />}
         {tab === 'procesos' && (
-          <ProcesosTab procesos={procesos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} />
+          <ProcesosTab procesos={procesos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} isOnline={isOnline} />
         )}
         {tab === 'repuestos' && (
           <RepuestosTab repuestos={repuestos} compras={compras} ticketId={ticketId} editable={editable} navigation={navigation} />
         )}
         {tab === 'fotos' && (
-          <FotosTab fotos={fotos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} />
+          <FotosTab fotos={fotos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} isOnline={isOnline} />
         )}
-        {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} />}
+        {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} isOnline={isOnline} />}
         {tab === 'entrega' && (
           <EntregaTab ticketId={ticketId} resumen={resumen} onSuccess={() => { loadData(); setTab('info'); }} scrollRef={scrollRef} />
         )}
@@ -220,7 +234,7 @@ function InfoTab({ ticket, fecha }) {
   );
 }
 
-function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh }) {
+function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh, isOnline }) {
   const toast = useToast();
   const [baseUrl, setBaseUrl] = React.useState('');
   React.useEffect(() => { getPdfBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
@@ -232,6 +246,16 @@ function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh }) {
         text: 'Eliminar', style: 'destructive',
         onPress: async () => {
           try {
+            if (!isOnline) {
+              await offlineService.enqueueOperation({
+                type: 'DELETE_PROCESO',
+                endpoint: `/tickets/${ticketId}/procesos/${procesoId}`,
+                method: 'DELETE',
+                data: {},
+              });
+              toast('Sin conexión — se eliminará cuando vuelva el internet', 'warning');
+              return;
+            }
             await api.eliminarProceso(ticketId, procesoId);
             onRefresh();
           } catch (e) {
@@ -345,7 +369,7 @@ function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation 
   );
 }
 
-function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
+function FotosTab({ fotos, ticketId, editable, navigation, onRefresh, isOnline }) {
   const toast = useToast();
   const [baseUrl, setBaseUrl] = React.useState('');
   React.useEffect(() => { getPdfBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
@@ -363,6 +387,16 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
           style: 'destructive',
           onPress: async () => {
             try {
+              if (!isOnline) {
+                await offlineService.enqueueOperation({
+                  type: 'DELETE_FOTO',
+                  endpoint: `/tickets/${ticketId}/fotos/${fotoId}`,
+                  method: 'DELETE',
+                  data: {},
+                });
+                toast('Sin conexión — se eliminará cuando vuelva el internet', 'warning');
+                return;
+              }
               await api.eliminarFoto(ticketId, fotoId);
               onRefresh();
             } catch (e) {
@@ -411,7 +445,7 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
 }
 
 
-function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scrollRef }) {
+function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scrollRef, isOnline }) {
   const toast = useToast();
   const [cobros, setCobros] = useState([]);
   const [concepto, setConcepto] = useState('');
@@ -459,6 +493,18 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
     }
     setAddingCobro(true);
     try {
+      if (!isOnline) {
+        await offlineService.enqueueOperation({
+          type: 'CREATE_COBRO',
+          endpoint: `/tickets/${ticketId}/cobros`,
+          method: 'POST',
+          data: { concepto: concepto.trim(), valor: valorNum },
+        });
+        setConcepto('');
+        setValorCobro('');
+        toast('Sin conexión — se registrará cuando vuelva el internet', 'warning');
+        return;
+      }
       await api.createCobro(ticketId, { concepto: concepto.trim(), valor: valorNum });
       setConcepto('');
       setValorCobro('');
@@ -478,6 +524,16 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
         text: 'Eliminar', style: 'destructive',
         onPress: async () => {
           try {
+            if (!isOnline) {
+              await offlineService.enqueueOperation({
+                type: 'DELETE_COBRO',
+                endpoint: `/tickets/${ticketId}/cobros/${cobroId}`,
+                method: 'DELETE',
+                data: {},
+              });
+              toast('Sin conexión — se eliminará cuando vuelva el internet', 'warning');
+              return;
+            }
             await api.eliminarCobro(ticketId, cobroId);
             const c = await api.getCobros(ticketId);
             setCobros(c);

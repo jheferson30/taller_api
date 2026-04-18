@@ -10,10 +10,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { api } from '../api';
 import { useToast } from '../components/Toast';
+import { useOffline } from '../hooks/useOffline';
+import offlineService from '../services/offlineService';
 
 export default function AddCompraScreen({ route, navigation }) {
   const { ticketId } = route.params;
   const toast = useToast();
+  const { isOnline } = useOffline();
   const [descripcion, setDescripcion] = useState('');
   const [valor, setValor] = useState('');
   const [responsable, setResponsable] = useState('');
@@ -61,6 +64,24 @@ export default function AddCompraScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
+      if (!isOnline) {
+        await offlineService.enqueueOperation({
+          type: 'CREATE_COMPRA_CON_SOPORTE',
+          endpoint: `/tickets/${ticketId}/compras`,
+          method: 'POST',
+          data: {
+            ticketId,
+            descripcion: descripcion.trim(),
+            valor: valorNum,
+            responsable: responsable.trim() || null,
+            nota: nota.trim() || null,
+            soporteUri: uri || null,
+          },
+        });
+        toast('Sin conexión — se subirá automáticamente cuando vuelva el internet', 'warning');
+        navigation.goBack();
+        return;
+      }
       await api.createCompra(ticketId, {
         descripcion: descripcion.trim(),
         valor: valorNum,
