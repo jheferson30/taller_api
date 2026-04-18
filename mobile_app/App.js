@@ -120,6 +120,8 @@ export default function App() {
           />
           <Stack.Screen name="HomeAdmin" component={HomeAdminScreen} options={({ navigation }) => ({
             title: 'Panel Administrador',
+            headerBackVisible: false,
+            gestureEnabled: false,
             headerRight: () => (
               <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
                 <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
