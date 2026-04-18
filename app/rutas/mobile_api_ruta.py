@@ -37,6 +37,7 @@ from app.seguridad.dependencias import requerir_password_admin
 from app.servicios.ticket_service import TicketService
 from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
 from app.servicios.whatsapp_service import TipoEvento
+from app.utils.input_validator import InputSanitizer
 
 FOTOS_DIR = os.path.join("uploads", "fotos")
 os.makedirs(FOTOS_DIR, exist_ok=True)
@@ -234,6 +235,7 @@ def crear_repuesto_mobile(ticket_id: int, repuesto: RepuestoCreate, db: Session 
         cantidad=repuesto.cantidad,
         marca_referencia=repuesto.marca_referencia,
         proceso_id=repuesto.proceso_id,
+        foto_url=repuesto.foto_url,
     )
 
     db.add(nuevo_repuesto)
@@ -441,6 +443,7 @@ def entregar_ticket_mobile(ticket_id: int, data: EntregarTicketData, db: Session
         observaciones_finales=data.observaciones_finales,
         recomendaciones=data.recomendaciones,
         proximo_mantenimiento=data.proximo_mantenimiento,
+        metodo_pago_final=data.metodo_pago_final,
     )
 
     db.commit()
@@ -608,6 +611,15 @@ def actualizar_finanzas_mobile(
         total_servicio=data.total_servicio,
         metodo_pago_final=data.metodo_pago_final,
     )
+
+    # Guardar observaciones si se enviaron
+    if data.observaciones_finales is not None:
+        ticket.observaciones_finales = InputSanitizer.sanitize_html(data.observaciones_finales)
+    if data.recomendaciones is not None:
+        ticket.recomendaciones = InputSanitizer.sanitize_html(data.recomendaciones)
+    if data.proximo_mantenimiento is not None:
+        ticket.proximo_mantenimiento = InputSanitizer.sanitize_html(data.proximo_mantenimiento)
+
     db.commit()
     return {"ok": True, "saldo_pendiente": ticket.saldo_pendiente}
 

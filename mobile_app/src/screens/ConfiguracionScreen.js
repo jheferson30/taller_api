@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { getServerIp, saveServerIp, getIpsGuardadas, eliminarIp, detectarIpActiva, getAdminPassword, saveAdminPassword } from '../config';
 import authService from '../services/authService';
 
@@ -9,6 +10,9 @@ export default function ConfiguracionScreen({ navigation, route }) {
   const [ipsGuardadas, setIpsGuardadas] = useState([]);
   const [buscando, setBuscando] = useState(false);
   const [user, setUser] = useState(null);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
   const primeraVez = route.params?.primeraVez || false;
 
   useEffect(() => { cargarDatos(); }, []);
@@ -39,6 +43,39 @@ export default function ConfiguracionScreen({ navigation, route }) {
     finally { setBuscando(false); }
   };
 
+  const abrirScanner = async () => {
+    if (!permission?.granted) {
+      const { granted } = await requestPermission();
+      if (!granted) { Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara para escanear el QR'); return; }
+    }
+    setScanned(false);
+    setScannerVisible(true);
+  };
+
+  const handleQrScanned = ({ data }) => {
+    if (scanned) return;
+    setScanned(true);
+    setScannerVisible(false);
+    try {
+      const decoded = JSON.parse(atob(data));
+      if (decoded.ip && decoded.token) {
+        setIp(decoded.ip);
+        // Guardar IP y usar el token temporal como contraseña para esta sesión
+        Alert.alert(
+          'QR Escaneado',
+          `Servidor encontrado: ${decoded.ip}\n\nIngresa tu contraseña admin y presiona Guardar.`,
+        );
+      } else if (decoded.ip) {
+        setIp(decoded.ip);
+        Alert.alert('QR Escaneado', `IP detectada: ${decoded.ip}\n\nIngresa tu contraseña admin y presiona Guardar.`);
+      } else {
+        Alert.alert('QR inválido', 'El código QR no contiene una IP válida');
+      }
+    } catch {
+      Alert.alert('QR inválido', 'No se pudo leer el código QR');
+    }
+  };
+
   const seleccionarIp = async (ipSel) => { setIp(ipSel); await saveServerIp(ipSel); await cargarDatos(); };
 
   const borrarIp = async (ipBorrar) => {
@@ -57,6 +94,26 @@ export default function ConfiguracionScreen({ navigation, route }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0f172a' }}>
+      {/* Modal Scanner QR */}
+      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <CameraView
+            style={{ flex: 1 }}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            onBarcodeScanned={handleQrScanned}
+          />
+          <View style={{ padding: 20, backgroundColor: '#0A1017' }}>
+            <Text style={{ color: '#fff', textAlign: 'center', marginBottom: 12, fontSize: 15 }}>
+              Apunta al código QR del servidor
+            </Text>
+            <TouchableOpacity style={[s.btn, s.btnRed]} onPress={() => setScannerVisible(false)}>
+              <Text style={s.btnTxtWhite}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView style={s.container}>
         <View style={s.section}>
           <Text style={s.title}>Servidor</Text>
@@ -67,6 +124,9 @@ export default function ConfiguracionScreen({ navigation, route }) {
           <TouchableOpacity style={s.btn} onPress={guardar}><Text style={s.btnTxt}>Guardar</Text></TouchableOpacity>
           <TouchableOpacity style={[s.btn, s.btnGray]} onPress={buscarAutomatico} disabled={buscando}>
             <Text style={s.btnTxtWhite}>{buscando ? 'Buscando...' : 'Buscar Automaticamente'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.btn, s.btnQr]} onPress={abrirScanner}>
+            <Text style={s.btnTxtWhite}>📷 Escanear QR del Servidor</Text>
           </TouchableOpacity>
         </View>
         {ipsGuardadas.length > 0 && (
@@ -107,6 +167,7 @@ const s = StyleSheet.create({
   btn: { backgroundColor: '#D4920A', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginBottom: 12 },
   btnGray: { backgroundColor: '#1C2B3A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   btnRed: { backgroundColor: '#C0392B' },
+  btnQr: { backgroundColor: '#0ea5e9' },
   btnTxt: { color: '#0A1017', fontSize: 16, fontWeight: '700' },
   btnTxtWhite: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
   ipRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },

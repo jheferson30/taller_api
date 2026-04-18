@@ -13,10 +13,10 @@ import { getAuthBaseUrl } from "../config";
 const fmt = (n) => "$" + Number(n ?? 0).toLocaleString("es-CO");
 
 const TIPO_CONFIG = {
-  INGRESO_ANTICIPO: { label: "Anticipo",     color: "#0F1923" },
-  INGRESO_FINAL:    { label: "Pago final",   color: "#065f46" },
-  INGRESO_RAPIDO:   { label: "Cobro rapido", color: "#0F1923" },
-  EGRESO:           { label: "Egreso",       color: "#991b1b" },
+  INGRESO_ANTICIPO: { label: "Anticipo",     color: "#0ea5e9" },
+  INGRESO_FINAL:    { label: "Pago final",   color: "#10b981" },
+  INGRESO_RAPIDO:   { label: "Cobro Rápido", color: "#f59e0b" },
+  EGRESO:           { label: "Egreso",       color: "#ef4444" },
 };
 
 function hoyISO() {
@@ -200,7 +200,9 @@ export default function AdminEconomiaScreen() {
               <View key={i} style={s.movRow}>
                 <View style={[s.movDot, { backgroundColor: cfg.color }]} />
                 <View style={s.movInfo}>
-                  <Text style={s.movConcepto}>{m.concepto}</Text>
+                  <Text style={s.movConcepto}>
+                    {m.tipo === 'INGRESO_RAPIDO' ? `${cfg.label}: ${m.concepto}` : m.concepto}
+                  </Text>
                   {m.placa ? <Text style={s.movPlaca}>{m.placa}</Text> : null}
                 </View>
                 <Text style={[s.movValor, { color: cfg.color }]}>

@@ -204,6 +204,7 @@ def generar_pdf_economia_profesional(
     # ── RESUMEN EJECUTIVO ────────────────────────────────────────────────────
     ing_anticipo = resumen.get("ingreso_anticipo", 0) or 0
     ing_final = resumen.get("ingreso_final", 0) or 0
+    ing_rapido = resumen.get("ingreso_rapido", 0) or 0
     total_ing = resumen.get("ingresos", 0) or 0
     total_egr = resumen.get("egresos", 0) or 0
     balance = resumen.get("balance", 0) or 0
@@ -258,12 +259,15 @@ def generar_pdf_economia_profesional(
             [
                 tarjeta("Anticipos", ing_anticipo, AZUL_MEDIO),
                 tarjeta("Cobros finales", ing_final, AZUL),
+                tarjeta("Cobros rápidos", ing_rapido, colors.HexColor("#f59e0b")),
+            ],
+            [
                 tarjeta("Total ingresos", total_ing, VERDE_MEDIO),
                 tarjeta("Total egresos", total_egr, ROJO_MEDIO),
                 tarjeta("Balance del día", balance, VERDE_MEDIO if balance >= 0 else ROJO_MEDIO),
-            ]
+            ],
         ],
-        colWidths=[1.48 * inch] * 5,
+        colWidths=[2.47 * inch, 2.47 * inch, 2.47 * inch],
     )
     tarjetas.setStyle(
         TableStyle(
@@ -413,6 +417,47 @@ def generar_pdf_economia_profesional(
             KeepTogether(
                 [
                     cab("COBROS FINALES", VERDE_MEDIO),
+                    tbl,
+                    Spacer(1, 0.14 * inch),
+                ]
+            )
+        )
+
+    # ── COBROS RÁPIDOS ───────────────────────────────────────────────────────
+    cobros_rapidos = ingresos.get("cobros_rapidos", [])
+    if cobros_rapidos:
+        NARANJA = colors.HexColor("#f59e0b")
+        rows = [
+            [
+                Paragraph("Descripción", s_label),
+                Paragraph("Placa", s_label),
+                Paragraph("Método", s_label),
+                Paragraph(
+                    "Valor",
+                    estilo(
+                        "LR3",
+                        fontSize=8,
+                        fontName="Helvetica-Bold",
+                        textColor=TEXTO,
+                        alignment=TA_RIGHT,
+                    ),
+                ),
+            ]
+        ]
+        for r in cobros_rapidos:
+            rows.append(
+                [
+                    Paragraph(r.get("descripcion") or "—", s_valor),
+                    Paragraph(r.get("placa") or "—", s_valor),
+                    Paragraph(r.get("metodo_pago") or "—", s_valor),
+                    Paragraph(fmt_cop(r.get("valor", 0)), s_valor_r),
+                ]
+            )
+        tbl = tbl_base(rows, [3.0 * inch, 0.9 * inch, 1.2 * inch, 2.3 * inch])
+        story.append(
+            KeepTogether(
+                [
+                    cab("COBROS RÁPIDOS", NARANJA),
                     tbl,
                     Spacer(1, 0.14 * inch),
                 ]

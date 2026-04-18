@@ -53,6 +53,11 @@ function ConfiguracionInterna() {
   const [savingEmail, setSavingEmail] = useState(false);
   const [msgEmail, setMsgEmail] = useState("");
 
+  // ── Contraseña Admin ──
+  const [adminPwd, setAdminPwd] = useState({ actual: "", nueva: "", confirmar: "" });
+  const [savingAdminPwd, setSavingAdminPwd] = useState(false);
+  const [msgAdminPwd, setMsgAdminPwd] = useState("");
+
   useEffect(() => {
     cargarMecanicos();
     api.obtenerConfigTaller().then(setTaller);
@@ -239,6 +244,30 @@ function ConfiguracionInterna() {
       setMsgEmail("✗ " + err.message);
     } finally {
       setSavingEmail(false);
+    }
+  }
+
+  async function handleCambiarPasswordAdmin(e) {
+    e.preventDefault();
+    if (adminPwd.nueva !== adminPwd.confirmar) {
+      setMsgAdminPwd("✗ Las contraseñas nuevas no coinciden");
+      return;
+    }
+    if (adminPwd.nueva.length < 6) {
+      setMsgAdminPwd("✗ La nueva contraseña debe tener al menos 6 caracteres");
+      return;
+    }
+    setSavingAdminPwd(true);
+    setMsgAdminPwd("");
+    try {
+      await api.cambiarPasswordAdmin({ password_actual: adminPwd.actual, nueva_password: adminPwd.nueva });
+      setAdminPwd({ actual: "", nueva: "", confirmar: "" });
+      setMsgAdminPwd("✓ Contraseña actualizada correctamente");
+      setTimeout(() => setMsgAdminPwd(""), 4000);
+    } catch (err) {
+      setMsgAdminPwd("✗ " + err.message);
+    } finally {
+      setSavingAdminPwd(false);
     }
   }
 
@@ -546,6 +575,38 @@ function ConfiguracionInterna() {
                 {savingEmail ? "Guardando..." : "Guardar"}
               </button>
               {msgEmail && <span className={`config-msg ${msgEmail.startsWith("✓") ? "ok" : "err"}`}>{msgEmail}</span>}
+            </div>
+          </form>
+        </section>
+      )}
+
+      {isAdmin && (
+        <section className="config-section">
+          <h2 className="config-section-title">Contraseña Admin (App Móvil)</h2>
+          <p className="config-section-desc">
+            Cambia la contraseña que usan los mecánicos para conectar la app móvil al servidor.
+          </p>
+          <form onSubmit={handleCambiarPasswordAdmin} className="config-form" style={{ marginTop: "1rem" }}>
+            <div className="config-field">
+              <label>Contraseña actual</label>
+              <input className="config-input" type="password" placeholder="Contraseña actual"
+                value={adminPwd.actual} onChange={(e) => setAdminPwd({ ...adminPwd, actual: e.target.value })} required />
+            </div>
+            <div className="config-field">
+              <label>Nueva contraseña (mín. 6 caracteres)</label>
+              <input className="config-input" type="password" placeholder="Nueva contraseña"
+                value={adminPwd.nueva} onChange={(e) => setAdminPwd({ ...adminPwd, nueva: e.target.value })} required />
+            </div>
+            <div className="config-field">
+              <label>Confirmar nueva contraseña</label>
+              <input className="config-input" type="password" placeholder="Repite la nueva contraseña"
+                value={adminPwd.confirmar} onChange={(e) => setAdminPwd({ ...adminPwd, confirmar: e.target.value })} required />
+            </div>
+            <div className="config-save-row">
+              <button className="btn-primary" type="submit" disabled={savingAdminPwd}>
+                {savingAdminPwd ? "Guardando..." : "Cambiar Contraseña"}
+              </button>
+              {msgAdminPwd && <span className={`config-msg ${msgAdminPwd.startsWith("✓") ? "ok" : "err"}`}>{msgAdminPwd}</span>}
             </div>
           </form>
         </section>

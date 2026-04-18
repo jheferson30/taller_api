@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import PageHero from "../components/PageHero";
+import { FiSettings } from "react-icons/fi";
 
 export default function InfoPage() {
   const [info, setInfo] = useState(null);
@@ -19,7 +20,7 @@ export default function InfoPage() {
 
       {/* Tarjeta sistema */}
       <div className="info-sys-card">
-        <div className="info-sys-card-icon">⚙</div>
+        <div className="info-sys-card-icon"><FiSettings size={24} /></div>
         <div className="info-sys-card-content">
           <h3>Sistema</h3>
           <div className="info-rows">

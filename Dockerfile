@@ -1,52 +1,61 @@
-# Stage 1: Builder
-FROM python:3.11-slim as builder
+# ── Stage 1: Build Frontend ──────────────────────────────────────────────────
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /frontend
+
+COPY frontend/package*.json ./
+RUN npm ci --silent
+
+COPY frontend/ ./
+RUN npm run build
+
+# ── Stage 2: Build Python deps ────────────────────────────────────────────────
+FROM python:3.11-slim AS python-builder
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
-    postgresql-client \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Stage 2: Runtime
+# ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy Python dependencies from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
-
-# Install runtime dependencies
+# Runtime system deps
 RUN apt-get update && apt-get install -y \
-    postgresql-client \
     libmagic1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
+# Python deps
+COPY --from=python-builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+# App code
 COPY app/ ./app/
 COPY migrations/ ./migrations/
+COPY scripts/ ./scripts/
 COPY alembic.ini .
 
-# Create directories for uploads
-RUN mkdir -p uploads/fotos uploads/compras
+# Frontend build
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
+COPY --from=frontend-builder /frontend/public ./frontend/public
 
-# Expose port
+# Uploads dirs
+RUN mkdir -p uploads/fotos uploads/compras uploads/firmas uploads/logo
+
+# Entrypoint
+RUN chmod +x scripts/entrypoint.sh
+
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/info')"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -f http://localhost:8000/info || exit 1
 
-# Run with gunicorn
-CMD ["gunicorn", "app.main:app", \
-     "--workers", "4", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8000", \
-     "--timeout", "120"]
+ENTRYPOINT ["scripts/entrypoint.sh"]

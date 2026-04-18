@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import authService from "../services/authService";
 import { QRCodeSVG } from "qrcode.react";
+import { FiUser } from "react-icons/fi";
 
 export default function ConfiguracionMecanicoPage() {
   const user = authService.getUser();
@@ -63,7 +64,7 @@ export default function ConfiguracionMecanicoPage() {
         <h2 className="config-section-title">Mi Perfil</h2>
         <div className="config-list">
           <div className="config-list-item">
-            <span className="config-item-name">👤 {user?.username}</span>
+            <span className="config-item-name"><FiUser size={14} style={{marginRight:5, verticalAlign:"middle"}} />{user?.username}</span>
             <span style={{ fontSize: "0.8rem", background: "#dbeafe", color: "#1e40af", padding: "2px 10px", borderRadius: "12px" }}>
               {user?.roles?.join(", ")}
             </span>

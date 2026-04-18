@@ -24,6 +24,35 @@ export default function EntregadosPage() {
   const [fechaHasta, setFechaHasta] = useState(hoyLocal());
   const [estado, setEstado] = useState("TODOS");
   const [selected, setSelected] = useState(null);
+  const [entrega, setEntrega] = useState({ confirmado_entrega_por: "", metodo_pago_final: "EFECTIVO", firma_entrega_url: "", observaciones_finales: "", recomendaciones: "", proximo_mantenimiento: "" });
+  const [msgEntrega, setMsgEntrega] = useState("");
+  const [loadingEntrega, setLoadingEntrega] = useState(false);
+
+  const handleEntregar = async () => {
+    if (!entrega.confirmado_entrega_por) {
+      setMsgEntrega("Debes ingresar quién confirma la entrega");
+      return;
+    }
+    setLoadingEntrega(true);
+    setMsgEntrega("");
+    try {
+      await api.entregarTicket(selected.id, {
+        confirmado_entrega_por: entrega.confirmado_entrega_por,
+        firma_entrega_url: entrega.firma_entrega_url || null,
+        metodo_pago_final: entrega.metodo_pago_final,
+        observaciones_finales: entrega.observaciones_finales || null,
+        recomendaciones: entrega.recomendaciones || null,
+        proximo_mantenimiento: entrega.proximo_mantenimiento || null,
+      });
+      setMsgEntrega("Ticket entregado correctamente");
+      setEntrega({ confirmado_entrega_por: "", metodo_pago_final: "EFECTIVO", firma_entrega_url: "", observaciones_finales: "", recomendaciones: "", proximo_mantenimiento: "" });
+      await buscar();
+    } catch (e) {
+      setMsgEntrega("Error: " + e.message);
+    } finally {
+      setLoadingEntrega(false);
+    }
+  };
 
   const buscar = async () => {
     setLoading(true);
@@ -133,7 +162,7 @@ export default function EntregadosPage() {
                   <div key={`cr-${item.id}`} className="ent-card" style={{ borderLeft: "3px solid #f59e0b" }}>
                     <div className="ent-card-top">
                       <span className="ent-placa">{item.placa}</span>
-                      <span className="ent-chip" style={{ background: "#fef3c7", color: "#92400e" }}>⚡ COBRO RÁPIDO</span>
+                      <span className="ent-chip" style={{ background: "#fef3c7", color: "#92400e" }}>COBRO RÁPIDO</span>
                     </div>
                     <p className="ent-motivo">{item.concepto}</p>
                     <div className="ent-card-footer">
@@ -150,7 +179,14 @@ export default function EntregadosPage() {
                 <div
                   key={`tk-${item.id}`}
                   className={`ent-card ${isActive ? "ent-card--active" : ""}`}
-                  onClick={() => setSelected(item)}
+                  onClick={async () => {
+                    try {
+                      const resumen = await api.ticketResumen(item.id);
+                      setSelected({ ...resumen.ticket, cobros: resumen.cobros || [] });
+                    } catch {
+                      setSelected(item);
+                    }
+                  }}
                 >
                   <div className="ent-card-top">
                     <span className="ent-placa">{item.placa}</span>
@@ -228,6 +264,90 @@ export default function EntregadosPage() {
                     <p>{selected.recomendaciones}</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Formulario de entrega — solo para tickets FINALIZADOS */}
+            {selected.estado === "FINALIZADO" && (
+              <div className="ent-section" style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 12, padding: "1rem" }}>
+                <h3 className="ent-section-title" style={{ color: "#166534" }}>Registrar Entrega al Cliente</h3>
+
+                {/* Resumen de cobros */}
+                {selected.total_servicio > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    {/* Desglose de cobros individuales */}
+                    {selected.cobros && selected.cobros.length > 0 && (
+                      selected.cobros.map((c, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #d1fae5", color: "#374151", fontSize: "0.9rem" }}>
+                          <span>{c.concepto}</span>
+                          <span>{fmt(c.valor)}</span>
+                        </div>
+                      ))
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #d1fae5", fontWeight: 600 }}>
+                      <span style={{ color: "#374151" }}>Total del servicio</span>
+                      <strong>{fmt(selected.total_servicio)}</strong>
+                    </div>
+                    {selected.anticipo_recibido > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #d1fae5", color: "#16a34a" }}>
+                        <span>— Anticipo recibido</span>
+                        <span>-{fmt(selected.anticipo_recibido)}</span>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontWeight: 700, fontSize: "1.1rem" }}>
+                      <span>Total a Cobrar</span>
+                      <span style={{ color: "#166534" }}>{fmt(Math.max(0, (selected.total_servicio || 0) - (selected.anticipo_recibido || 0)))}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Confirmado por *</label>
+                    <input
+                      style={{ width: "100%", padding: "0.6rem", borderRadius: 8, border: "1px solid #d1d5db", fontFamily: "inherit", boxSizing: "border-box" }}
+                      type="text"
+                      placeholder="Nombre de quien recibe el vehículo"
+                      value={entrega.confirmado_entrega_por}
+                      onChange={(e) => setEntrega({ ...entrega, confirmado_entrega_por: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Método de Pago *</label>
+                    <select
+                      style={{ width: "100%", padding: "0.6rem", borderRadius: 8, border: "1px solid #d1d5db", fontFamily: "inherit" }}
+                      value={entrega.metodo_pago_final}
+                      onChange={(e) => setEntrega({ ...entrega, metodo_pago_final: e.target.value })}
+                    >
+                      <option value="EFECTIVO">Efectivo</option>
+                      <option value="NEQUI">Nequi</option>
+                      <option value="DAVIPLATA">Daviplata</option>
+                      <option value="TRANSFERENCIA">Transferencia</option>
+                      <option value="TARJETA">Tarjeta</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>URL de Firma (opcional)</label>
+                    <input
+                      style={{ width: "100%", padding: "0.6rem", borderRadius: 8, border: "1px solid #d1d5db", fontFamily: "inherit", boxSizing: "border-box" }}
+                      type="text"
+                      placeholder="https://..."
+                      value={entrega.firma_entrega_url}
+                      onChange={(e) => setEntrega({ ...entrega, firma_entrega_url: e.target.value })}
+                    />
+                  </div>
+                  {msgEntrega && (
+                    <p style={{ color: msgEntrega.startsWith("Error") ? "#dc2626" : "#166534", fontWeight: 600, margin: 0 }}>{msgEntrega}</p>
+                  )}
+                  <button
+                    className="button-primary"
+                    onClick={handleEntregar}
+                    disabled={loadingEntrega || !entrega.confirmado_entrega_por}
+                    style={{ width: "100%", padding: "0.8rem", fontSize: "1rem" }}
+                  >
+                    {loadingEntrega ? "Procesando..." : "Entregar y Cobrar"}
+                  </button>
+                </div>
               </div>
             )}
 

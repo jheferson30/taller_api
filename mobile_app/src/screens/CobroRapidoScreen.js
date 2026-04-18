@@ -103,7 +103,7 @@ export default function CobroRapidoScreen({ route, navigation }) {
         >
           {loading
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>⚡ Registrar Cobro</Text>
+            : <Text style={styles.btnText}>Registrar Cobro</Text>
           }
         </TouchableOpacity>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import InputDinero from "../components/InputDinero";
 import SelectMecanico from "../components/SelectMecanico";
@@ -24,6 +24,7 @@ export default function TicketPage() {
   const [activeTab, setActiveTab] = useState("procesos");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
   const [procesosRapidos, setProcesosRapidos] = useState(PROCESOS_RAPIDOS_DEFAULT);
   const [cobrosRapidos, setCobrosRapidos] = useState([]);
 
@@ -110,6 +111,8 @@ export default function TicketPage() {
 
   async function onAddRepuesto() {
     if (!repuesto.nombre) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     try {
       // Subir foto primero si hay archivo
@@ -142,6 +145,7 @@ export default function TicketPage() {
       setMsg("✗ Error: " + e.message);
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   }
 
@@ -154,7 +158,7 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (fotoFile) {
         const uploadResult = await api.subirFoto(fotoFile);
-        fotoUrl = `http://127.0.0.1:8000${uploadResult.url}`;
+        fotoUrl = `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${uploadResult.url}`;
       }
       
       await api.agregarFoto(selectedId, { ...foto, archivo_url: fotoUrl });
@@ -193,7 +197,7 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (compraFile) {
         const uploadResult = await api.subirSoporteCompra(compraFile);
-        soporteUrl = `http://127.0.0.1:8000${uploadResult.url}`;
+        soporteUrl = `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${uploadResult.url}`;
       }
       
       await api.agregarCompra(selectedId, { ...compra, valor: Number(compra.valor), soporte_url: soporteUrl });
@@ -315,10 +319,12 @@ export default function TicketPage() {
   }
 
   async function onUpdateFinanzas() {
-    if (!finanzas.total_servicio) return;
+    const totalCobros = (resumen?.cobros || []).reduce((sum, c) => sum + c.valor, 0);
+    const total = finanzas.total_servicio || totalCobros;
+    if (!total) return;
     setLoading(true);
     try {
-      await api.actualizarFinanzas(selectedId, { ...finanzas, total_servicio: Number(finanzas.total_servicio) });
+      await api.actualizarFinanzas(selectedId, { ...finanzas, total_servicio: Number(total) });
       await loadResumen(selectedId);
       setMsg("✓ Finanzas actualizadas");
       setTimeout(() => setMsg(""), 2000);
@@ -339,6 +345,14 @@ export default function TicketPage() {
     if (!confirm("¿Finalizar este ticket?")) return;
     setLoading(true);
     try {
+      // Guardar observaciones antes de finalizar
+      await api.actualizarFinanzas(selectedId, {
+        total_servicio: resumen.ticket.total_servicio,
+        metodo_pago_final: finanzas.metodo_pago_final,
+        observaciones_finales: observaciones.observaciones_finales || null,
+        recomendaciones: observaciones.recomendaciones || null,
+        proximo_mantenimiento: observaciones.proximo_mantenimiento || null,
+      });
       await api.finalizarTicket(selectedId);
       await loadResumen(selectedId);
       await loadTickets();
@@ -358,7 +372,10 @@ export default function TicketPage() {
     }
     setLoading(true);
     try {
-      await api.entregarTicket(selectedId, { ...entrega, ...observaciones });
+      await api.entregarTicket(selectedId, {
+        ...entrega,
+        metodo_pago_final: finanzas.metodo_pago_final,
+      });
       await loadResumen(selectedId);
       await loadTickets();
       setEntrega({ confirmado_entrega_por: "", firma_entrega_url: "" });
@@ -490,7 +507,7 @@ export default function TicketPage() {
                   className={`tab ${activeTab === "finanzas" ? "active" : ""}`}
                   onClick={() => setActiveTab("finanzas")}
                 >
-                  Finanzas
+                  Finanzas y Observaciones
                 </button>
                 {isFinalizado && (
                   <button
@@ -656,7 +673,12 @@ export default function TicketPage() {
                               className="file-input"
                             />
                             {compraRepuestoFile && (
-                              <small className="file-selected">✓ {compraRepuestoFile.name}</small>
+                              <>
+                                <small className="file-selected">✓ {compraRepuestoFile.name}</small>
+                                <div className="image-preview" style={{ marginTop: 8 }}>
+                                  <img src={URL.createObjectURL(compraRepuestoFile)} alt="Preview" />
+                                </div>
+                              </>
                             )}
                           </label>
                         </div>
@@ -717,9 +739,18 @@ export default function TicketPage() {
                       ) : (
                         (() => {
                           const nombresComprados = new Set((resumen.compras || []).map(c => c.descripcion));
-                          const comprasPorNombre = Object.fromEntries((resumen.compras || []).map(c => [c.descripcion, c]));
+                          // Agrupar compras por nombre como cola para manejar duplicados
+                          const comprasPorNombre = {};
+                          (resumen.compras || []).forEach(c => {
+                            if (!comprasPorNombre[c.descripcion]) comprasPorNombre[c.descripcion] = [];
+                            comprasPorNombre[c.descripcion].push(c);
+                          });
+                          const comprasUsadas = {};
                           return resumen.repuestos.map((r) => {
-                            const compra = comprasPorNombre[r.nombre];
+                            const cola = comprasPorNombre[r.nombre] || [];
+                            const idx = comprasUsadas[r.nombre] || 0;
+                            const compra = cola[idx] || null;
+                            comprasUsadas[r.nombre] = idx + 1;
                             const fotoSrc = r.foto_url
                               ? `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${r.foto_url}`
                               : compra?.soporte_url || null;
@@ -743,8 +774,8 @@ export default function TicketPage() {
                                 <div className="item-header">
                                   <strong>{r.nombre}</strong>
                                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                    {nombresComprados.has(r.nombre) && (
-                                      <span className="badge" style={{ background: "#dcfce7", color: "#166534" }}>🛒 Comprado</span>
+                                    {compra && (
+                                      <span className="badge" style={{ background: "#dcfce7", color: "#166534" }}>Comprado</span>
                                     )}
                                     <span className="badge">x{r.cantidad}</span>
                                   </div>
@@ -847,7 +878,7 @@ export default function TicketPage() {
                                   ✕
                                 </button>
                               )}
-                              <img src={f.archivo_url} alt={f.descripcion} className="foto-img" />
+                              <img src={`${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${f.archivo_url}`} alt={f.descripcion} className="foto-img" />
                               {f.descripcion && <p className="foto-desc">{f.descripcion}</p>}
                             </div>
                           ))}
@@ -1028,31 +1059,16 @@ export default function TicketPage() {
                               )}
                             </div>
 
-                            {/* Método de pago y guardar — solo si hay cobros */}
+                            {/* Guardar finanzas — solo si hay cobros */}
                             {isEditable && resumen.cobros.length > 0 && (
-                              <div className="form-grid" style={{ marginTop: 16 }}>
-                                <label>
-                                  <span className="label-text">Método de Pago Final</span>
-                                  <select
-                                    value={finanzas.metodo_pago_final}
-                                    onChange={(e) => setFinanzas({ ...finanzas, metodo_pago_final: e.target.value })}
-                                  >
-                                    <option value="EFECTIVO">Efectivo</option>
-                                    <option value="NEQUI">Nequi</option>
-                                    <option value="DAVIPLATA">Daviplata</option>
-                                    <option value="TRANSFERENCIA">Transferencia</option>
-                                    <option value="TARJETA">Tarjeta</option>
-                                  </select>
-                                </label>
-                                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                                  <button
-                                    className="button-primary"
-                                    onClick={onUpdateFinanzas}
-                                    disabled={loading || !totalCobros}
-                                  >
-                                    {loading ? "Guardando..." : "Guardar Finanzas"}
-                                  </button>
-                                </div>
+                              <div style={{ marginTop: 16 }}>
+                                <button
+                                  className="button-primary"
+                                  onClick={onUpdateFinanzas}
+                                  disabled={loading}
+                                >
+                                  {loading ? "Guardando..." : "Listo para Cobro"}
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1061,18 +1077,54 @@ export default function TicketPage() {
                     })()}
 
                     {isEditable && (
-                      <div className="finalizar-section">
-                        <button
-                          className="button-finalizar"
-                          onClick={onFinalizar}
-                          disabled={loading || !resumen.ticket.total_servicio}
-                        >
-                          {loading ? "Finalizando..." : "Finalizar Ticket"}
-                        </button>
-                        <p className="finalizar-note">
-                          Al finalizar el ticket se generará el cobro final y no podrás agregar más procesos.
-                        </p>
-                      </div>
+                      <>
+                        {/* Observaciones y recomendaciones — para que el mecánico las llene */}
+                        <div className="form-section" style={{ marginTop: 16 }}>
+                          <h4 className="section-title">Observaciones y Recomendaciones</h4>
+                          <div className="form-grid">
+                            <label className="full-width">
+                              <span className="label-text">Observaciones Finales</span>
+                              <textarea
+                                placeholder="Observaciones sobre el trabajo realizado..."
+                                value={observaciones.observaciones_finales}
+                                onChange={(e) => setObservaciones({ ...observaciones, observaciones_finales: e.target.value })}
+                                rows="3"
+                              />
+                            </label>
+                            <label className="full-width">
+                              <span className="label-text">Recomendaciones</span>
+                              <textarea
+                                placeholder="Recomendaciones para el cliente..."
+                                value={observaciones.recomendaciones}
+                                onChange={(e) => setObservaciones({ ...observaciones, recomendaciones: e.target.value })}
+                                rows="3"
+                              />
+                            </label>
+                            <label className="full-width">
+                              <span className="label-text">Próximo Mantenimiento</span>
+                              <input
+                                type="text"
+                                placeholder="Ej: 2026-06 o en 5000 km"
+                                value={observaciones.proximo_mantenimiento}
+                                onChange={(e) => setObservaciones({ ...observaciones, proximo_mantenimiento: e.target.value })}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="finalizar-section">
+                          <button
+                            className="button-finalizar"
+                            onClick={onFinalizar}
+                            disabled={loading || !resumen.ticket.total_servicio}
+                          >
+                            {loading ? "Finalizando..." : "Finalizar Ticket"}
+                          </button>
+                          <p className="finalizar-note">
+                            Al finalizar el ticket no podrás agregar más procesos. El cobro se registra al entregar.
+                          </p>
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -1108,6 +1160,32 @@ export default function TicketPage() {
 
                     <div className="form-section">
                       <h4 className="section-title">Entregar Ticket al Cliente</h4>
+
+                      {/* Resumen de cobros */}
+                      {resumen.cobros.length > 0 && (
+                        <div className="cobros-list" style={{ marginBottom: 16 }}>
+                          <h4 className="section-title" style={{ marginBottom: 8 }}>Resumen de Cobros</h4>
+                          {resumen.cobros.map((c) => (
+                            <div key={c.id} className="cobro-item">
+                              <span className="cobro-concepto">{c.concepto}</span>
+                              <span className="cobro-valor">${c.valor.toLocaleString("es-CO")}</span>
+                            </div>
+                          ))}
+                          {resumen.ticket.anticipo_recibido > 0 && (
+                            <div className="cobro-item" style={{ color: '#16a34a' }}>
+                              <span className="cobro-concepto">— Anticipo recibido</span>
+                              <span className="cobro-valor">-${resumen.ticket.anticipo_recibido.toLocaleString("es-CO")}</span>
+                            </div>
+                          )}
+                          <div className="cobro-item total">
+                            <span className="cobro-concepto"><strong>Total a Pagar</strong></span>
+                            <span className="cobro-valor" style={{ color: '#1d4ed8', fontSize: '1.1rem' }}>
+                              <strong>${Math.max(0, resumen.cobros.reduce((s, c) => s + c.valor, 0) - (resumen.ticket.anticipo_recibido || 0)).toLocaleString("es-CO")}</strong>
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="form-grid">
                         <label className="full-width">
                           <span className="label-text">Confirmado por *</span>
@@ -1118,6 +1196,19 @@ export default function TicketPage() {
                             onChange={(e) => setEntrega({ ...entrega, confirmado_entrega_por: e.target.value })}
                           />
                         </label>
+                        <label>
+                          <span className="label-text">Método de Pago *</span>
+                          <select
+                            value={finanzas.metodo_pago_final}
+                            onChange={(e) => setFinanzas({ ...finanzas, metodo_pago_final: e.target.value })}
+                          >
+                            <option value="EFECTIVO">Efectivo</option>
+                            <option value="NEQUI">Nequi</option>
+                            <option value="DAVIPLATA">Daviplata</option>
+                            <option value="TRANSFERENCIA">Transferencia</option>
+                            <option value="TARJETA">Tarjeta</option>
+                          </select>
+                        </label>
                         <label className="full-width">
                           <span className="label-text">URL de Firma (opcional)</span>
                           <input
@@ -1127,40 +1218,13 @@ export default function TicketPage() {
                             onChange={(e) => setEntrega({ ...entrega, firma_entrega_url: e.target.value })}
                           />
                         </label>
-                        <label className="full-width">
-                          <span className="label-text">Observaciones Finales</span>
-                          <textarea
-                            placeholder="Observaciones sobre el trabajo realizado..."
-                            value={observaciones.observaciones_finales}
-                            onChange={(e) => setObservaciones({ ...observaciones, observaciones_finales: e.target.value })}
-                            rows="3"
-                          />
-                        </label>
-                        <label className="full-width">
-                          <span className="label-text">Recomendaciones</span>
-                          <textarea
-                            placeholder="Recomendaciones para el cliente..."
-                            value={observaciones.recomendaciones}
-                            onChange={(e) => setObservaciones({ ...observaciones, recomendaciones: e.target.value })}
-                            rows="3"
-                          />
-                        </label>
-                        <label className="full-width">
-                          <span className="label-text">Próximo Mantenimiento</span>
-                          <input
-                            type="text"
-                            placeholder="Ej: 2026-06 o en 5000 km"
-                            value={observaciones.proximo_mantenimiento}
-                            onChange={(e) => setObservaciones({ ...observaciones, proximo_mantenimiento: e.target.value })}
-                          />
-                        </label>
                       </div>
                       <button
                         className="button-primary"
                         onClick={onEntregar}
                         disabled={loading || !entrega.confirmado_entrega_por}
                       >
-                        {loading ? "Entregando..." : "Marcar como Entregado"}
+                        {loading ? "Entregando..." : "Entregar y Cobrar"}
                       </button>
                     </div>
                   </div>

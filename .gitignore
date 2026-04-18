@@ -65,6 +65,9 @@ uploads/
 *.db
 test_temp.db
 
+# PDFs de prueba generados localmente
+test_pdf_*.pdf
+
 # Hypothesis (tests)
 .hypothesis/
 

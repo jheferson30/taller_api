@@ -6,9 +6,12 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { colors } from '../theme';
 import { useToast } from '../components/Toast';
+import authService from '../services/authService';
+import { getApiBaseUrl, getPdfBaseUrl } from '../config';
 
 const METODOS = ['EFECTIVO', 'NEQUI', 'DAVIPLATA', 'TRANSFERENCIA', 'TARJETA'];
 
@@ -24,7 +27,8 @@ export default function AddRepuestoScreen({ route, navigation }) {
   const [valor, setValor] = useState('');
   const [responsable, setResponsable] = useState('');
   const [nota, setNota] = useState('');
-  const [uri, setUri] = useState(null);
+  const [fotoRepuesto, setFotoRepuesto] = useState(null); // foto del repuesto
+  const [uriSoporte, setUriSoporte] = useState(null);    // soporte/factura de compra
   const [mecanicos, setMecanicos] = useState([]);
 
   const [loading, setLoading] = useState(false);
@@ -33,18 +37,42 @@ export default function AddRepuestoScreen({ route, navigation }) {
     api.getMecanicos().then(setMecanicos).catch(() => {});
   }, []);
 
-  const seleccionarFoto = async () => {
+  // Foto del repuesto
+  const seleccionarFotoRepuesto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { toast('Necesitamos acceso a tu galería', 'warning'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-    if (!result.canceled) setUri(result.assets[0].uri);
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      console.log('Foto seleccionada:', uri);
+      setFotoRepuesto(uri);
+    }
   };
 
-  const tomarFoto = async () => {
+  const tomarFotoRepuesto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { toast('Necesitamos acceso a la cámara', 'warning'); return; }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (!result.canceled) setUri(result.assets[0].uri);
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      console.log('Foto tomada:', uri);
+      setFotoRepuesto(uri);
+    }
+  };
+
+  // Soporte/factura de compra
+  const seleccionarSoporte = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { toast('Necesitamos acceso a tu galería', 'warning'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (!result.canceled) setUriSoporte(result.assets[0].uri);
+  };
+
+  const tomarSoporte = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') { toast('Necesitamos acceso a la cámara', 'warning'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled) setUriSoporte(result.assets[0].uri);
   };
 
   const ajustarCantidad = (delta) => {
@@ -63,22 +91,18 @@ export default function AddRepuestoScreen({ route, navigation }) {
 
     setLoading(true);
     try {
-      // Subir foto primero si hay
+      // Subir foto del repuesto si hay
       let foto_url = null;
-      if (uri) {
-        const [baseUrl, password] = await Promise.all([
-          import('../config').then(m => m.getApiBaseUrl()),
-          import('../config').then(m => m.getAdminPassword()),
-        ]);
-        const filename = uri.split('/').pop();
+      if (fotoRepuesto) {
+        const baseUrl = await getPdfBaseUrl();
+        const filename = fotoRepuesto.split('/').pop();
         const ext = filename.split('.').pop().toLowerCase();
         const type = ext === 'png' ? 'image/png' : 'image/jpeg';
         const formData = new FormData();
-        formData.append('file', { uri, name: filename, type });
-        const res = await fetch(`${baseUrl}/upload/foto`, {
+        formData.append('file', { uri: fotoRepuesto, name: filename, type });
+        const res = await authService.authenticatedRequest(`${baseUrl}/upload/foto`, {
           method: 'POST',
           body: formData,
-          headers: { 'X-Admin-Password': password },
         });
         if (res.ok) {
           const data = await res.json();
@@ -99,12 +123,18 @@ export default function AddRepuestoScreen({ route, navigation }) {
           valor: parseInt(valor, 10),
           responsable: responsable || null,
           nota: nota.trim() || null,
-        }, uri);
+        }, uriSoporte || fotoRepuesto);
       }
 
       navigation.goBack();
     } catch (e) {
-      toast(e.message, 'error');
+      const tienefoto = !!(fotoRepuesto || uriSoporte);
+      const msg = e.message?.toLowerCase().includes('network')
+        ? tienefoto
+          ? 'Error de red al subir la foto. Verifica tu conexión WiFi e intenta de nuevo, o quita la foto y guarda sin ella.'
+          : 'Error de red. Verifica tu conexión e intenta de nuevo.'
+        : e.message;
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -153,6 +183,38 @@ export default function AddRepuestoScreen({ route, navigation }) {
           value={marcaReferencia}
           onChangeText={setMarcaReferencia}
         />
+
+        {/* Foto del repuesto (siempre disponible) */}
+        <Text style={styles.label}>Foto del repuesto (opcional)</Text>
+        <View style={styles.botonesRow}>
+          <TouchableOpacity style={styles.btnFoto} onPress={tomarFotoRepuesto}>
+            <Ionicons name="camera-outline" size={18} color={colors.primary} style={{marginRight: 6}} />
+            <Text style={styles.btnFotoText}>Cámara</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.btnFoto} onPress={seleccionarFotoRepuesto}>
+            <Ionicons name="images-outline" size={18} color={colors.primary} style={{marginRight: 6}} />
+            <Text style={styles.btnFotoText}>Galería</Text>
+          </TouchableOpacity>
+        </View>
+        {fotoRepuesto ? (
+          <View style={styles.previewContainer}>
+            <Image
+              key={fotoRepuesto}
+              source={{ uri: fotoRepuesto }}
+              style={styles.preview}
+              resizeMode="cover"
+              onError={(e) => console.log('Error imagen:', e.nativeEvent.error)}
+              onLoad={() => console.log('Imagen cargada OK')}
+            />
+            <TouchableOpacity style={styles.removeBtn} onPress={() => setFotoRepuesto(null)}>
+              <Text style={styles.removeBtnText}>Quitar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.placeholder}>
+            <Text style={styles.placeholderText}>Sin foto adjunta (opcional)</Text>
+          </View>
+        )}
 
         {/* Toggle ¿Fue comprado? */}
         <View style={styles.toggleRow}>
@@ -213,28 +275,6 @@ export default function AddRepuestoScreen({ route, navigation }) {
               numberOfLines={3}
               textAlignVertical="top"
             />
-
-            <Text style={styles.label}>Soporte (Factura/Recibo)</Text>
-            <View style={styles.botonesRow}>
-              <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
-                <Text style={styles.btnFotoText}>📷 Cámara</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnFoto} onPress={seleccionarFoto}>
-                <Text style={styles.btnFotoText}>🖼 Galería</Text>
-              </TouchableOpacity>
-            </View>
-            {uri ? (
-              <View style={styles.previewContainer}>
-                <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
-                <TouchableOpacity style={styles.removeBtn} onPress={() => setUri(null)}>
-                  <Text style={styles.removeBtnText}>✕ Quitar</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.placeholder}>
-                <Text style={styles.placeholderText}>Sin soporte adjunto (opcional)</Text>
-              </View>
-            )}
           </>
         )}
 
@@ -284,11 +324,12 @@ const styles = StyleSheet.create({
   botonesRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   btnFoto: {
     flex: 1, backgroundColor: '#1C2B3A', borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+    borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
   },
   btnFotoText: { fontSize: 14, fontWeight: '600', color: '#D4920A' },
-  previewContainer: { marginTop: 10, borderRadius: 10, overflow: 'hidden' },
-  preview: { width: '100%', height: 180 },
+  previewContainer: { marginTop: 10, borderRadius: 10, minHeight: 200 },
+  preview: { width: '100%', height: 200, borderRadius: 10 },
   removeBtn: { backgroundColor: '#C0392B', padding: 8, alignItems: 'center' },
   removeBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   placeholder: {

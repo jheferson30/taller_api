@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TicketListResponse(BaseModel):
@@ -53,6 +53,7 @@ class RepuestoResponse(BaseModel):
     nombre: str
     cantidad: int
     marca_referencia: str | None = None
+    foto_url: str | None = None
 
     class Config:
         from_attributes = True
@@ -69,27 +70,29 @@ class FotoResponse(BaseModel):
 
 
 class ProcesoCreate(BaseModel):
-    nombre: str
-    descripcion: str | None = None
-    mecanico: str | None = None
+    nombre: str = Field(..., min_length=2, max_length=120)
+    descripcion: str | None = Field(None, max_length=400)
+    mecanico: str | None = Field(None, max_length=120)
 
 
 class RepuestoCreate(BaseModel):
-    nombre: str
-    cantidad: int = 1
-    marca_referencia: str | None = None
+    nombre: str = Field(..., min_length=2, max_length=150)
+    cantidad: int = Field(1, ge=1)
+    marca_referencia: str | None = Field(None, max_length=120)
     proceso_id: int | None = None
+    foto_url: str | None = Field(None, max_length=500)
 
 
 class ActualizarEstadoTicket(BaseModel):
-    estado: str
+    estado: str = Field(..., max_length=20)
 
 
 class EntregarTicketData(BaseModel):
-    confirmado_entrega_por: str
-    observaciones_finales: str | None = None
-    recomendaciones: str | None = None
-    proximo_mantenimiento: str | None = None
+    confirmado_entrega_por: str = Field(..., max_length=120)
+    metodo_pago_final: str | None = Field(None, max_length=50)
+    observaciones_finales: str | None = Field(None, max_length=800)
+    recomendaciones: str | None = Field(None, max_length=800)
+    proximo_mantenimiento: str | None = Field(None, max_length=200)
 
 
 class CompraResponse(BaseModel):
@@ -105,10 +108,10 @@ class CompraResponse(BaseModel):
 
 
 class CompraCreate(BaseModel):
-    descripcion: str
-    valor: int
-    nota: str | None = None
-    responsable: str | None = None
+    descripcion: str = Field(..., min_length=1, max_length=250)
+    valor: int = Field(..., gt=0)
+    nota: str | None = Field(None, max_length=500)
+    responsable: str | None = Field(None, max_length=120)
 
 
 class CobroResponse(BaseModel):
@@ -121,10 +124,13 @@ class CobroResponse(BaseModel):
 
 
 class CobroCreate(BaseModel):
-    concepto: str
-    valor: int
+    concepto: str = Field(..., min_length=2, max_length=200)
+    valor: int = Field(..., gt=0)
 
 
 class ActualizarFinanzasData(BaseModel):
-    total_servicio: int
-    metodo_pago_final: str | None = None
+    total_servicio: int = Field(..., gt=0)
+    metodo_pago_final: str | None = Field(None, max_length=50)
+    observaciones_finales: str | None = Field(None, max_length=800)
+    recomendaciones: str | None = Field(None, max_length=800)
+    proximo_mantenimiento: str | None = Field(None, max_length=200)

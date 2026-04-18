@@ -6,6 +6,8 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { api } from '../api';
 import { getApiBaseUrl, getPdfBaseUrl } from '../config';
 import { colors, estadoConfig } from '../theme';
@@ -20,7 +22,7 @@ const ESTADOS_SIGUIENTES = {
 const LABELS_SIGUIENTE = {
   ABIERTO: '▶ Iniciar Proceso',
   EN_PROCESO: '✓ Marcar Finalizado',
-  FINALIZADO: '📦 Marcar Entregado',
+  FINALIZADO: 'Marcar Entregado',
 };
 
 export default function TicketDetailScreen({ route, navigation }) {
@@ -111,8 +113,8 @@ export default function TicketDetailScreen({ route, navigation }) {
     { key: 'procesos', label: `Procesos (${resumen?.contadores?.procesos ?? 0})` },
     { key: 'repuestos', label: `Repuestos (${resumen?.contadores?.repuestos ?? 0})` },
     { key: 'fotos', label: `Fotos (${resumen?.contadores?.fotos ?? 0})` },
-    { key: 'finanzas', label: 'Finanzas' },
-    ...(isFinalizado ? [{ key: 'entrega', label: '📦 Entrega' }] : []),
+    { key: 'finanzas', label: 'Finanzas y Observaciones' },
+    ...(isFinalizado ? [{ key: 'entrega', label: 'Entrega' }] : []),
   ];
 
   return (
@@ -194,7 +196,7 @@ export default function TicketDetailScreen({ route, navigation }) {
         )}
         {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} />}
         {tab === 'entrega' && (
-          <EntregaTab ticketId={ticketId} onSuccess={() => { loadData(); setTab('info'); }} scrollRef={scrollRef} />
+          <EntregaTab ticketId={ticketId} resumen={resumen} onSuccess={() => { loadData(); setTab('info'); }} scrollRef={scrollRef} />
         )}
       </KeyboardAwareScrollView>
       </View>
@@ -267,7 +269,7 @@ function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh }) {
               />
             ) : null}
             <Text style={styles.itemTitle}>{p.nombre}</Text>
-            {p.mecanico && <Text style={styles.itemSub}>🔧 {p.mecanico}</Text>}
+            {p.mecanico && <Text style={styles.itemSub}>{p.mecanico}</Text>}
             {p.descripcion && <Text style={styles.itemDesc}>{p.descripcion}</Text>}
           </View>
         ))
@@ -277,10 +279,16 @@ function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh }) {
 }
 
 function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation }) {
-  const nombresComprados = new Set((compras || []).map(c => c.descripcion));
-  const comprasPorNombre = Object.fromEntries((compras || []).map(c => [c.descripcion, c]));
   const [baseUrl, setBaseUrl] = React.useState('');
   React.useEffect(() => { getPdfBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
+
+  // Agrupar compras por nombre como cola para manejar duplicados
+  const comprasPorNombre = {};
+  (compras || []).forEach(c => {
+    if (!comprasPorNombre[c.descripcion]) comprasPorNombre[c.descripcion] = [];
+    comprasPorNombre[c.descripcion].push(c);
+  });
+  const comprasUsadas = {};
 
   return (
     <View style={styles.section}>
@@ -292,7 +300,10 @@ function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation 
       {repuestos.length === 0
         ? <Text style={styles.emptyText}>No hay repuestos registrados</Text>
         : repuestos.map((r) => {
-          const compra = comprasPorNombre[r.nombre];
+          const cola = comprasPorNombre[r.nombre] || [];
+          const idx = comprasUsadas[r.nombre] || 0;
+          const compra = cola[idx] || null;
+          comprasUsadas[r.nombre] = idx + 1;
           const fotoUri = r.foto_url && baseUrl ? `${baseUrl}${r.foto_url}`
             : compra?.soporte_url ? compra.soporte_url
             : null;
@@ -308,9 +319,9 @@ function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation 
               <View style={styles.repuestoRow}>
                 <Text style={styles.itemTitle}>{r.nombre}</Text>
                 <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                  {nombresComprados.has(r.nombre) && (
+                  {compra && (
                     <View style={{ backgroundColor: '#dcfce7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>🛒 Comprado</Text>
+                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>Comprado</Text>
                     </View>
                   )}
                   <View style={styles.cantBadge}>
@@ -367,7 +378,7 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh }) {
     <View style={styles.section}>
       {editable && (
         <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('AddFoto', { ticketId })}>
-          <Text style={styles.addBtnText}>📷 Agregar Foto</Text>
+          <Text style={styles.addBtnText}>Agregar Foto</Text>
         </TouchableOpacity>
       )}
       {fotosVisibles.length === 0
@@ -409,8 +420,10 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
   const [savingFinanzas, setSavingFinanzas] = useState(false);
   const [addingCobro, setAddingCobro] = useState(false);
   const [cobrosRapidos, setCobrosRapidos] = useState([]);
+  const [observaciones, setObservaciones] = useState({ observaciones_finales: '', recomendaciones: '', proximo_mantenimiento: '' });
+  const [finalizando, setFinalizando] = useState(false);
 
-  const METODOS = ['Efectivo', 'Transferencia', 'Tarjeta', 'Nequi', 'Daviplata'];
+  const METODOS = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA', 'NEQUI', 'DAVIPLATA'];
 
   // Formatea número con separadores de miles
   const fmtInput = (v) => {
@@ -422,7 +435,7 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
   useEffect(() => {
     api.getCobros(ticketId).then(setCobros).catch(() => {});
     if (resumen?.finanzas?.metodo_pago_final) {
-      setMetodoPago(resumen.finanzas.metodo_pago_final);
+      setMetodoPago(resumen.finanzas.metodo_pago_final.toUpperCase());
     }
   }, [ticketId, resumen]);
 
@@ -511,12 +524,50 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
 
   const totalCobros = cobros.reduce((s, c) => s + c.valor, 0);
 
+  const handleFinalizar = async () => {
+    if (totalCobros <= 0) {
+      toast('Agrega al menos un cobro antes de finalizar', 'warning');
+      return;
+    }
+    Alert.alert('Finalizar Ticket', '¿Finalizar este ticket? Ya no podrás agregar más procesos.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Finalizar',
+        onPress: async () => {
+          setFinalizando(true);
+          try {
+            // Si está ABIERTO, pasar primero a EN_PROCESO
+            if (resumen?.ticket?.estado === 'ABIERTO') {
+              await api.cambiarEstadoTicket(ticketId, 'EN_PROCESO');
+            }
+            // Guardar finanzas y observaciones
+            await api.actualizarFinanzas(ticketId, {
+              total_servicio: totalCobros,
+              metodo_pago_final: metodoPago,
+              observaciones_finales: observaciones.observaciones_finales || null,
+              recomendaciones: observaciones.recomendaciones || null,
+              proximo_mantenimiento: observaciones.proximo_mantenimiento || null,
+            });
+            // Luego finalizar
+            await api.finalizarTicket(ticketId);
+            await onRefresh();
+            toast('Ticket finalizado', 'success');
+          } catch (e) {
+            toast(e.message, 'error');
+          } finally {
+            setFinalizando(false);
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={styles.section}>
       {/* Banner egresos */}
       {f.total_egresos > 0 && (
         <View style={styles.finBanner}>
-          <Text style={styles.finBannerTitle}>💰 Egresos del Ticket: {fmt(f.total_egresos)}</Text>
+          <Text style={styles.finBannerTitle}>Egresos del Ticket: {fmt(f.total_egresos)}</Text>
           <Text style={styles.finBannerSub}>Has gastado {fmt(f.total_egresos)} en compras para este ticket.</Text>
         </View>
       )}
@@ -658,19 +709,7 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
                 </>
               )}
 
-              {/* Método de pago */}
-              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Método de Pago</Text>
-              <View style={styles.finMetodosRow}>
-                {METODOS.map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[styles.finMetodoBtn, metodoPago === m && styles.finMetodoBtnActive]}
-                    onPress={() => setMetodoPago(m)}
-                  >
-                    <Text style={[styles.finMetodoBtnText, metodoPago === m && styles.finMetodoBtnTextActive]}>{m}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {/* Método de pago — se selecciona en Entrega */}
 
               <TouchableOpacity
                 style={[styles.addBtn, { marginTop: 12 }, savingFinanzas && styles.btnDisabled]}
@@ -679,24 +718,87 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
               >
                 {savingFinanzas
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.addBtnText}>💾 Guardar Finanzas</Text>
+                  : <Text style={styles.addBtnText}>Listo para Cobro</Text>
                 }
               </TouchableOpacity>
             </>
           )}
         </View>
       )}
+      {/* Observaciones y Recomendaciones */}
+      {editable && (
+        <View style={styles.finSection}>
+          <Text style={styles.finSectionTitle}>Observaciones y Recomendaciones</Text>
+
+          <Text style={styles.fieldLabel}>Observaciones Finales</Text>
+          <TextInput
+            style={[styles.fieldInput, styles.fieldTextArea]}
+            placeholder="Observaciones sobre el trabajo realizado..."
+            placeholderTextColor={colors.textMuted}
+            value={observaciones.observaciones_finales}
+            onChangeText={(t) => setObservaciones({ ...observaciones, observaciones_finales: t })}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+
+          <Text style={styles.fieldLabel}>Recomendaciones</Text>
+          <TextInput
+            style={[styles.fieldInput, styles.fieldTextArea]}
+            placeholder="Recomendaciones para el cliente..."
+            placeholderTextColor={colors.textMuted}
+            value={observaciones.recomendaciones}
+            onChangeText={(t) => setObservaciones({ ...observaciones, recomendaciones: t })}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+
+          <Text style={styles.fieldLabel}>Próximo Mantenimiento</Text>
+          <TextInput
+            style={styles.fieldInput}
+            placeholder="Ej: 2026-06 o en 5000 km"
+            placeholderTextColor={colors.textMuted}
+            value={observaciones.proximo_mantenimiento}
+            onChangeText={(t) => setObservaciones({ ...observaciones, proximo_mantenimiento: t })}
+          />
+
+          <TouchableOpacity
+            style={[styles.entregaBtn, { marginTop: 16, backgroundColor: '#16a34a' }, finalizando && styles.btnDisabled]}
+            onPress={handleFinalizar}
+            disabled={finalizando}
+          >
+            {finalizando
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.entregaBtnText}>Finalizar Ticket</Text>
+            }
+          </TouchableOpacity>
+          <Text style={{ color: colors.textMuted, fontSize: 12, textAlign: 'center', marginTop: 6 }}>
+            Al finalizar el ticket no podrás agregar más procesos. El cobro se registra al entregar.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
 
-function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
+function EntregaTab({ ticketId, resumen, onSuccess, ticketCodigo, scrollRef }) {
   const toast = useToast();
   const [confirmadoPor, setConfirmadoPor] = useState('');
-  const [observaciones, setObservaciones] = useState('');
-  const [recomendaciones, setRecomendaciones] = useState('');
-  const [proximoMantenimiento, setProximoMantenimiento] = useState('');
+  const [metodoPago, setMetodoPago] = useState('EFECTIVO');
+  const [cobros, setCobros] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const METODOS = ['EFECTIVO', 'NEQUI', 'DAVIPLATA', 'TRANSFERENCIA', 'TARJETA'];
+
+  useEffect(() => {
+    api.getCobros(ticketId).then(setCobros).catch(() => {});
+  }, [ticketId]);
+
+  const fmt = (v) => v != null ? `$${Number(v).toLocaleString('es-CO')}` : '$0';
+  const totalServicio = resumen?.finanzas?.total_servicio || 0;
+  const anticipo = resumen?.finanzas?.anticipo || 0;
+  const totalCobrar = Math.max(0, totalServicio - anticipo);
 
   const handleEntregar = async () => {
     if (!confirmadoPor.trim()) {
@@ -715,11 +817,9 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
             try {
               await api.entregarTicket(ticketId, {
                 confirmado_entrega_por: confirmadoPor.trim(),
-                observaciones_finales: observaciones.trim() || null,
-                recomendaciones: recomendaciones.trim() || null,
-                proximo_mantenimiento: proximoMantenimiento.trim() || null,
+                metodo_pago_final: metodoPago,
               });
-              toast('Ticket marcado como entregado', 'success');
+              toast('Ticket entregado y cobrado', 'success');
               onSuccess();
             } catch (e) {
               toast(e.message, 'error');
@@ -735,9 +835,35 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
   return (
     <View style={styles.section}>
       <View style={styles.entregaCard}>
-        <Text style={styles.entregaTitle}>📦 Registrar Entrega</Text>
+        <Text style={styles.entregaTitle}>Registrar Entrega al Cliente</Text>
         <Text style={styles.entregaSubtitle}>Completa los datos para finalizar la entrega del vehículo</Text>
       </View>
+
+      {/* Desglose de cobros */}
+      {totalServicio > 0 && (
+        <View style={{ backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#86efac' }}>
+          {cobros.map((c, i) => (
+            <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#d1fae5' }}>
+              <Text style={{ color: '#374151', fontSize: 13 }}>{c.concepto}</Text>
+              <Text style={{ color: '#374151', fontSize: 13 }}>{fmt(c.valor)}</Text>
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#d1fae5' }}>
+            <Text style={{ color: '#374151', fontWeight: '600' }}>Total del servicio</Text>
+            <Text style={{ color: '#374151', fontWeight: '600' }}>{fmt(totalServicio)}</Text>
+          </View>
+          {anticipo > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#d1fae5' }}>
+              <Text style={{ color: '#16a34a' }}>— Anticipo recibido</Text>
+              <Text style={{ color: '#16a34a' }}>-{fmt(anticipo)}</Text>
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+            <Text style={{ color: '#166534', fontWeight: '700', fontSize: 16 }}>Total a Cobrar</Text>
+            <Text style={{ color: '#166534', fontWeight: '700', fontSize: 16 }}>{fmt(totalCobrar)}</Text>
+          </View>
+        </View>
+      )}
 
       <Text style={styles.fieldLabel}>Confirmado por *</Text>
       <TextInput
@@ -748,38 +874,21 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
         onChangeText={setConfirmadoPor}
       />
 
-      <Text style={styles.fieldLabel}>Observaciones finales</Text>
-      <TextInput
-        style={[styles.fieldInput, styles.fieldTextArea]}
-        placeholder="Observaciones sobre el trabajo realizado..."
-        placeholderTextColor={colors.textMuted}
-        value={observaciones}
-        onChangeText={setObservaciones}
-        multiline
-        numberOfLines={3}
-        textAlignVertical="top"
-      />
-
-      <Text style={styles.fieldLabel}>Recomendaciones</Text>
-      <TextInput
-        style={[styles.fieldInput, styles.fieldTextArea]}
-        placeholder="Recomendaciones para el cliente..."
-        placeholderTextColor={colors.textMuted}
-        value={recomendaciones}
-        onChangeText={setRecomendaciones}
-        multiline
-        numberOfLines={3}
-        textAlignVertical="top"
-      />
-
-      <Text style={styles.fieldLabel}>Próximo mantenimiento</Text>
-      <TextInput
-        style={styles.fieldInput}
-        placeholder="Ej: En 3 meses o 3000 km"
-        placeholderTextColor={colors.textMuted}
-        value={proximoMantenimiento}
-        onChangeText={setProximoMantenimiento}
-      />
+      <Text style={styles.fieldLabel}>Método de Pago *</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {METODOS.map((m) => (
+          <TouchableOpacity
+            key={m}
+            onPress={() => setMetodoPago(m)}
+            style={{
+              paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+              backgroundColor: metodoPago === m ? '#166534' : '#e5e7eb',
+            }}
+          >
+            <Text style={{ color: metodoPago === m ? '#fff' : '#374151', fontSize: 13, fontWeight: '600' }}>{m}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <TouchableOpacity
         style={[styles.entregaBtn, loading && styles.btnDisabled]}
@@ -788,32 +897,34 @@ function EntregaTab({ ticketId, onSuccess, ticketCodigo, scrollRef }) {
       >
         {loading
           ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.entregaBtnText}>📦 Confirmar Entrega</Text>
+          : <Text style={styles.entregaBtnText}>Entregar y Cobrar</Text>
         }
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.pdfBtn}
         onPress={async () => {
-          const url = await api.getPdfUrl(ticketId);
-          Linking.openURL(url);
-        }}
-      >
-        <Text style={styles.pdfBtnText}>📄 Ver / Descargar PDF del cliente</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.pdfShareBtn}
-        onPress={async () => {
           try {
             const url = await api.getPdfUrl(ticketId);
-            await Share.share({ message: `PDF del ticket: ${url}` });
+            toast('Descargando PDF...', 'info');
+            const destino = FileSystem.cacheDirectory + `ticket_${ticketId}.pdf`;
+            const { uri: archivoUri } = await FileSystem.downloadAsync(url, destino);
+            const puedeCompartir = await Sharing.isAvailableAsync();
+            if (puedeCompartir) {
+              await Sharing.shareAsync(archivoUri, {
+                mimeType: 'application/pdf',
+                dialogTitle: `PDF Ticket ${ticketId}`,
+                UTI: 'com.adobe.pdf',
+              });
+            } else {
+              Linking.openURL(url);
+            }
           } catch (e) {
-            toast(e.message, 'error');
+            toast('Error al descargar PDF: ' + e.message, 'error');
           }
         }}
       >
-        <Text style={styles.pdfShareBtnText}>🔗 Compartir enlace del PDF</Text>
+        <Text style={styles.pdfBtnText}>📄 Descargar / Compartir PDF</Text>
       </TouchableOpacity>
     </View>
   );

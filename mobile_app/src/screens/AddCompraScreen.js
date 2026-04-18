@@ -6,6 +6,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { api } from '../api';
 import { useToast } from '../components/Toast';
@@ -60,28 +61,20 @@ export default function AddCompraScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('descripcion', descripcion.trim());
-      formData.append('valor', String(valorNum));
-      if (responsable.trim()) formData.append('responsable', responsable.trim());
-      if (nota.trim()) formData.append('nota', nota.trim());
-      if (uri) {
-        const filename = uri.split('/').pop();
-        const ext = filename.split('.').pop().toLowerCase();
-        const type = ext === 'png' ? 'image/png' : 'image/jpeg';
-        formData.append('file', { uri, name: filename, type });
-      }
-
       await api.createCompra(ticketId, {
         descripcion: descripcion.trim(),
         valor: valorNum,
         responsable: responsable.trim() || null,
         nota: nota.trim() || null,
-        file: uri ? { uri, name: uri.split('/').pop(), type: 'image/jpeg' } : undefined,
       }, uri);
       navigation.goBack();
     } catch (e) {
-      toast(e.message, 'error');
+      const msg = e.message?.toLowerCase().includes('network')
+        ? uri
+          ? 'Error de red al subir el soporte. Verifica tu conexión WiFi e intenta de nuevo, o quita la foto.'
+          : 'Error de red. Verifica tu conexión e intenta de nuevo.'
+        : e.message;
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -160,10 +153,12 @@ export default function AddCompraScreen({ route, navigation }) {
           <Text style={styles.label}>Soporte (Factura/Recibo)</Text>
           <View style={styles.botonesRow}>
             <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
-              <Text style={styles.btnFotoText}>📷 Cámara</Text>
+              <Ionicons name="camera-outline" size={18} color={colors.primary} style={{marginRight: 6}} />
+              <Text style={styles.btnFotoText}>Cámara</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.btnFoto} onPress={seleccionarSoporte}>
-              <Text style={styles.btnFotoText}>🖼 Galería</Text>
+              <Ionicons name="images-outline" size={18} color={colors.primary} style={{marginRight: 6}} />
+              <Text style={styles.btnFotoText}>Galería</Text>
             </TouchableOpacity>
           </View>
 
@@ -171,7 +166,7 @@ export default function AddCompraScreen({ route, navigation }) {
             <View style={styles.previewContainer}>
               <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
               <TouchableOpacity style={styles.removeBtn} onPress={() => setUri(null)}>
-                <Text style={styles.removeBtnText}>✕ Quitar</Text>
+                <Text style={styles.removeBtnText}>Quitar</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -214,7 +209,8 @@ const styles = StyleSheet.create({
   botonesRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   btnFoto: {
     flex: 1, backgroundColor: colors.surface, borderWidth: 1,
-    borderColor: colors.border, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+    borderColor: colors.border, borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
   },
   btnFotoText: { fontSize: 14, fontWeight: '600', color: colors.primary },
   previewContainer: { marginTop: 10, borderRadius: 10, overflow: 'hidden' },

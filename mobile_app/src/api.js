@@ -83,8 +83,12 @@ export const api = {
       const type = ext === 'png' ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type });
     }
+    // Usar endpoint con-foto si hay imagen, sino el normal
+    const endpoint = uri
+      ? `${baseUrl}/tickets/${ticketId}/procesos/con-foto`
+      : `${baseUrl}/tickets/${ticketId}/procesos`;
     const response = await authService.authenticatedRequest(
-      `${baseUrl}/tickets/${ticketId}/procesos`,
+      endpoint,
       {
         method: 'POST',
         body: formData,
@@ -131,6 +135,18 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  finalizarTicket: (id) =>
+    request(`/tickets/${id}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado: 'FINALIZADO' }),
+    }),
+
+  cambiarEstadoTicket: (id, estado) =>
+    request(`/tickets/${id}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado }),
+    }),
+
   eliminarFoto: (ticketId, fotoId) =>
     request(`/tickets/${ticketId}/fotos/${fotoId}`, { method: 'DELETE' }),
 
@@ -165,8 +181,8 @@ export const api = {
 
   getPdfUrl: async (ticketId) => {
     const base = await getPdfBaseUrl();
-    const token = authService.accessToken || await AsyncStorage.getItem('@auth_access_token');
-    return `${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(token)}`;
+    const password = await getAdminPassword();
+    return `${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(password)}`;
   },
 
   descargarPdf: async (ticketId) => {

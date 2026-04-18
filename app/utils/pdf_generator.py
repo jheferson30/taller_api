@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from io import BytesIO
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import letter
@@ -49,17 +50,52 @@ def resolver_ruta_img(url: str) -> str:
     """Convierte URL o ruta relativa a ruta local del sistema de archivos."""
     if not url:
         return ""
-    for prefijo in [
-        "http://127.0.0.1:8000/uploads/",
-        "http://localhost:8000/uploads/",
-    ]:
-        if url.startswith(prefijo):
-            return "uploads/" + url[len(prefijo) :]
+    import os
+    import re
+
+    def _sanitizar(ruta: str) -> str:
+        # Normalizar separadores y prevenir path traversal
+        ruta = ruta.replace("\\", "/")
+        partes = [p for p in ruta.split("/") if p and p != "."]
+        resultado = []
+        for p in partes:
+            if p == "..":
+                if resultado:
+                    resultado.pop()
+            else:
+                resultado.append(p)
+        return "/".join(resultado)
+
+    match = re.match(r"https?://[^/]+/uploads/(.+)", url)
+    if match:
+        ruta = _sanitizar(match.group(1))
+        if not ruta:
+            return ""
+        return os.path.join("uploads", *ruta.split("/"))
     if url.startswith("/uploads/"):
-        return "uploads/" + url[len("/uploads/") :]
+        ruta = _sanitizar(url[len("/uploads/") :])
+        if not ruta:
+            return ""
+        return os.path.join("uploads", *ruta.split("/"))
     if url.startswith("uploads/"):
-        return url
-    return url
+        ruta = _sanitizar(url[len("uploads/") :])
+        if not ruta:
+            return ""
+        return os.path.join("uploads", *ruta.split("/"))
+    return ""
+
+
+def imagen_escalada(ruta: str, max_w: float, max_h: float, usar_bytes: bool = False) -> Image:
+    """Crea una Image de ReportLab escalada proporcionalmente dentro de max_w x max_h."""
+    with PILImage.open(ruta) as img:
+        orig_w, orig_h = img.size
+        ratio = min(max_w / orig_w, max_h / orig_h)
+        if usar_bytes:
+            buf = BytesIO()
+            img.save(buf, format=img.format or "JPEG")
+            buf.seek(0)
+            return Image(buf, width=orig_w * ratio, height=orig_h * ratio)
+    return Image(ruta, width=orig_w * ratio, height=orig_h * ratio)
 
 
 def generar_pdf_ticket_completo(
@@ -287,11 +323,7 @@ def generar_pdf_ticket_completo(
                 ruta = resolver_ruta_img(p.get("foto_url", ""))
                 if ruta and os.path.exists(ruta):
                     try:
-                        contenido.append(
-                            Image(
-                                ruta, width=col_w_p - 12, height=col_w_p - 12, kind="proportional"
-                            )
-                        )
+                        contenido.append(imagen_escalada(ruta, col_w_p - 12, 1.8 * inch))
                         contenido.append(Spacer(1, 4))
                     except Exception:
                         pass
@@ -329,6 +361,10 @@ def generar_pdf_ticket_completo(
 
     # ── REPUESTOS UTILIZADOS ─────────────────────────────────────────────────
     if repuestos:
+        # Separar repuestos con y sin foto
+        repuestos_con_foto = [r for r in repuestos if r.get("foto_url")]
+        repuestos_sin_foto = repuestos  # tabla siempre muestra todos
+
         rows = [
             [
                 Paragraph("Repuesto", s_label),
@@ -336,7 +372,7 @@ def generar_pdf_ticket_completo(
                 Paragraph("Marca / Ref.", s_label),
             ]
         ]
-        for r in repuestos:
+        for r in repuestos_sin_foto:
             rows.append(
                 [
                     Paragraph(r.get("nombre", "—"), s_valor),
@@ -372,6 +408,61 @@ def generar_pdf_ticket_completo(
             )
         )
 
+        # Fotos de repuestos (igual que compras — grid de 3)
+        if repuestos_con_foto:
+            story.append(seccion("FOTOS DE REPUESTOS"))
+            POR_FILA = 3
+            col_w = W / POR_FILA
+            for i in range(0, len(repuestos_con_foto), POR_FILA):
+                grupo = repuestos_con_foto[i : i + POR_FILA]
+                celdas = []
+                for r in grupo:
+                    contenido = []
+                    ruta = resolver_ruta_img(r.get("foto_url", ""))
+                    if ruta and os.path.exists(ruta):
+                        try:
+                            contenido.append(imagen_escalada(ruta, col_w - 12, 1.5 * inch))
+                        except Exception:
+                            contenido.append(Paragraph("<i>Sin imagen</i>", s_small))
+                    else:
+                        ph = Table([[Paragraph("Sin foto", s_small)]], colWidths=[col_w - 12])
+                        ph.setStyle(
+                            TableStyle(
+                                [
+                                    ("BACKGROUND", (0, 0), (-1, -1), GRIS_FILA),
+                                    ("BOX", (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+                                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                                    ("TOPPADDING", (0, 0), (-1, -1), 20),
+                                    ("BOTTOMPADDING", (0, 0), (-1, -1), 20),
+                                ]
+                            )
+                        )
+                        contenido.append(ph)
+                    contenido.append(Spacer(1, 4))
+                    contenido.append(Paragraph(f"<b>{r.get('nombre', '—')}</b>", s_valor))
+                    if r.get("marca_referencia"):
+                        contenido.append(Paragraph(r["marca_referencia"], s_small))
+                    celdas.append(contenido)
+                while len(celdas) < POR_FILA:
+                    celdas.append([Paragraph("", s_small)])
+                fila_tbl = Table([celdas], colWidths=[col_w] * POR_FILA, rowHeights=[2.0 * inch])
+                fila_tbl.setStyle(
+                    TableStyle(
+                        [
+                            ("BOX", (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+                            ("LINEBEFORE", (1, 0), (-1, -1), 0.3, GRIS_BORDE),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                            ("TOPPADDING", (0, 0), (-1, -1), 6),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                        ]
+                    )
+                )
+                story.append(fila_tbl)
+            story.append(Spacer(1, 0.14 * inch))
+
     # ── COMPRAS / MATERIALES (con fotos de soporte) ──────────────────────────
     if compras:
         story.append(seccion("MATERIALES Y COMPRAS"))
@@ -391,7 +482,7 @@ def generar_pdf_ticket_completo(
                 if ruta and os.path.exists(ruta):
                     try:
                         contenido.append(
-                            Image(ruta, width=col_w - 12, height=col_w - 12, kind="proportional")
+                            imagen_escalada(ruta, col_w - 12, 1.5 * inch, usar_bytes=True)
                         )
                     except Exception:
                         contenido.append(Paragraph("<i>Sin imagen</i>", s_small))
@@ -435,7 +526,7 @@ def generar_pdf_ticket_completo(
             while len(celdas) < POR_FILA:
                 celdas.append([Paragraph("", s_small)])
 
-            fila_tbl = Table([celdas], colWidths=[col_w] * POR_FILA)
+            fila_tbl = Table([celdas], colWidths=[col_w] * POR_FILA, rowHeights=[2.0 * inch])
             fila_tbl.setStyle(
                 TableStyle(
                     [

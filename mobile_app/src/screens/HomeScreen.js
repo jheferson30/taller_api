@@ -129,7 +129,7 @@ export default function HomeScreen({ navigation }) {
         style={styles.quickBtn}
         onPress={() => navigation.navigate('CobroRapido', {})}
       >
-        <Text style={styles.quickBtnText}><Text style={{ color: '#D4920A' }}>⚡</Text> Cobro Rápido</Text>
+        <Text style={styles.quickBtnText}><Text style={{ color: '#D4920A' }}>›</Text> Cobro Rápido</Text>
         <Text style={styles.quickBtnArrow}>›</Text>
       </TouchableOpacity>
 

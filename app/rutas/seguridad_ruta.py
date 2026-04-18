@@ -1,4 +1,5 @@
 import hashlib
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -138,3 +139,64 @@ async def recuperar_password_economia(
     _guardar_config(db, "economia_password", payload.nueva_password)
 
     return {"ok": True, "mensaje": "Contraseña actualizada exitosamente"}
+
+
+# ── Contraseña Admin (app móvil) ─────────────────────────────────────────────
+
+
+class CambiarPasswordAdminPayload(BaseModel):
+    password_actual: str
+    nueva_password: str
+
+
+@router.get("/admin/tiene-password-bd")
+def verificar_tiene_password_admin_bd(db: Session = Depends(obtener_db)):
+    """Verifica si la contraseña admin ya está guardada en BD (vs solo en .env)"""
+    config = _obtener_config(db, "admin_password")
+    return {"tiene_password_bd": config is not None}
+
+
+@router.post("/admin/cambiar-password")
+@limiter.limit("5/minute")
+async def cambiar_password_admin(
+    request: Request,
+    payload: CambiarPasswordAdminPayload,
+    db: Session = Depends(obtener_db),
+):
+    """
+    Cambia la contraseña admin. Solo accesible con JWT de admin.
+    Requiere la contraseña actual para confirmar.
+    """
+    # Solo admins pueden cambiar esta contraseña
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+    user_roles = [role.name for role in user.roles] if hasattr(user, "roles") and user.roles else []
+    if "ADMIN" not in user_roles:
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden cambiar esta contraseña"
+        )
+
+    # Validar contraseña actual — primero BD, luego .env
+    config_actual = _obtener_config(db, "admin_password")
+    if config_actual:
+        if _hash_password(payload.password_actual) != config_actual.valor_hash:
+            raise HTTPException(status_code=401, detail="Contraseña actual incorrecta")
+    else:
+        # Fallback: comparar con .env
+        import hmac as _hmac
+
+        password_env = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD") or ""
+        if not _hmac.compare_digest(payload.password_actual.encode(), password_env.encode()):
+            raise HTTPException(status_code=401, detail="Contraseña actual incorrecta")
+
+    # Validar nueva contraseña
+    if not payload.nueva_password or len(payload.nueva_password) < 6:
+        raise HTTPException(
+            status_code=400, detail="La nueva contraseña debe tener al menos 6 caracteres"
+        )
+
+    # Guardar en BD
+    _guardar_config(db, "admin_password", payload.nueva_password)
+
+    return {"ok": True, "mensaje": "Contraseña admin actualizada correctamente"}

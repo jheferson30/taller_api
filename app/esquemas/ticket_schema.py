@@ -213,6 +213,9 @@ class TicketFinanzasActualizar(BaseModel):
         max_length=50,
         description="Método de pago final (EFECTIVO, TRANSFERENCIA, TARJETA, etc.)",
     )
+    observaciones_finales: str | None = Field(None, max_length=800)
+    recomendaciones: str | None = Field(None, max_length=800)
+    proximo_mantenimiento: str | None = Field(None, max_length=200)
 
     class Config:
         json_schema_extra = {
@@ -229,6 +232,7 @@ class TicketObservacionesFinalesActualizar(BaseModel):
 class TicketEntregarPayload(BaseModel):
     confirmado_entrega_por: str | None = Field(None, max_length=120)
     firma_entrega_url: str | None = Field(None, max_length=255)
+    metodo_pago_final: str | None = Field(None, max_length=50)
     observaciones_finales: str | None = Field(None, max_length=800)
     recomendaciones: str | None = Field(None, max_length=800)
     proximo_mantenimiento: str | None = Field(None, max_length=200)

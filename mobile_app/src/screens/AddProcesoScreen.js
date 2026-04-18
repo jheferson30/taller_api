@@ -7,6 +7,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { colors } from '../theme';
 import { useToast } from '../components/Toast';
@@ -92,7 +93,12 @@ export default function AddProcesoScreen({ route, navigation }) {
       }, fotoUri);
       navigation.goBack();
     } catch (e) {
-      toast(e.message, 'error');
+      const msg = e.message?.toLowerCase().includes('network')
+        ? fotoUri
+          ? 'Error de red al subir la foto. Verifica tu conexión WiFi e intenta de nuevo, o quita la foto y guarda sin ella.'
+          : 'Error de red. Verifica tu conexión e intenta de nuevo.'
+        : e.message;
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -130,20 +136,22 @@ export default function AddProcesoScreen({ route, navigation }) {
             onChangeText={setNombre}
           />
 
-          <Text style={styles.label}>📷 Foto (opcional)</Text>
+          <Text style={styles.label}>Foto (opcional)</Text>
           <View style={styles.botonesRow}>
             <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
-              <Text style={styles.btnFotoText}>📷 Cámara</Text>
+              <Ionicons name="camera-outline" size={18} color={colors.primary} style={{marginRight: 6}} />
+              <Text style={styles.btnFotoText}>Cámara</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.btnFoto} onPress={seleccionarFoto}>
-              <Text style={styles.btnFotoText}>🖼 Galería</Text>
+              <Ionicons name="images-outline" size={18} color={colors.primary} style={{marginRight: 6}} />
+              <Text style={styles.btnFotoText}>Galería</Text>
             </TouchableOpacity>
           </View>
           {fotoUri && (
             <View style={styles.previewContainer}>
               <Image source={{ uri: fotoUri }} style={styles.preview} resizeMode="cover" />
               <TouchableOpacity style={styles.removeBtn} onPress={() => setFotoUri(null)}>
-                <Text style={styles.removeBtnText}>✕ Quitar</Text>
+                <Text style={styles.removeBtnText}>Quitar</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -193,7 +201,7 @@ export default function AddProcesoScreen({ route, navigation }) {
             {loading
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.btnText}>
-                  {!isOnline ? '📥 Guardar sin conexión' : 'Guardar Proceso'}
+                  {!isOnline ? 'Guardar sin conexión' : 'Guardar Proceso'}
                 </Text>
             }
           </TouchableOpacity>
@@ -263,7 +271,8 @@ const styles = StyleSheet.create({
   botonesRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
   btnFoto: {
     flex: 1, backgroundColor: '#1C2B3A', borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+    borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
   },
   btnFotoText: { fontSize: 14, fontWeight: '600', color: '#D4920A' },
   previewContainer: { borderRadius: 12, overflow: 'hidden', marginBottom: 8 },

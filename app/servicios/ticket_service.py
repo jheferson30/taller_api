@@ -59,7 +59,7 @@ class TicketService:
 
     def finalizar_ticket(self, ticket: Ticket) -> Ticket:
         """
-        Finaliza un ticket y crea el movimiento de caja correspondiente.
+        Finaliza un ticket (trabajo terminado). El ingreso se registra al entregar.
 
         Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4
         """
@@ -74,24 +74,7 @@ class TicketService:
         ticket.estado = "FINALIZADO"
         ticket.fecha_cierre = datetime.now(UTC)
 
-        # Crear movimiento de caja para el ingreso final
-        valor_ingreso = ticket.total_servicio - (ticket.anticipo_recibido or 0)
-        if valor_ingreso > 0:
-            movimiento = MovimientoCaja(
-                tipo=TipoMovimiento.INGRESO_FINAL,
-                ticket_id=ticket.id,
-                ticket_codigo=ticket.ticket_codigo,
-                placa=ticket.placa,
-                estado_ticket=EstadoTicket.FINALIZADO,
-                valor=valor_ingreso,
-                metodo_pago=ticket.metodo_pago_final,
-                responsable=ticket.recepcionado_por,
-                concepto=f"Cobro final ticket {ticket.ticket_codigo}",
-                observacion=ticket.observaciones_finales,
-                creado_por=ticket.recepcionado_por,
-            )
-            self.db.add(movimiento)
-
+        # El ingreso final se registra cuando el cliente recoge el vehículo (entregar_ticket)
         return ticket
 
     def entregar_ticket(
@@ -102,9 +85,10 @@ class TicketService:
         observaciones_finales: str | None = None,
         recomendaciones: str | None = None,
         proximo_mantenimiento: str | None = None,
+        metodo_pago_final: str | None = None,
     ) -> Ticket:
         """
-        Marca un ticket como entregado.
+        Marca un ticket como entregado y registra el ingreso final en caja.
 
         Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4
         """
@@ -113,8 +97,25 @@ class TicketService:
 
         ticket.estado = "ENTREGADO"
         ticket.fecha_entrega = datetime.now(UTC)
-        ticket.confirmado_entrega_por = confirmado_entrega_por
+        ticket.confirmado_entrega_por = (
+            InputSanitizer.sanitize_html(confirmado_entrega_por)
+            if confirmado_entrega_por
+            else confirmado_entrega_por
+        )
+        # firma_entrega_url: solo permitir URLs relativas internas o https
+        if firma_entrega_url and not (
+            firma_entrega_url.startswith("/uploads/") or firma_entrega_url.startswith("https://")
+        ):
+            raise HTTPException(status_code=400, detail="URL de firma no válida")
         ticket.firma_entrega_url = firma_entrega_url
+
+        if metodo_pago_final is not None:
+            # Validar que sea un método de pago permitido
+            metodos_permitidos = {"EFECTIVO", "NEQUI", "DAVIPLATA", "TRANSFERENCIA", "TARJETA"}
+            valor_upper = metodo_pago_final.strip().upper()
+            if valor_upper not in metodos_permitidos:
+                raise HTTPException(status_code=400, detail="Método de pago no válido")
+            ticket.metodo_pago_final = valor_upper
 
         # Sanitize text fields to prevent XSS
         if observaciones_finales is not None:
@@ -123,6 +124,24 @@ class TicketService:
             ticket.recomendaciones = InputSanitizer.sanitize_html(recomendaciones)
         if proximo_mantenimiento is not None:
             ticket.proximo_mantenimiento = InputSanitizer.sanitize_html(proximo_mantenimiento)
+
+        # Registrar ingreso final en caja al momento de la entrega (cliente paga al recoger)
+        valor_ingreso = (ticket.total_servicio or 0) - (ticket.anticipo_recibido or 0)
+        if valor_ingreso > 0:
+            movimiento = MovimientoCaja(
+                tipo=TipoMovimiento.INGRESO_FINAL,
+                ticket_id=ticket.id,
+                ticket_codigo=ticket.ticket_codigo,
+                placa=ticket.placa,
+                estado_ticket=EstadoTicket.ENTREGADO,
+                valor=valor_ingreso,
+                metodo_pago=ticket.metodo_pago_final,
+                responsable=ticket.recepcionado_por,
+                concepto=f"Cobro final ticket {ticket.ticket_codigo}",
+                observacion=ticket.observaciones_finales,
+                creado_por=confirmado_entrega_por,
+            )
+            self.db.add(movimiento)
 
         return ticket
 

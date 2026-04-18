@@ -37,6 +37,7 @@ from app.seguridad.dependencias import requerir_password_admin
 from app.servicios.ticket_service import TicketService
 from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
 from app.servicios.whatsapp_service import TipoEvento
+from app.utils.input_validator import InputSanitizer
 from app.utils.pdf_generator import generar_pdf_ticket_completo
 
 router = APIRouter(
@@ -737,6 +738,15 @@ async def actualizar_finanzas_ticket(
         total_servicio=datos.total_servicio,
         metodo_pago_final=datos.metodo_pago_final,
     )
+
+    # Guardar observaciones si se enviaron
+    if datos.observaciones_finales is not None:
+        ticket.observaciones_finales = InputSanitizer.sanitize_html(datos.observaciones_finales)
+    if datos.recomendaciones is not None:
+        ticket.recomendaciones = InputSanitizer.sanitize_html(datos.recomendaciones)
+    if datos.proximo_mantenimiento is not None:
+        ticket.proximo_mantenimiento = InputSanitizer.sanitize_html(datos.proximo_mantenimiento)
+
     db.commit()
     db.refresh(ticket)
     return ticket
@@ -863,12 +873,25 @@ def generar_pdf_cliente(
 
     if not jwt_user:
         # Fallback legacy: verificar X-Admin-Password o token query param
-        password_esperada = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD")
         admin_token = x_admin_password or token
-        if not admin_token or not hmac.compare_digest(
-            admin_token.encode("utf-8"), password_esperada.encode("utf-8")
-        ):
+        if not admin_token:
             raise HTTPException(status_code=401, detail="Autenticacion requerida")
+
+        # Verificar contra BD primero, luego .env
+        from app.seguridad.dependencias import _get_admin_password_from_db
+
+        hash_bd = _get_admin_password_from_db(db)
+        if hash_bd:
+            import hashlib as _hashlib
+
+            if not hmac.compare_digest(_hashlib.sha256(admin_token.encode()).hexdigest(), hash_bd):
+                raise HTTPException(status_code=401, detail="Autenticacion requerida")
+        else:
+            password_esperada = os.getenv("ADMIN_PASSWORD") or os.getenv("PDF_PASSWORD")
+            if not password_esperada or not hmac.compare_digest(
+                admin_token.encode("utf-8"), password_esperada.encode("utf-8")
+            ):
+                raise HTTPException(status_code=401, detail="Autenticacion requerida")
     ticket = _obtener_ticket_o_404(db, ticket_id)
     vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
     procesos = (
@@ -933,7 +956,12 @@ def generar_pdf_cliente(
         for p in procesos
     ]
     repuestos_list = [
-        {"nombre": r.nombre, "cantidad": r.cantidad, "marca_referencia": r.marca_referencia}
+        {
+            "nombre": r.nombre,
+            "cantidad": r.cantidad,
+            "marca_referencia": r.marca_referencia,
+            "foto_url": r.foto_url,
+        }
         for r in repuestos
     ]
     fotos_list = [
@@ -1056,6 +1084,7 @@ async def marcar_entregado(
         observaciones_finales=datos.observaciones_finales,
         recomendaciones=datos.recomendaciones,
         proximo_mantenimiento=datos.proximo_mantenimiento,
+        metodo_pago_final=datos.metodo_pago_final,
     )
     db.commit()
     db.refresh(ticket)

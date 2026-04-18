@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taller-api
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:${DB_PASSWORD}@db:5432/taller_db?client_encoding=utf8
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - PUBLIC_IP=${PUBLIC_IP}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - PDF_PASSWORD=${PDF_PASSWORD}
+      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY}
+      - PASSWORD_HASHER=bcrypt
+      - BCRYPT_COST_FACTOR=12
+    env_file:
+      - .env.production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    container_name: taller-db
+    environment:
+      POSTGRES_DB: taller_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taller_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: taller-redis
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: taller-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  taller-network:
+    driver: bridge

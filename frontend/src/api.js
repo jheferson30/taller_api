@@ -242,4 +242,5 @@ export const api = {
   actualizarConfigEmail: (body) => request("/configuracion/email", { method: "PUT", data: body }),
   obtenerLogo: () => request("/configuracion/logo"),
   subirLogo: (formData) => request("/configuracion/logo", { method: "POST", data: formData, headers: { "Content-Type": "multipart/form-data" } }),
+  cambiarPasswordAdmin: (body) => request("/seguridad/admin/cambiar-password", { method: "POST", data: body }),
 };
