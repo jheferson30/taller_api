@@ -18,7 +18,12 @@ except Exception as e:
     sleep 2
 done
 
-# Ejecutar migraciones
+# Inicializar schema de base de datos (crear tablas si no existen)
+echo "🔨 Inicializando schema de base de datos..."
+python scripts/init_database.py
+echo "✅ Schema inicializado"
+
+# Ejecutar migraciones de Alembic
 echo "🔄 Ejecutando migraciones..."
 alembic upgrade head
 echo "✅ Migraciones completadas"
