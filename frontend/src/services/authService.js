@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+// En producción, usar URL relativa (mismo dominio). En desarrollo, localhost:8000
+const API_BASE = import.meta.env.VITE_API_URL !== undefined 
+  ? import.meta.env.VITE_API_URL 
+  : (import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000');
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user';

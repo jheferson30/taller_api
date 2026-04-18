@@ -8,11 +8,11 @@ RUN npm ci --silent
 
 COPY frontend/ ./
 
-# Set VITE_API_URL to empty for production (uses relative URLs)
-# CRITICAL: Vite needs this at build time, not runtime
+# CRITICAL: Set environment variables for production build
+ENV NODE_ENV=production
 ENV VITE_API_URL=""
 
-# Build with production mode explicitly
+# Build with production mode explicitly - this should make import.meta.env.MODE === 'production'
 RUN npm run build -- --mode production
 
 # ── Stage 2: Build Python deps ────────────────────────────────────────────────

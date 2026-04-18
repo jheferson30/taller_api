@@ -1,7 +1,10 @@
 import axios from 'axios';
 import authService from './services/authService';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// En producción, usar URL relativa (mismo dominio). En desarrollo, localhost:8000
+const API_BASE = import.meta.env.VITE_API_URL !== undefined 
+  ? import.meta.env.VITE_API_URL 
+  : (import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000');
 const TIMEOUT_MS = 15000; // 15 segundos
 
 // Configurar axios con base URL y timeout

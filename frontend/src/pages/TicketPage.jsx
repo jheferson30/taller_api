@@ -18,6 +18,11 @@ const PROCESOS_RAPIDOS_DEFAULT = [
 ];
 
 export default function TicketPage() {
+  // En producción, usar URL relativa (mismo dominio). En desarrollo, localhost:8000
+  const API_BASE = import.meta.env.VITE_API_URL !== undefined 
+    ? import.meta.env.VITE_API_URL 
+    : (import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000');
+  
   const [tickets, setTickets] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [resumen, setResumen] = useState(null);
@@ -130,7 +135,7 @@ export default function TicketPage() {
           valor: Number(compraRepuesto.valor),
           responsable: compraRepuesto.responsable || null,
           nota: compraRepuesto.nota || null,
-          soporte_url: foto_url ? `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${foto_url}` : null,
+          soporte_url: foto_url ? `${API_BASE}${foto_url}` : null,
         });
       }
 
@@ -158,7 +163,7 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (fotoFile) {
         const uploadResult = await api.subirFoto(fotoFile);
-        fotoUrl = `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${uploadResult.url}`;
+        fotoUrl = `${API_BASE}${uploadResult.url}`;
       }
       
       await api.agregarFoto(selectedId, { ...foto, archivo_url: fotoUrl });
@@ -197,7 +202,7 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (compraFile) {
         const uploadResult = await api.subirSoporteCompra(compraFile);
-        soporteUrl = `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${uploadResult.url}`;
+        soporteUrl = `${API_BASE}${uploadResult.url}`;
       }
       
       await api.agregarCompra(selectedId, { ...compra, valor: Number(compra.valor), soporte_url: soporteUrl });
@@ -610,7 +615,7 @@ export default function TicketPage() {
                             )}
                             {p.foto_url && (
                               <img
-                                src={`${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${p.foto_url}`}
+                                src={`${API_BASE}${p.foto_url}`}
                                 alt={p.nombre}
                                 style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: "8px 8px 0 0", marginBottom: 8 }}
                               />
@@ -752,7 +757,7 @@ export default function TicketPage() {
                             const compra = cola[idx] || null;
                             comprasUsadas[r.nombre] = idx + 1;
                             const fotoSrc = r.foto_url
-                              ? `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${r.foto_url}`
+                              ? `${API_BASE}${r.foto_url}`
                               : compra?.soporte_url || null;
                             return (
                               <div key={r.id} className="item-card" style={{ position: "relative" }}>
@@ -878,7 +883,7 @@ export default function TicketPage() {
                                   ✕
                                 </button>
                               )}
-                              <img src={`${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${f.archivo_url}`} alt={f.descripcion} className="foto-img" />
+                              <img src={`${API_BASE}${f.archivo_url}`} alt={f.descripcion} className="foto-img" />
                               {f.descripcion && <p className="foto-desc">{f.descripcion}</p>}
                             </div>
                           ))}

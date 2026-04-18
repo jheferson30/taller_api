@@ -62,7 +62,10 @@ export default function LoginPage() {
     setLoadingRecuperar(true);
     setMsgRecuperar('');
     try {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      // En producción, usar URL relativa (mismo dominio). En desarrollo, localhost:8000
+      const API_BASE = import.meta.env.VITE_API_URL !== undefined 
+        ? import.meta.env.VITE_API_URL 
+        : (import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000');
       await fetch(`${API_BASE}/auth/forgot-password-by-username`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
