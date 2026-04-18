@@ -7,6 +7,11 @@ COPY frontend/package*.json ./
 RUN npm ci --silent
 
 COPY frontend/ ./
+
+# Set VITE_API_URL to empty for production (uses relative URLs)
+ENV VITE_API_URL=""
+ENV NODE_ENV=production
+
 RUN npm run build
 
 # ── Stage 2: Build Python deps ────────────────────────────────────────────────
