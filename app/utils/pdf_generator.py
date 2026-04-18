@@ -179,9 +179,21 @@ def generar_pdf_ticket_completo(
     fecha_gen = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     # ── ENCABEZADO ───────────────────────────────────────────────────────────
-    logo_path = os.path.join("frontend", "public", "assets", "logo.png")
+    # Resolver ruta del logo: primero desde uploads (persistente), luego fallback a assets
+    logo_path = None
+    logo_url_taller = t.get("logo_url") or ""
+    if logo_url_taller:
+        # logo_url tiene formato /uploads/logo/logo_xxx.png
+        ruta_relativa = logo_url_taller.lstrip("/")
+        if os.path.exists(ruta_relativa):
+            logo_path = ruta_relativa
+    if not logo_path:
+        fallback = os.path.join("frontend", "public", "assets", "logo.png")
+        if os.path.exists(fallback):
+            logo_path = fallback
+
     col_izq = []
-    if os.path.exists(logo_path):
+    if logo_path:
         try:
             col_izq.append(Image(logo_path, width=0.65 * inch, height=0.65 * inch))
             col_izq.append(Spacer(1, 3))

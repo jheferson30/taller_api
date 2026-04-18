@@ -259,8 +259,18 @@ async def actualizar_config_email(
 
 @router.get("/logo")
 def obtener_logo(db: Session = Depends(get_db)):
+    import time
+
     cfg = _get_config(db)
-    return {"logo_url": cfg.logo_url or ""}
+    logo_url = cfg.logo_url or ""
+
+    # Agregar parámetro de versión para evitar caché del navegador
+    if logo_url:
+        timestamp = str(int(time.time()))
+        separator = "&" if "?" in logo_url else "?"
+        logo_url = f"{logo_url}{separator}v={timestamp}"
+
+    return {"logo_url": logo_url}
 
 
 @router.post("/logo", dependencies=[Depends(verificar_admin)])
@@ -270,7 +280,6 @@ async def subir_logo(
     db: Session = Depends(get_db),
 ):
     import os
-    import shutil
     import uuid
 
     ext = os.path.splitext(file.filename)[1].lower()
@@ -284,11 +293,6 @@ async def subir_logo(
     with open(filepath, "wb") as f:
         f.write(content)
     logo_url = f"/uploads/logo/{filename}"
-
-    # Copiar también como logo para los PDFs
-    pdf_logo_path = os.path.join("frontend", "public", "assets", "logo.png")
-    os.makedirs(os.path.dirname(pdf_logo_path), exist_ok=True)
-    shutil.copy2(filepath, pdf_logo_path)
 
     cfg = _get_config(db)
     cfg.logo_url = logo_url

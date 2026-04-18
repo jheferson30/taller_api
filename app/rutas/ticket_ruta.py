@@ -985,6 +985,7 @@ def generar_pdf_cliente(
         "direccion": cfg.direccion if cfg else "",
         "telefono": cfg.telefono if cfg else "",
         "nit": cfg.nit if cfg else "",
+        "logo_url": cfg.logo_url if cfg else "",
     }
 
     # Generar PDF con el nuevo generador

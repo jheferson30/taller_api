@@ -176,6 +176,7 @@ def generar_pdf_economia_dia(
         "direccion": config_taller.direccion if config_taller else "",
         "telefono": config_taller.telefono if config_taller else "",
         "nit": config_taller.nit if config_taller else "",
+        "logo_url": config_taller.logo_url if config_taller else "",
     }
 
     pdf_bytes = generar_pdf_economia_profesional(

@@ -83,7 +83,6 @@ export default function LoginPage() {
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#0A1017' }}>
       <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <img src="/assets/logo.png" alt="MecaApp" style={{ height: '120px', marginBottom: '1.5rem', filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15))' }} />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333' }}>Iniciar Sesión</h1>
         </div>
 
