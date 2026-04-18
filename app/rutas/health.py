@@ -4,6 +4,7 @@ Usados por Docker healthchecks y monitoreo.
 """
 
 import os
+import socket
 from datetime import datetime
 
 from fastapi import APIRouter
@@ -12,6 +13,27 @@ from sqlalchemy import text
 from app.configuracion.base_datos import engine
 
 router = APIRouter(tags=["Health"])
+
+
+def _get_ip_local() -> str:
+    public_ip = os.getenv("PUBLIC_IP")
+    if public_ip:
+        return public_ip
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen("https://api.ipify.org", timeout=2) as r:
+            return r.read().decode().strip()
+    except Exception:
+        pass
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 @router.get("/health")
@@ -61,11 +83,9 @@ async def health_check():
 @router.get("/info")
 async def service_info():
     """
-    Información del servicio.
-
-    Returns:
-        dict: Información básica del servicio
+    Información del servicio incluyendo IP del servidor para la app móvil.
     """
+    ip_local = _get_ip_local()
     return {
         "name": "MecaApp API",
         "version": "2.0.0",
@@ -75,6 +95,11 @@ async def service_info():
         "framework": "FastAPI",
         "database": "PostgreSQL 15",
         "cache": "Redis 7",
+        # Campos usados por el frontend para mostrar IP de conexión
+        "sistema": "MecaApp",
+        "ip_servidor": ip_local,
+        "puerto": 8000,
+        "url_app_movil": f"http://{ip_local}:8000",
     }
 
 
