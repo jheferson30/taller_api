@@ -618,8 +618,15 @@ app.add_middleware(AuthMiddleware)
 
 # ── HTTPS and Security Middleware (Production Only) ───────────────────────────
 if os.getenv("ENVIRONMENT") == "production":
-    # Redirigir HTTP → HTTPS automáticamente
-    app.add_middleware(HTTPSRedirectMiddleware)
+    # Redirigir HTTP → HTTPS solo si FORCE_HTTPS está habilitado
+    # Esto permite usar HTTP en producción sin certificados SSL
+    if os.getenv("FORCE_HTTPS", "false").lower() == "true":
+        app.add_middleware(HTTPSRedirectMiddleware)
+        print("✅ HTTPS redirect habilitado")
+    else:
+        print(
+            "⚠️  HTTPS redirect deshabilitado - Configura FORCE_HTTPS=true cuando tengas certificados SSL"
+        )
 
     # Validar hosts confiables
     allowed_hosts = os.getenv("ALLOWED_HOSTS", "").strip()
