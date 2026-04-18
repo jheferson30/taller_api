@@ -60,7 +60,9 @@ async function probarHost(ip, pwd, timeout) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), t);
   try {
-    const res = await fetch(`http://${ip}:8000/api/mobile/estadisticas`, {
+    // En producción (IP específica), usar puerto 80. En desarrollo, puerto 8000
+    const puerto = ip === '68.155.145.217' ? '' : ':8000';
+    const res = await fetch(`http://${ip}${puerto}/api/mobile/estadisticas`, {
       headers: { 'X-Admin-Password': pwd },
       signal: controller.signal,
     });
@@ -120,15 +122,21 @@ export async function detectarIpActiva(password) {
 
 export async function getApiBaseUrl() {
   const ip = await getServerIp();
-  return `http://${ip}:8000/api/mobile`;
+  // En producción, usar puerto 80 (Nginx proxy). En desarrollo, puerto 8000 (API directo)
+  const puerto = ip === '68.155.145.217' ? '' : ':8000';
+  return `http://${ip}${puerto}/api/mobile`;
 }
 
 export async function getAuthBaseUrl() {
   const ip = await getServerIp();
-  return `http://${ip}:8000`;
+  // En producción, usar puerto 80 (Nginx proxy). En desarrollo, puerto 8000 (API directo)
+  const puerto = ip === '68.155.145.217' ? '' : ':8000';
+  return `http://${ip}${puerto}`;
 }
 
 export async function getPdfBaseUrl() {
   const ip = await getServerIp();
-  return `http://${ip}:8000`;
+  // En producción, usar puerto 80 (Nginx proxy). En desarrollo, puerto 8000 (API directo)
+  const puerto = ip === '68.155.145.217' ? '' : ':8000';
+  return `http://${ip}${puerto}`;
 }
