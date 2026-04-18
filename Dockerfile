@@ -15,6 +15,10 @@ ENV VITE_API_URL=""
 # Build with production mode explicitly - this should make import.meta.env.MODE === 'production'
 RUN npm run build -- --mode production
 
+# Copy fix script and run it to remove any remaining hardcoded URLs
+COPY scripts/fix-frontend-urls.sh /tmp/
+RUN chmod +x /tmp/fix-frontend-urls.sh && /tmp/fix-frontend-urls.sh
+
 # ── Stage 2: Build Python deps ────────────────────────────────────────────────
 FROM python:3.11-slim AS python-builder
 
