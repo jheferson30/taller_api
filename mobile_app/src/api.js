@@ -316,27 +316,66 @@ export const api = {
   getEconomia: (fecha) => request(`/economia-hoy${fecha ? '?fecha=' + fecha : ''}`),
 
   // ── Vehículos ──────────────────────────────────────────────────────────────
-  buscarVehiculo: (placa) =>
-    request(`/vehiculos/buscar?placa=${encodeURIComponent(placa)}`),
+  buscarVehiculo: async (placa) => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/vehiculos/buscar?placa=${encodeURIComponent(placa)}`, {}
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || mensajeError(response.status));
+    }
+    return response.json();
+  },
 
-  fichaVehiculo: (placa) =>
-    request(`/vehiculos/${encodeURIComponent(placa)}/ficha`),
+  fichaVehiculo: async (placa) => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/vehiculos/${encodeURIComponent(placa)}/ficha`, {}
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || mensajeError(response.status));
+    }
+    return response.json();
+  },
 
-  crearVehiculo: (data) =>
-    request('/vehiculos/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  crearVehiculo: async (data) => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/vehiculos/`,
+      { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || mensajeError(response.status));
+    }
+    return response.json();
+  },
 
-  actualizarVehiculo: (placa, data) =>
-    request(`/vehiculos/${encodeURIComponent(placa)}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+  actualizarVehiculo: async (placa, data) => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/vehiculos/${encodeURIComponent(placa)}`,
+      { method: 'PUT', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || mensajeError(response.status));
+    }
+    return response.json();
+  },
 
-  crearTicketIngreso: (placa, data) =>
-    request(`/vehiculos/${encodeURIComponent(placa)}/ticket-ingreso`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  crearTicketIngreso: async (placa, data) => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/vehiculos/${encodeURIComponent(placa)}/ticket-ingreso`,
+      { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || mensajeError(response.status));
+    }
+    return response.json();
+  },
 };

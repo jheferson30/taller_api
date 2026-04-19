@@ -513,7 +513,7 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   searchBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#D4920A',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
