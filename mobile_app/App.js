@@ -112,6 +112,8 @@ export default function App() {
             component={HomeScreen}
             options={({ navigation }) => ({
               title: 'Taller Mecánico',
+              headerBackVisible: false,
+              gestureEnabled: false,
               headerRight: () => (
                 <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
                   <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
