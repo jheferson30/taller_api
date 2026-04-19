@@ -582,8 +582,9 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
     borderRadius: 10,
     overflow: 'hidden',
+    justifyContent: 'center',
   },
-  picker: { color: '#fff', height: 48 },
+  picker: { color: '#fff', height: 54 },
 
   // Info vehículo existente
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -625,10 +626,12 @@ const s = StyleSheet.create({
   btnCancelarText: { color: '#94a3b8', fontWeight: '600', fontSize: 15 },
   btnGuardar: {
     flex: 2,
-    backgroundColor: colors.primary,
+    backgroundColor: '#D4920A',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
   },
   btnGuardarText: { color: '#0A1017', fontWeight: '700', fontSize: 15 },
   btnDisabled: { opacity: 0.5 },
