@@ -127,6 +127,14 @@ export default function HomeScreen({ navigation }) {
 
       <TouchableOpacity
         style={styles.quickBtn}
+        onPress={() => navigation.navigate('Recepcion', {})}
+      >
+        <Text style={styles.quickBtnText}><Text style={{ color: '#D4920A' }}>›</Text> Recepción de Vehículos</Text>
+        <Text style={styles.quickBtnArrow}>›</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.quickBtn}
         onPress={() => navigation.navigate('CobroRapido', {})}
       >
         <Text style={styles.quickBtnText}><Text style={{ color: '#D4920A' }}>›</Text> Cobro Rápido</Text>
