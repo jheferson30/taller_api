@@ -314,4 +314,29 @@ export const api = {
   },
 
   getEconomia: (fecha) => request(`/economia-hoy${fecha ? '?fecha=' + fecha : ''}`),
+
+  // ── Vehículos ──────────────────────────────────────────────────────────────
+  buscarVehiculo: (placa) =>
+    request(`/vehiculos/buscar?placa=${encodeURIComponent(placa)}`),
+
+  fichaVehiculo: (placa) =>
+    request(`/vehiculos/${encodeURIComponent(placa)}/ficha`),
+
+  crearVehiculo: (data) =>
+    request('/vehiculos/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  actualizarVehiculo: (placa, data) =>
+    request(`/vehiculos/${encodeURIComponent(placa)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  crearTicketIngreso: (placa, data) =>
+    request(`/vehiculos/${encodeURIComponent(placa)}/ticket-ingreso`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };

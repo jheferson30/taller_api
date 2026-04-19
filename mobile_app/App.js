@@ -17,6 +17,7 @@ import AddFotoScreen from './src/screens/AddFotoScreen';
 import CobroRapidoScreen from './src/screens/CobroRapidoScreen';
 import ConfiguracionScreen from './src/screens/ConfiguracionScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import RecepcionScreen from './src/screens/RecepcionScreen';
 
 import { detectarIpActiva } from './src/config';
 import authService from './src/services/authService';
@@ -141,6 +142,7 @@ export default function App() {
           <Stack.Screen name="AddRepuesto" component={AddRepuestoScreen} options={{ title: 'Agregar Repuesto' }} />
           <Stack.Screen name="AddFoto" component={AddFotoScreen} options={{ title: 'Agregar Foto' }} />
           <Stack.Screen name="CobroRapido" component={CobroRapidoScreen} options={{ title: 'Cobro Rápido' }} />
+          <Stack.Screen name="Recepcion" component={RecepcionScreen} options={{ title: 'Recepción de Vehículos' }} />
         </Stack.Navigator>
       </NavigationContainer>
     </ToastProvider>

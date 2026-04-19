@@ -4,6 +4,7 @@ import { colors } from "../theme";
 import authService from "../services/authService";
 
 const MENU = [
+  { label: "Recepción de Vehículos", sub: "Registrar ingreso y crear ticket", screen: "Recepcion", params: {} },
   { label: "Economia del dia", sub: "Ingresos, egresos y ganancia", screen: "AdminEconomia" },
   { label: "Estado de tickets", sub: "Ver tickets por estado", screen: "TicketList", params: { estado: null, titulo: "Todos los tickets" } },
   { label: "Cobro rapido", sub: "Registrar un pago", screen: "CobroRapido", params: {} },
