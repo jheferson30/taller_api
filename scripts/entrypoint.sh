@@ -3,6 +3,21 @@ set -e
 
 echo "🚀 Iniciando MecaApp..."
 
+# Función para sincronizar logo
+sync_logo() {
+    echo "🖼️  Sincronizando logo..."
+    # Buscar el logo más reciente en uploads/logo/
+    LATEST_LOGO=$(find uploads/logo/ -name "logo_*.png" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+    
+    if [ -n "$LATEST_LOGO" ] && [ -f "$LATEST_LOGO" ]; then
+        echo "📋 Copiando logo: $LATEST_LOGO -> frontend/public/assets/logo.png"
+        cp "$LATEST_LOGO" frontend/public/assets/logo.png
+        echo "✅ Logo sincronizado"
+    else
+        echo "ℹ️  No se encontró logo personalizado, usando logo por defecto"
+    fi
+}
+
 # Esperar a que PostgreSQL esté listo
 echo "⏳ Esperando base de datos..."
 until python -c "
@@ -33,12 +48,16 @@ echo "👤 Verificando usuario admin y roles..."
 python scripts/seed_admin.py
 echo "✅ Seed completado"
 
+# Sincronizar logo
+sync_logo
+
 # Iniciar la aplicación
 echo "🌐 Iniciando servidor..."
 exec gunicorn app.main:app \
-    --workers 2 \
+    --workers 4 \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:8000 \
-    --timeout 120 \
+    --timeout 180 \
+    --graceful-timeout 30 \
     --access-logfile - \
     --error-logfile -

@@ -5,7 +5,8 @@ import authService from './services/authService';
 const API_BASE = import.meta.env.VITE_API_URL !== undefined 
   ? import.meta.env.VITE_API_URL 
   : (import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000');
-const TIMEOUT_MS = 15000; // 15 segundos
+const TIMEOUT_MS = 15000; // 15 segundos para requests normales
+const TIMEOUT_PDF_MS = 120000; // 2 minutos para generación de PDFs
 
 // Configurar axios con base URL y timeout
 axios.defaults.baseURL = API_BASE;
@@ -153,6 +154,7 @@ export const api = {
   descargarPdfTicket: async (ticketId) => {
     const response = await axios.get(`/tickets/${ticketId}/pdf`, {
       responseType: 'blob',
+      timeout: TIMEOUT_PDF_MS,
     });
     return response.data;
   },
@@ -160,6 +162,7 @@ export const api = {
     const params = fecha ? `?fecha=${fecha}` : '';
     const response = await axios.get(`/economia-dia/pdf${params}`, {
       responseType: 'blob',
+      timeout: TIMEOUT_PDF_MS,
     });
     return response.data;
   },
