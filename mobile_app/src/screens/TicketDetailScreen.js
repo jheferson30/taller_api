@@ -203,7 +203,7 @@ export default function TicketDetailScreen({ route, navigation }) {
           <ProcesosTab procesos={procesos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} isOnline={isOnline} />
         )}
         {tab === 'repuestos' && (
-          <RepuestosTab repuestos={repuestos} compras={compras} ticketId={ticketId} editable={editable} navigation={navigation} />
+          <RepuestosTab repuestos={repuestos} compras={compras} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} isOnline={isOnline} />
         )}
         {tab === 'fotos' && (
           <FotosTab fotos={fotos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} isOnline={isOnline} />
@@ -302,7 +302,8 @@ function ProcesosTab({ procesos, ticketId, editable, navigation, onRefresh, isOn
   );
 }
 
-function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation }) {
+function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation, onRefresh, isOnline }) {
+  const toast = useToast();
   const [baseUrl, setBaseUrl] = React.useState('');
   React.useEffect(() => { getPdfBaseUrl().then(setBaseUrl).catch(() => {}); }, []);
 
@@ -313,6 +314,33 @@ function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation 
     comprasPorNombre[c.descripcion].push(c);
   });
   const comprasUsadas = {};
+
+  const handleEliminar = (repuestoId) => {
+    Alert.alert('Eliminar repuesto', '¿Eliminar este repuesto?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          try {
+            if (!isOnline) {
+              await offlineService.enqueueOperation({
+                type: 'DELETE_REPUESTO',
+                endpoint: `/tickets/${ticketId}/repuestos/${repuestoId}`,
+                method: 'DELETE',
+                data: {},
+              });
+              toast('Sin conexión — se eliminará cuando vuelva el internet', 'warning');
+              return;
+            }
+            await api.eliminarRepuesto(ticketId, repuestoId);
+            onRefresh();
+          } catch (e) {
+            toast(e.message, 'error');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={styles.section}>
@@ -332,7 +360,12 @@ function RepuestosTab({ repuestos, compras = [], ticketId, editable, navigation 
             : compra?.soporte_url ? compra.soporte_url
             : null;
           return (
-            <View key={r.id} style={styles.itemCard}>
+            <View key={r.id} style={[styles.itemCard, { position: 'relative' }]}>
+              {editable && (
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleEliminar(r.id)}>
+                  <Text style={styles.deleteBtnText}>✕</Text>
+                </TouchableOpacity>
+              )}
               {fotoUri ? (
                 <Image
                   source={{ uri: fotoUri }}
