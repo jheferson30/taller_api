@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from io import BytesIO
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import letter
@@ -16,6 +17,25 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+
+def imagen_escalada(ruta: str, max_w: float, max_h: float) -> Image:
+    """Redimensiona la imagen en memoria antes de incluirla en el PDF."""
+    MAX_PX = 1200
+    with PILImage.open(ruta) as img:
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        orig_w, orig_h = img.size
+        if orig_w > MAX_PX or orig_h > MAX_PX:
+            scale = min(MAX_PX / orig_w, MAX_PX / orig_h)
+            img = img.resize((int(orig_w * scale), int(orig_h * scale)), PILImage.LANCZOS)
+            orig_w, orig_h = img.size
+        ratio = min(max_w / orig_w, max_h / orig_h)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=75, optimize=True)
+        buf.seek(0)
+        return Image(buf, width=orig_w * ratio, height=orig_h * ratio)
+
 
 # ── Paleta (misma que pdf_generator.py) ─────────────────────────────────────
 AZUL = colors.HexColor("#1e3a5f")
@@ -134,7 +154,7 @@ def generar_pdf_economia_profesional(
     col_izq = []
     if logo_path:
         try:
-            col_izq.append(Image(logo_path, width=0.65 * inch, height=0.65 * inch))
+            col_izq.append(imagen_escalada(logo_path, 0.65 * inch, 0.65 * inch))
             col_izq.append(Spacer(1, 3))
         except Exception:
             pass

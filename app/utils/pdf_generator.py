@@ -85,17 +85,30 @@ def resolver_ruta_img(url: str) -> str:
     return ""
 
 
-def imagen_escalada(ruta: str, max_w: float, max_h: float, usar_bytes: bool = False) -> Image:
-    """Crea una Image de ReportLab escalada proporcionalmente dentro de max_w x max_h."""
+def imagen_escalada(ruta: str, max_w: float, max_h: float) -> Image:
+    """Crea una Image de ReportLab escalada proporcionalmente dentro de max_w x max_h.
+    Redimensiona en memoria para evitar procesar imágenes de alta resolución completas."""
+    MAX_PX = 1200  # máximo de píxeles en cualquier dimensión antes de procesar
     with PILImage.open(ruta) as img:
+        # Convertir a RGB si es necesario (evita errores con PNG con transparencia)
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+
         orig_w, orig_h = img.size
+
+        # Redimensionar si la imagen es muy grande (optimización de rendimiento)
+        if orig_w > MAX_PX or orig_h > MAX_PX:
+            scale = min(MAX_PX / orig_w, MAX_PX / orig_h)
+            new_w = int(orig_w * scale)
+            new_h = int(orig_h * scale)
+            img = img.resize((new_w, new_h), PILImage.LANCZOS)
+            orig_w, orig_h = new_w, new_h
+
         ratio = min(max_w / orig_w, max_h / orig_h)
-        if usar_bytes:
-            buf = BytesIO()
-            img.save(buf, format=img.format or "JPEG")
-            buf.seek(0)
-            return Image(buf, width=orig_w * ratio, height=orig_h * ratio)
-    return Image(ruta, width=orig_w * ratio, height=orig_h * ratio)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=75, optimize=True)
+        buf.seek(0)
+        return Image(buf, width=orig_w * ratio, height=orig_h * ratio)
 
 
 def generar_pdf_ticket_completo(
@@ -195,7 +208,7 @@ def generar_pdf_ticket_completo(
     col_izq = []
     if logo_path:
         try:
-            col_izq.append(Image(logo_path, width=0.65 * inch, height=0.65 * inch))
+            col_izq.append(imagen_escalada(logo_path, 0.65 * inch, 0.65 * inch))
             col_izq.append(Spacer(1, 3))
         except Exception:
             pass
@@ -493,9 +506,7 @@ def generar_pdf_ticket_completo(
                 ruta = resolver_ruta_img(c.get("soporte_url", ""))
                 if ruta and os.path.exists(ruta):
                     try:
-                        contenido.append(
-                            imagen_escalada(ruta, col_w - 12, 1.5 * inch, usar_bytes=True)
-                        )
+                        contenido.append(imagen_escalada(ruta, col_w - 12, 1.5 * inch))
                     except Exception:
                         contenido.append(Paragraph("<i>Sin imagen</i>", s_small))
                 else:
