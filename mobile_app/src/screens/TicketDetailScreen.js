@@ -458,7 +458,7 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh, isOnline }
               </View>
               {editable && (
                 <TouchableOpacity style={styles.deleteBtn} onPress={() => handleEliminar(f.id)}>
-                  <Text style={styles.deleteBtnText}>✕ Eliminar</Text>
+                  <Text style={styles.deleteBtnText}>✕</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1103,11 +1103,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   deleteBtn: {
-    position: 'absolute', top: 8, right: 8, zIndex: 10,
-    backgroundColor: '#ef4444', borderRadius: 12,
-    width: 24, height: 24, justifyContent: 'center', alignItems: 'center',
+    position: 'absolute', top: 6, right: 6, zIndex: 10,
+    backgroundColor: 'rgba(239,68,68,0.85)',
+    borderRadius: 10,
+    width: 22, height: 22,
+    justifyContent: 'center', alignItems: 'center',
   },
-  deleteBtnText: { color: '#fff', fontWeight: '700', fontSize: 12, lineHeight: 14 },
+  deleteBtnText: { color: '#fff', fontWeight: '700', fontSize: 11, lineHeight: 13 },
   itemTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   itemSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   itemDesc: { fontSize: 13, color: colors.text, marginTop: 4 },
@@ -1129,8 +1131,6 @@ const styles = StyleSheet.create({
   fotoHeader: { flexDirection: 'row', padding: 8, justifyContent: 'space-between', alignItems: 'center' },
   tipoBadge: { backgroundColor: colors.primaryLight, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
   tipoText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  deleteBtn: { backgroundColor: colors.error, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
-  deleteBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   fotoImg: { width: '100%', height: 200 },
   fotoDesc: { padding: 8, fontSize: 13, color: colors.textMuted },
   finRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
