@@ -122,9 +122,6 @@ export default function ConfiguracionScreen({ navigation, route }) {
           <Text style={s.label}>Contrasena Admin</Text>
           <TextInput style={s.input} placeholder="Contrasena" placeholderTextColor="#64748b" value={password} onChangeText={setPassword} secureTextEntry />
           <TouchableOpacity style={s.btn} onPress={guardar}><Text style={s.btnTxt}>Guardar</Text></TouchableOpacity>
-          <TouchableOpacity style={[s.btn, s.btnGray]} onPress={buscarAutomatico} disabled={buscando}>
-            <Text style={s.btnTxtWhite}>{buscando ? 'Buscando...' : 'Buscar Automaticamente'}</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={[s.btn, s.btnQr]} onPress={abrirScanner}>
             <Text style={s.btnTxtWhite}>📷 Escanear QR del Servidor</Text>
           </TouchableOpacity>

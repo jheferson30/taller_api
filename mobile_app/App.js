@@ -19,7 +19,7 @@ import ConfiguracionScreen from './src/screens/ConfiguracionScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RecepcionScreen from './src/screens/RecepcionScreen';
 
-import { detectarIpActiva } from './src/config';
+import { detectarIpActiva, getServerIp } from './src/config';
 import authService from './src/services/authService';
 import offlineService from './src/services/offlineService';
 import { sessionEvents } from './src/services/sessionEvents';
@@ -35,8 +35,8 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      // Detectar IP del servidor
-      const ip = await detectarIpActiva();
+      // Verificar si hay IP guardada (sin escaneo automático de red)
+      const ip = await getServerIp();
       setHayConexion(!!ip);
 
       // Cargar tokens guardados - sesión persistente
