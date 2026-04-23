@@ -879,6 +879,7 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
   const [metodoPago, setMetodoPago] = useState('EFECTIVO');
   const [cobros, setCobros] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   const METODOS = ['EFECTIVO', 'NEQUI', 'DAVIPLATA', 'TRANSFERENCIA', 'TARJETA'];
 
@@ -893,7 +894,7 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
 
   const handleDescargarPdf = async () => {
     try {
-      toast('Generando PDF...', 'info');
+      setDescargandoPdf(true);
       const base = await getPdfBaseUrl();
       const nombreArchivo = `ticket_${ticket?.ticket_codigo || ticketId}.pdf`;
       const destino = FileSystem.cacheDirectory + nombreArchivo;
@@ -929,6 +930,8 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
       };
     } catch (e) {
       toast('Error al descargar PDF: ' + e.message, 'error');
+    } finally {
+      setDescargandoPdf(false);
     }
   };
 
@@ -990,8 +993,18 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
         )}
 
         {/* Botón PDF */}
-        <TouchableOpacity style={styles.pdfBtn} onPress={handleDescargarPdf}>
-          <Text style={styles.pdfBtnText}>📄 Descargar / Compartir PDF</Text>
+        <TouchableOpacity
+          style={[styles.pdfBtn, descargandoPdf && styles.btnDisabled]}
+          onPress={handleDescargarPdf}
+          disabled={descargandoPdf}
+        >
+          {descargandoPdf
+            ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator size="small" color="#0369a1" />
+                <Text style={styles.pdfBtnText}>Generando PDF...</Text>
+              </View>
+            : <Text style={styles.pdfBtnText}>📄 Descargar / Compartir PDF</Text>
+          }
         </TouchableOpacity>
       </View>
     );
@@ -1100,10 +1113,17 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.pdfBtn}
+        style={[styles.pdfBtn, descargandoPdf && styles.btnDisabled]}
         onPress={handleDescargarPdf}
+        disabled={descargandoPdf}
       >
-        <Text style={styles.pdfBtnText}>📄 Descargar / Compartir PDF</Text>
+        {descargandoPdf
+          ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator size="small" color="#0369a1" />
+              <Text style={styles.pdfBtnText}>Generando PDF...</Text>
+            </View>
+          : <Text style={styles.pdfBtnText}>📄 Descargar / Compartir PDF</Text>
+        }
       </TouchableOpacity>
     </View>
   );
