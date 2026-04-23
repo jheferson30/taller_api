@@ -895,7 +895,8 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
     try {
       toast('Generando PDF...', 'info');
       const base = await getPdfBaseUrl();
-      const destino = FileSystem.cacheDirectory + `ticket_${ticketId}.pdf`;
+      const nombreArchivo = `ticket_${ticket?.ticket_codigo || ticketId}.pdf`;
+      const destino = FileSystem.cacheDirectory + nombreArchivo;
 
       // Descargar con JWT en header usando fetch autenticado
       const response = await authService.authenticatedRequest(
@@ -919,7 +920,7 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
         if (puedeCompartir) {
           await Sharing.shareAsync(destino, {
             mimeType: 'application/pdf',
-            dialogTitle: `PDF Ticket`,
+            dialogTitle: `PDF ${ticket?.ticket_codigo || ticketId}`,
             UTI: 'com.adobe.pdf',
           });
         } else {
