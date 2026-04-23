@@ -48,6 +48,7 @@ export default function TicketPage() {
   const [finanzas, setFinanzas] = useState({ total_servicio: 0, metodo_pago_final: "EFECTIVO" });
   const [observaciones, setObservaciones] = useState({ observaciones_finales: "", recomendaciones: "", proximo_mantenimiento: "" });
   const [entrega, setEntrega] = useState({ confirmado_entrega_por: "", firma_entrega_url: "" });
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   async function loadTickets() {
     try {
@@ -1145,7 +1146,10 @@ export default function TicketPage() {
                       </p>
                       <button
                         className="button-download-pdf"
+                        disabled={descargandoPdf}
+                        style={descargandoPdf ? { opacity: 0.6, cursor: "not-allowed" } : {}}
                         onClick={async () => {
+                          setDescargandoPdf(true);
                           try {
                             const blob = await api.descargarPdfTicket(selectedId);
                             const url = window.URL.createObjectURL(blob);
@@ -1156,10 +1160,12 @@ export default function TicketPage() {
                             window.URL.revokeObjectURL(url);
                           } catch (err) {
                             setMsg("Error al descargar PDF: " + err.message);
+                          } finally {
+                            setDescargandoPdf(false);
                           }
                         }}
                       >
-                        Descargar PDF Completo
+                        {descargandoPdf ? "Descargando..." : "Descargar PDF Completo"}
                       </button>
                     </div>
 

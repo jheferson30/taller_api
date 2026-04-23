@@ -27,6 +27,7 @@ export default function EntregadosPage() {
   const [entrega, setEntrega] = useState({ confirmado_entrega_por: "", metodo_pago_final: "EFECTIVO", firma_entrega_url: "", observaciones_finales: "", recomendaciones: "", proximo_mantenimiento: "" });
   const [msgEntrega, setMsgEntrega] = useState("");
   const [loadingEntrega, setLoadingEntrega] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   const handleEntregar = async () => {
     if (!entrega.confirmado_entrega_por) {
@@ -353,7 +354,10 @@ export default function EntregadosPage() {
 
             <button
               className="ent-pdf-btn"
+              disabled={descargandoPdf}
+              style={descargandoPdf ? { opacity: 0.6, cursor: "not-allowed" } : {}}
               onClick={async () => {
+                setDescargandoPdf(true);
                 try {
                   const blob = await api.descargarPdfTicket(selected.id);
                   const url = window.URL.createObjectURL(blob);
@@ -364,10 +368,12 @@ export default function EntregadosPage() {
                   window.URL.revokeObjectURL(url);
                 } catch (err) {
                   alert("Error al descargar PDF: " + err.message);
+                } finally {
+                  setDescargandoPdf(false);
                 }
               }}
             >
-              Descargar PDF del cliente
+              {descargandoPdf ? "Descargando..." : "Descargar PDF del cliente"}
             </button>
           </div>
         ) : (
