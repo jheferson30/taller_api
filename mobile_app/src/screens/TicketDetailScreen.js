@@ -14,6 +14,7 @@ import { colors, estadoConfig } from '../theme';
 import { useToast } from '../components/Toast';
 import { useOffline } from '../hooks/useOffline';
 import offlineService from '../services/offlineService';
+import authService from '../services/authService';
 
 const ESTADOS_SIGUIENTES = {
   ABIERTO: 'EN_PROCESO',
@@ -893,19 +894,38 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
   const handleDescargarPdf = async () => {
     try {
       toast('Generando PDF...', 'info');
-      const url = await api.getPdfUrl(ticketId);
+      const base = await getPdfBaseUrl();
       const destino = FileSystem.cacheDirectory + `ticket_${ticketId}.pdf`;
-      const { uri: archivoUri } = await FileSystem.downloadAsync(url, destino);
-      const puedeCompartir = await Sharing.isAvailableAsync();
-      if (puedeCompartir) {
-        await Sharing.shareAsync(archivoUri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `PDF Ticket ${ticketId}`,
-          UTI: 'com.adobe.pdf',
-        });
-      } else {
-        Linking.openURL(url);
+
+      // Descargar con JWT en header usando fetch autenticado
+      const response = await authService.authenticatedRequest(
+        `${base}/tickets/${ticketId}/pdf`, {}
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status} al generar el PDF`);
       }
+
+      // Convertir respuesta a base64 y guardar
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = async () => {
+        const base64data = reader.result.split(',')[1];
+        await FileSystem.writeAsStringAsync(destino, base64data, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const puedeCompartir = await Sharing.isAvailableAsync();
+        if (puedeCompartir) {
+          await Sharing.shareAsync(destino, {
+            mimeType: 'application/pdf',
+            dialogTitle: `PDF Ticket`,
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          Linking.openURL(destino);
+        }
+      };
     } catch (e) {
       toast('Error al descargar PDF: ' + e.message, 'error');
     }
