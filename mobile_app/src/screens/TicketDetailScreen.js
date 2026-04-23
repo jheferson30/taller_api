@@ -121,6 +121,7 @@ export default function TicketDetailScreen({ route, navigation }) {
   const fecha = new Date(ticket.fecha_ingreso).toLocaleString('es-CO');
   const editable = ['ABIERTO', 'EN_PROCESO'].includes(ticket.estado);
   const isFinalizado = ticket.estado === 'FINALIZADO';
+  const isEntregado = ticket.estado === 'ENTREGADO';
 
   const TABS = [
     { key: 'info', label: 'Info' },
@@ -128,7 +129,7 @@ export default function TicketDetailScreen({ route, navigation }) {
     { key: 'repuestos', label: `Repuestos (${resumen?.contadores?.repuestos ?? 0})` },
     { key: 'fotos', label: `Fotos (${resumen?.contadores?.fotos ?? 0})` },
     { key: 'finanzas', label: 'Finanzas y Observaciones' },
-    ...(isFinalizado ? [{ key: 'entrega', label: 'Entrega' }] : []),
+    ...(isFinalizado || isEntregado ? [{ key: 'entrega', label: isEntregado ? 'Entrega / PDF' : 'Entrega' }] : []),
   ];
 
   return (
@@ -210,7 +211,7 @@ export default function TicketDetailScreen({ route, navigation }) {
         )}
         {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} isOnline={isOnline} />}
         {tab === 'entrega' && (
-          <EntregaTab ticketId={ticketId} resumen={resumen} onSuccess={() => { loadData(); setTab('info'); }} scrollRef={scrollRef} />
+          <EntregaTab ticketId={ticketId} resumen={resumen} ticket={ticket} isEntregado={isEntregado} onSuccess={() => { loadData(); setTab('info'); }} scrollRef={scrollRef} />
         )}
       </KeyboardAwareScrollView>
       </View>
@@ -871,7 +872,7 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
   );
 }
 
-function EntregaTab({ ticketId, resumen, onSuccess, ticketCodigo, scrollRef }) {
+function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketCodigo, scrollRef }) {
   const toast = useToast();
   const [confirmadoPor, setConfirmadoPor] = useState('');
   const [metodoPago, setMetodoPago] = useState('EFECTIVO');
@@ -889,6 +890,93 @@ function EntregaTab({ ticketId, resumen, onSuccess, ticketCodigo, scrollRef }) {
   const anticipo = resumen?.finanzas?.anticipo || 0;
   const totalCobrar = Math.max(0, totalServicio - anticipo);
 
+  const handleDescargarPdf = async () => {
+    try {
+      toast('Generando PDF...', 'info');
+      const url = await api.getPdfUrl(ticketId);
+      const destino = FileSystem.cacheDirectory + `ticket_${ticketId}.pdf`;
+      const { uri: archivoUri } = await FileSystem.downloadAsync(url, destino);
+      const puedeCompartir = await Sharing.isAvailableAsync();
+      if (puedeCompartir) {
+        await Sharing.shareAsync(archivoUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `PDF Ticket ${ticketId}`,
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        Linking.openURL(url);
+      }
+    } catch (e) {
+      toast('Error al descargar PDF: ' + e.message, 'error');
+    }
+  };
+
+  // ── Vista para ticket ENTREGADO ──────────────────────────────────────────
+  if (isEntregado) {
+    return (
+      <View style={styles.section}>
+        {/* Info de entrega */}
+        <View style={{ backgroundColor: '#f0fdf4', borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#86efac' }}>
+          <Text style={{ color: '#166534', fontWeight: '700', fontSize: 15, marginBottom: 10 }}>✓ Ticket Entregado</Text>
+          {ticket?.confirmado_entrega_por && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+              <Text style={{ color: '#374151', fontSize: 13 }}>Confirmado por</Text>
+              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>{ticket.confirmado_entrega_por}</Text>
+            </View>
+          )}
+          {ticket?.fecha_entrega && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+              <Text style={{ color: '#374151', fontSize: 13 }}>Fecha entrega</Text>
+              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>
+                {new Date(ticket.fecha_entrega).toLocaleString('es-CO')}
+              </Text>
+            </View>
+          )}
+          {ticket?.metodo_pago_final && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+              <Text style={{ color: '#374151', fontSize: 13 }}>Método de pago</Text>
+              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>{ticket.metodo_pago_final}</Text>
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#d1fae5', marginTop: 4 }}>
+            <Text style={{ color: '#166534', fontWeight: '700', fontSize: 15 }}>Total cobrado</Text>
+            <Text style={{ color: '#166534', fontWeight: '700', fontSize: 15 }}>{fmt(totalServicio)}</Text>
+          </View>
+        </View>
+
+        {/* Observaciones finales */}
+        {ticket?.observaciones_finales && (
+          <View style={{ backgroundColor: '#1C2B3A', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+            <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>Observaciones Finales</Text>
+            <Text style={{ color: '#fff', fontSize: 14 }}>{ticket.observaciones_finales}</Text>
+          </View>
+        )}
+
+        {/* Recomendaciones */}
+        {ticket?.recomendaciones && (
+          <View style={{ backgroundColor: '#1C2B3A', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+            <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>Recomendaciones</Text>
+            <Text style={{ color: '#fff', fontSize: 14 }}>{ticket.recomendaciones}</Text>
+          </View>
+        )}
+
+        {/* Próximo mantenimiento */}
+        {ticket?.proximo_mantenimiento && (
+          <View style={{ backgroundColor: '#1C2B3A', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+            <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>Próximo Mantenimiento</Text>
+            <Text style={{ color: '#D4920A', fontSize: 14, fontWeight: '600' }}>{ticket.proximo_mantenimiento}</Text>
+          </View>
+        )}
+
+        {/* Botón PDF */}
+        <TouchableOpacity style={styles.pdfBtn} onPress={handleDescargarPdf}>
+          <Text style={styles.pdfBtnText}>📄 Descargar / Compartir PDF</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── Vista para ticket FINALIZADO (formulario de entrega) ─────────────────
   const handleEntregar = async () => {
     if (!confirmadoPor.trim()) {
       toast('Ingresa quien confirma la entrega', 'warning');
@@ -992,26 +1080,7 @@ function EntregaTab({ ticketId, resumen, onSuccess, ticketCodigo, scrollRef }) {
 
       <TouchableOpacity
         style={styles.pdfBtn}
-        onPress={async () => {
-          try {
-            const url = await api.getPdfUrl(ticketId);
-            toast('Descargando PDF...', 'info');
-            const destino = FileSystem.cacheDirectory + `ticket_${ticketId}.pdf`;
-            const { uri: archivoUri } = await FileSystem.downloadAsync(url, destino);
-            const puedeCompartir = await Sharing.isAvailableAsync();
-            if (puedeCompartir) {
-              await Sharing.shareAsync(archivoUri, {
-                mimeType: 'application/pdf',
-                dialogTitle: `PDF Ticket ${ticketId}`,
-                UTI: 'com.adobe.pdf',
-              });
-            } else {
-              Linking.openURL(url);
-            }
-          } catch (e) {
-            toast('Error al descargar PDF: ' + e.message, 'error');
-          }
-        }}
+        onPress={handleDescargarPdf}
       >
         <Text style={styles.pdfBtnText}>📄 Descargar / Compartir PDF</Text>
       </TouchableOpacity>
