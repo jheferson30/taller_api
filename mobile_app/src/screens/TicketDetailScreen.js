@@ -939,24 +939,24 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
         {/* Info de entrega */}
         <View style={{ backgroundColor: '#f0fdf4', borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#86efac' }}>
           <Text style={{ color: '#166534', fontWeight: '700', fontSize: 15, marginBottom: 10 }}>✓ Ticket Entregado</Text>
-          {ticket?.confirmado_entrega_por && (
+          {(ticket?.confirmado_entrega_por || resumen?.ticket?.confirmado_entrega_por) && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
               <Text style={{ color: '#374151', fontSize: 13 }}>Confirmado por</Text>
-              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>{ticket.confirmado_entrega_por}</Text>
+              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>{ticket?.confirmado_entrega_por || resumen?.ticket?.confirmado_entrega_por}</Text>
             </View>
           )}
-          {ticket?.fecha_entrega && (
+          {(ticket?.fecha_entrega || resumen?.ticket?.fecha_entrega) && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
               <Text style={{ color: '#374151', fontSize: 13 }}>Fecha entrega</Text>
               <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>
-                {new Date(ticket.fecha_entrega).toLocaleString('es-CO')}
+                {new Date(ticket?.fecha_entrega || resumen?.ticket?.fecha_entrega).toLocaleString('es-CO')}
               </Text>
             </View>
           )}
-          {ticket?.metodo_pago_final && (
+          {(ticket?.metodo_pago_final || resumen?.ticket?.metodo_pago_final) && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
               <Text style={{ color: '#374151', fontSize: 13 }}>Método de pago</Text>
-              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>{ticket.metodo_pago_final}</Text>
+              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600' }}>{ticket?.metodo_pago_final || resumen?.ticket?.metodo_pago_final}</Text>
             </View>
           )}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#d1fae5', marginTop: 4 }}>
@@ -966,26 +966,26 @@ function EntregaTab({ ticketId, resumen, ticket, isEntregado, onSuccess, ticketC
         </View>
 
         {/* Observaciones finales */}
-        {ticket?.observaciones_finales && (
+        {(ticket?.observaciones_finales || resumen?.ticket?.observaciones_finales) && (
           <View style={{ backgroundColor: '#1C2B3A', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
             <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>Observaciones Finales</Text>
-            <Text style={{ color: '#fff', fontSize: 14 }}>{ticket.observaciones_finales}</Text>
+            <Text style={{ color: '#fff', fontSize: 14 }}>{ticket?.observaciones_finales || resumen?.ticket?.observaciones_finales}</Text>
           </View>
         )}
 
         {/* Recomendaciones */}
-        {ticket?.recomendaciones && (
+        {(ticket?.recomendaciones || resumen?.ticket?.recomendaciones) && (
           <View style={{ backgroundColor: '#1C2B3A', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
             <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>Recomendaciones</Text>
-            <Text style={{ color: '#fff', fontSize: 14 }}>{ticket.recomendaciones}</Text>
+            <Text style={{ color: '#fff', fontSize: 14 }}>{ticket?.recomendaciones || resumen?.ticket?.recomendaciones}</Text>
           </View>
         )}
 
         {/* Próximo mantenimiento */}
-        {ticket?.proximo_mantenimiento && (
+        {(ticket?.proximo_mantenimiento || resumen?.ticket?.proximo_mantenimiento) && (
           <View style={{ backgroundColor: '#1C2B3A', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
             <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>Próximo Mantenimiento</Text>
-            <Text style={{ color: '#D4920A', fontSize: 14, fontWeight: '600' }}>{ticket.proximo_mantenimiento}</Text>
+            <Text style={{ color: '#D4920A', fontSize: 14, fontWeight: '600' }}>{ticket?.proximo_mantenimiento || resumen?.ticket?.proximo_mantenimiento}</Text>
           </View>
         )}
 
