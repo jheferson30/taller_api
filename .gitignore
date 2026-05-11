@@ -78,3 +78,43 @@ test_pdf_*.pdf
 # Expo
 mobile_app/.expo/
 .aider*
+
+# Kiro temporal
+.kiro_tmp/
+
+# Python compiled (todos los niveles)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Frontend build generado
+frontend/dist/
+
+# Archivos de documentación temporal generados por Kiro en la raíz
+ACCESO_DOCKER_WSL.md
+AUDITORIA_*.md
+BUGFIX_*.md
+BUG_*.md
+CAMBIOS_*.md
+CHANGELOG-*.md
+CREDENCIALES_*.md
+DOCKER-*.md
+DOCKER_*.md
+EJEMPLOS_*.md
+ESTADO_*.md
+FAQ_*.md
+FUNCIONALIDAD_*.md
+GUIA_*.md
+IMPLEMENTACION_*.md
+IMPORTAR_*.md
+INSTRUCCIONES_*.md
+MIGRATION-*.md
+PASOS_*.md
+PLAN_*.md
+PRUEBAS_*.md
+QUICK_*.md
+RESUMEN_*.md
+VERIFICACION_*.md
+
+# Scripts temporales de diagnóstico
+drop_enum.py
