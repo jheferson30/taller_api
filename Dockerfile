@@ -15,9 +15,7 @@ ENV VITE_API_URL=""
 # Build with production mode explicitly - this should make import.meta.env.MODE === 'production'
 RUN npm run build -- --mode production
 
-# Copy fix script and run it to remove any remaining hardcoded URLs
-COPY scripts/fix-frontend-urls.sh /tmp/
-RUN chmod +x /tmp/fix-frontend-urls.sh && /tmp/fix-frontend-urls.sh
+# Note: fix-frontend-urls.sh script removed - URLs are now handled via environment variables
 
 # ── Stage 2: Build Python deps ────────────────────────────────────────────────
 FROM python:3.11-slim AS python-builder
@@ -61,11 +59,12 @@ COPY --from=frontend-builder /frontend/public ./frontend/public
 RUN mkdir -p uploads/fotos uploads/compras uploads/firmas uploads/logo
 
 # Entrypoint
-RUN chmod +x scripts/entrypoint.sh
+COPY scripts/entrypoint.py /app/scripts/entrypoint.py
+RUN chmod +x /app/scripts/entrypoint.py
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:8000/info || exit 1
 
-ENTRYPOINT ["scripts/entrypoint.sh"]
+ENTRYPOINT ["python", "/app/scripts/entrypoint.py"]

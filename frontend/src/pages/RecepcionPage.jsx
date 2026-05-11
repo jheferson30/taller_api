@@ -1,7 +1,6 @@
-﻿import { useState } from "react";
+﻿import { useState, useEffect } from "react";
 import { api } from "../api";
 import InputDinero from "../components/InputDinero";
-import SelectMecanico from "../components/SelectMecanico";
 import { FiZap } from "react-icons/fi";
 import PageHero from "../components/PageHero";
 
@@ -24,6 +23,7 @@ const emptyTicket = {
   anticipo_recibido: 0,
   metodo_pago_anticipo: "EFECTIVO",
   recepcionado_por: "",
+  asignado_a_user_id: "",
 };
 
 function CobroRapidoPanel({ placa, onDone, inline = false }) {
@@ -135,6 +135,26 @@ export default function RecepcionPage() {
   const [ficha, setFicha] = useState(null);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [usuarios, setUsuarios] = useState([]);
+  const [nombresPersonal, setNombresPersonal] = useState([]);
+
+  useEffect(() => {
+    // Cargar usuarios y mecánicos en paralelo para los selectores
+    Promise.all([
+      api.listarUsuariosParaAsignacion().catch(() => ({ users: [] })),
+      api.listarMecanicos().catch(() => []),
+    ]).then(([dataUsuarios, dataMecanicos]) => {
+      setUsuarios(dataUsuarios.users || []);
+      // Combinar usuarios + mecánicos para "Recepcionado Por" (solo nombre)
+      const nombresUsuarios = (dataUsuarios.users || []).map(u => u.nombre_completo || u.username);
+      const nombresMecanicos = (Array.isArray(dataMecanicos) ? dataMecanicos : [])
+        .filter(m => m.activo !== false)
+        .map(m => m.nombre);
+      // Unir sin duplicados
+      const todos = [...new Set([...nombresUsuarios, ...nombresMecanicos])].sort();
+      setNombresPersonal(todos);
+    });
+  }, []);
 
   async function onBuscar(e) {
     e.preventDefault();
@@ -194,9 +214,11 @@ export default function RecepcionPage() {
         ...ticket,
         kilometraje: ticket.kilometraje ? Number(ticket.kilometraje) : null,
         anticipo_recibido: Number(ticket.anticipo_recibido || 0),
+        asignado_a_user_id: ticket.asignado_a_user_id ? Number(ticket.asignado_a_user_id) : null,
       });
       
       setMsg("✓ Vehículo y ticket creados exitosamente");
+      window.dispatchEvent(new CustomEvent("notif:refresh"));
       
       // Resetear y volver a búsqueda
       setTimeout(() => {
@@ -229,9 +251,11 @@ export default function RecepcionPage() {
         ...ticket,
         kilometraje: ticket.kilometraje ? Number(ticket.kilometraje) : null,
         anticipo_recibido: Number(ticket.anticipo_recibido || 0),
+        asignado_a_user_id: ticket.asignado_a_user_id ? Number(ticket.asignado_a_user_id) : null,
       });
       
       setMsg("✓ Vehículo actualizado y ticket creado exitosamente");
+      window.dispatchEvent(new CustomEvent("notif:refresh"));
       
       // Resetear y volver a búsqueda
       setTimeout(() => {
@@ -252,9 +276,11 @@ export default function RecepcionPage() {
         ...ticket,
         kilometraje: ticket.kilometraje ? Number(ticket.kilometraje) : null,
         anticipo_recibido: Number(ticket.anticipo_recibido || 0),
+        asignado_a_user_id: ticket.asignado_a_user_id ? Number(ticket.asignado_a_user_id) : null,
       });
       
       setMsg("✓ Ticket creado exitosamente");
+      window.dispatchEvent(new CustomEvent("notif:refresh"));
       
       // Resetear y volver a búsqueda
       setTimeout(() => {
@@ -465,13 +491,33 @@ export default function RecepcionPage() {
                   <option value="TARJETA">Tarjeta</option>
                 </select>
               </label>
-              <label className="full-width">
+              <label>
                 <span className="label-text">Recepcionado Por</span>
-                <SelectMecanico
+                <select
                   value={ticket.recepcionado_por}
-                  onChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
-                  placeholder="Sin asignar"
-                />
+                  onChange={(e) => setTicket({ ...ticket, recepcionado_por: e.target.value })}
+                >
+                  <option value="">Sin asignar</option>
+                  {nombresPersonal.map((nombre) => (
+                    <option key={nombre} value={nombre}>
+                      {nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="label-text">Asignado a</span>
+                <select
+                  value={ticket.asignado_a_user_id}
+                  onChange={(e) => setTicket({ ...ticket, asignado_a_user_id: e.target.value })}
+                >
+                  <option value="">Sin asignar</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre_completo || u.username}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           </div>
@@ -651,13 +697,33 @@ export default function RecepcionPage() {
                   <option value="TARJETA">Tarjeta</option>
                 </select>
               </label>
-              <label className="full-width">
+              <label>
                 <span className="label-text">Recepcionado Por</span>
-                <SelectMecanico
+                <select
                   value={ticket.recepcionado_por}
-                  onChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
-                  placeholder="Sin asignar"
-                />
+                  onChange={(e) => setTicket({ ...ticket, recepcionado_por: e.target.value })}
+                >
+                  <option value="">Sin asignar</option>
+                  {nombresPersonal.map((nombre) => (
+                    <option key={nombre} value={nombre}>
+                      {nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="label-text">Asignado a</span>
+                <select
+                  value={ticket.asignado_a_user_id}
+                  onChange={(e) => setTicket({ ...ticket, asignado_a_user_id: e.target.value })}
+                >
+                  <option value="">Sin asignar</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre_completo || u.username}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           </div>
@@ -801,13 +867,33 @@ export default function RecepcionPage() {
                   <option value="TARJETA">Tarjeta</option>
                 </select>
               </label>
-              <label className="full-width">
+              <label>
                 <span className="label-text">Recepcionado Por</span>
-                <SelectMecanico
+                <select
                   value={ticket.recepcionado_por}
-                  onChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
-                  placeholder="Sin asignar"
-                />
+                  onChange={(e) => setTicket({ ...ticket, recepcionado_por: e.target.value })}
+                >
+                  <option value="">Sin asignar</option>
+                  {nombresPersonal.map((nombre) => (
+                    <option key={nombre} value={nombre}>
+                      {nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="label-text">Asignado a</span>
+                <select
+                  value={ticket.asignado_a_user_id}
+                  onChange={(e) => setTicket({ ...ticket, asignado_a_user_id: e.target.value })}
+                >
+                  <option value="">Sin asignar</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre_completo || u.username}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           </div>

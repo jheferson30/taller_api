@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -5,11 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
+from app.configuracion.limiter import limiter
 from app.esquemas.ticket_schema import TicketIngresoCrear, TicketRespuesta, VehiculoFichaRespuesta
 from app.esquemas.vehiculo_schema import VehiculoActualizar, VehiculoCrear, VehiculoRespuesta
 from app.modelos.movimiento_caja import EstadoTicket, MovimientoCaja, TipoMovimiento
 from app.modelos.ticket import Ticket
 from app.modelos.vehiculo import Vehiculo
+from app.seguridad.auth_middleware import require_auth
 from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
 from app.servicios.whatsapp_service import TipoEvento
 
@@ -92,12 +95,19 @@ def _generar_codigo_ticket(placa: str) -> str:
         },
     },
 )
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_VEHICULOS_PER_MINUTE", "30") + "/minute")
 def buscar_por_placa(
+    request: Request,
     placa: str = Query(..., min_length=3, max_length=20),
     db: Session = Depends(obtener_db),
 ):
+    taller_id = request.state.taller_id
     placa_norm = _normalizar_placa(placa)
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.placa == placa_norm,
+        Vehiculo.taller_id == taller_id,
+    ).first()
     if not vehiculo:
         return {"existe": False, "placa": placa_norm}
     return {"existe": True, "vehiculo": VehiculoRespuesta.model_validate(vehiculo).model_dump()}
@@ -168,15 +178,22 @@ def buscar_por_placa(
         },
     },
 )
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_VEHICULOS_PER_MINUTE", "30") + "/minute")
 async def crear_vehiculo(
     request: Request,
     datos: VehiculoCrear,
     db: Session = Depends(obtener_db),
 ):
+    taller_id = request.state.taller_id
     payload = datos.model_dump()
     payload["placa"] = _normalizar_placa(payload["placa"])
+    payload["taller_id"] = taller_id
 
-    existente = db.query(Vehiculo).filter(Vehiculo.placa == payload["placa"]).first()
+    existente = db.query(Vehiculo).filter(
+        Vehiculo.placa == payload["placa"],
+        Vehiculo.taller_id == taller_id,
+    ).first()
     if existente:
         raise HTTPException(status_code=400, detail="La placa ya esta registrada")
 
@@ -236,23 +253,39 @@ async def crear_vehiculo(
         }
     },
 )
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_VEHICULOS_PER_MINUTE", "30") + "/minute")
 def listar_vehiculos(
+    request: Request,
     db: Session = Depends(obtener_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ):
-    return db.query(Vehiculo).order_by(Vehiculo.id.desc()).offset(skip).limit(limit).all()
+    taller_id = request.state.taller_id
+    return (
+        db.query(Vehiculo)
+        .filter(Vehiculo.taller_id == taller_id)
+        .order_by(Vehiculo.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.put("/{placa}", response_model=VehiculoRespuesta)
+@require_auth
 async def actualizar_vehiculo_por_placa(
     request: Request,
     placa: str,
     datos: VehiculoActualizar,
     db: Session = Depends(obtener_db),
 ):
+    taller_id = request.state.taller_id
     placa_norm = _normalizar_placa(placa)
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.placa == placa_norm,
+        Vehiculo.taller_id == taller_id,
+    ).first()
     if not vehiculo:
         raise HTTPException(status_code=404, detail="Vehiculo no encontrado")
 
@@ -266,12 +299,18 @@ async def actualizar_vehiculo_por_placa(
 
 
 @router.get("/{placa}", response_model=VehiculoRespuesta)
+@require_auth
 def obtener_vehiculo_por_placa(
+    request: Request,
     placa: str,
     db: Session = Depends(obtener_db),
 ):
+    taller_id = request.state.taller_id
     placa_norm = _normalizar_placa(placa)
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.placa == placa_norm,
+        Vehiculo.taller_id == taller_id,
+    ).first()
     if not vehiculo:
         raise HTTPException(status_code=404, detail="Vehiculo no encontrado")
     return vehiculo
@@ -299,61 +338,25 @@ def obtener_vehiculo_por_placa(
     **Rate Limiting:**
     - 100 requests per minute (standard read limit)
     """,
-    responses={
-        200: {
-            "description": "Vehicle service history card",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "id": 1,
-                        "placa": "ABC123",
-                        "marca": "Yamaha",
-                        "modelo": "FZ16",
-                        "anio": 2020,
-                        "cilindraje": "150cc",
-                        "color": "Negro",
-                        "nombre_propietario": "Juan Pérez",
-                        "telefono_propietario": "3001234567",
-                        "historial_visitas": [
-                            {
-                                "ticket_codigo": "TK-ABC123-20260406103000",
-                                "fecha_ingreso": "2026-04-06T10:30:00",
-                                "motivo_visita": "Cambio de aceite",
-                                "estado": "ENTREGADO",
-                            },
-                            {
-                                "ticket_codigo": "TK-ABC123-20260301120000",
-                                "fecha_ingreso": "2026-03-01T12:00:00",
-                                "motivo_visita": "Revisión general",
-                                "estado": "ENTREGADO",
-                            },
-                        ],
-                    }
-                }
-            },
-        },
-        404: {
-            "description": "Vehicle not found",
-            "content": {
-                "application/json": {
-                    "example": {"error": "resource_not_found", "message": "Vehiculo no encontrado"}
-                }
-            },
-        },
-    },
 )
+@require_auth
 def obtener_ficha_vehiculo(
+    request: Request,
     placa: str,
     db: Session = Depends(obtener_db),
 ):
+    taller_id = request.state.taller_id
     placa_norm = _normalizar_placa(placa)
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.placa == placa_norm,
+        Vehiculo.taller_id == taller_id,
+    ).first()
     if not vehiculo:
         raise HTTPException(status_code=404, detail="Vehiculo no encontrado")
 
     historial = (
         db.query(Ticket)
-        .filter(Ticket.vehiculo_id == vehiculo.id)
+        .filter(Ticket.vehiculo_id == vehiculo.id, Ticket.taller_id == taller_id)
         .order_by(Ticket.fecha_ingreso.desc())
         .all()
     )
@@ -376,101 +379,27 @@ def obtener_ficha_vehiculo(
     "/{placa}/ticket-ingreso",
     response_model=TicketRespuesta,
     summary="Create service ticket for vehicle",
-    description="""
-    Create a new service ticket (orden de servicio) for a vehicle.
-
-    **Use Case:**
-    - Vehicle check-in at reception
-    - Start new service workflow
-    - Record initial vehicle condition and customer requirements
-
-    **Process:**
-    1. Validates vehicle exists by plate
-    2. Generates unique ticket code (TK-{PLACA}-{TIMESTAMP})
-    3. Creates ticket with status ABIERTO
-    4. Records initial observations and mileage
-    5. Registers advance payment if provided
-    6. Creates INGRESO_ANTICIPO cash movement for advance
-    7. Sends WhatsApp notification to customer (async)
-
-    **Required Information:**
-    - motivo_visita: Reason for service (3-250 chars)
-    - Optional: kilometraje, observaciones_recepcion, anticipo_recibido
-
-    **Advance Payment:**
-    - If anticipo_recibido > 0, creates cash movement
-    - Records payment method (EFECTIVO, TRANSFERENCIA, etc.)
-    - Links payment to ticket for financial tracking
-
-    **Notifications:**
-    - WhatsApp message sent to vehicle owner (async, fire-and-forget)
-    - Message includes ticket code and estimated completion time
-
-    **Rate Limiting:**
-    - 30 requests per minute (standard write limit)
-    """,
-    responses={
-        200: {
-            "description": "Ticket created successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "id": 123,
-                        "ticket_codigo": "TK-ABC123-20260406103000",
-                        "vehiculo_id": 1,
-                        "placa": "ABC123",
-                        "fecha_ingreso": "2026-04-06T10:30:00",
-                        "motivo_visita": "Cambio de aceite y revisión general",
-                        "observaciones_recepcion": "Cliente reporta ruido en el motor",
-                        "kilometraje": 15000,
-                        "estado_inicial": "Buen estado general",
-                        "anticipo_recibido": 50000,
-                        "metodo_pago_anticipo": "EFECTIVO",
-                        "recepcionado_por": "María González",
-                        "estado": "ABIERTO",
-                        "total_servicio": None,
-                        "saldo_pendiente": None,
-                    }
-                }
-            },
-        },
-        404: {
-            "description": "Vehicle not found",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "resource_not_found",
-                        "message": "Vehiculo no encontrado para crear ticket",
-                    }
-                }
-            },
-        },
-        422: {
-            "description": "Validation error",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "validation_error",
-                        "message": "motivo_visita must be at least 3 characters",
-                    }
-                }
-            },
-        },
-    },
 )
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_VEHICULOS_PER_MINUTE", "30") + "/minute")
 async def crear_ticket_ingreso(
     request: Request,
     placa: str,
     datos: TicketIngresoCrear,
     db: Session = Depends(obtener_db),
 ):
+    taller_id = request.state.taller_id
     placa_norm = _normalizar_placa(placa)
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.placa == placa_norm,
+        Vehiculo.taller_id == taller_id,
+    ).first()
     if not vehiculo:
         raise HTTPException(status_code=404, detail="Vehiculo no encontrado para crear ticket")
 
     ticket = Ticket(
         vehiculo_id=vehiculo.id,
+        taller_id=request.state.taller_id,
         ticket_codigo=_generar_codigo_ticket(placa_norm),
         placa=placa_norm,
         motivo_visita=datos.motivo_visita,
@@ -480,6 +409,7 @@ async def crear_ticket_ingreso(
         anticipo_recibido=datos.anticipo_recibido,
         metodo_pago_anticipo=datos.metodo_pago_anticipo,
         recepcionado_por=datos.recepcionado_por,
+        asignado_a_user_id=datos.asignado_a_user_id,
         estado="ABIERTO",
     )
     db.add(ticket)
@@ -487,6 +417,7 @@ async def crear_ticket_ingreso(
 
     if datos.anticipo_recibido > 0:
         movimiento = MovimientoCaja(
+            taller_id=request.state.taller_id,
             tipo=TipoMovimiento.INGRESO_ANTICIPO,
             ticket_id=ticket.id,
             ticket_codigo=ticket.ticket_codigo,
@@ -500,6 +431,19 @@ async def crear_ticket_ingreso(
             creado_por=datos.recepcionado_por,
         )
         db.add(movimiento)
+
+    # Notificación interna al usuario asignado
+    if datos.asignado_a_user_id:
+        from app.modelos.notificacion import Notificacion, TipoNotificacion
+        notif = Notificacion(
+            taller_id=request.state.taller_id,
+            destinatario_user_id=datos.asignado_a_user_id,
+            tipo=TipoNotificacion.TICKET_ASIGNADO,
+            titulo=f"Nuevo ticket asignado: {ticket.ticket_codigo}",
+            mensaje=f"Se te asignó el ticket de {placa_norm}: {datos.motivo_visita}",
+            referencia_id=ticket.id,
+        )
+        db.add(notif)
 
     db.commit()
     db.refresh(ticket)

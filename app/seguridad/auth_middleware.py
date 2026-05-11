@@ -73,7 +73,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/info",
             "/info/conexion-qr",
             "/assets",
-            "/uploads",
             "/auth/login",
             "/auth/refresh",
             "/auth/forgot-password",
@@ -98,6 +97,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # No hay header de autorización, continuar sin user context
             # Los decoradores @require_auth se encargarán de validar
             request.state.user = None
+            request.state.taller_id = None
             return await call_next(request)
 
         # Validar formato "Bearer <token>"
@@ -171,6 +171,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
                 # Inyectar user context en request.state
                 request.state.user = user
+                # Inyectar taller_id desde el JWT payload para RLS
+                request.state.taller_id = payload.get("taller_id")
 
             finally:
                 if should_close:

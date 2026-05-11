@@ -1,4 +1,5 @@
-from sqlalchemy import Boolean, Column, Integer, String, Text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from app.configuracion.base_datos import Base
 
@@ -6,7 +7,8 @@ from app.configuracion.base_datos import Base
 class ConfiguracionTaller(Base):
     __tablename__ = "configuracion_taller"
 
-    id = Column(Integer, primary_key=True, default=1)
+    id = Column(Integer, primary_key=True)
+    taller_id = Column(Integer, ForeignKey("talleres.id"), nullable=False, unique=True, index=True)
     nombre_taller = Column(String(200), nullable=False, default="Taller Mecánico")
     direccion = Column(String(300), nullable=True)
     telefono = Column(String(50), nullable=True)
@@ -20,3 +22,9 @@ class ConfiguracionTaller(Base):
     smtp_password = Column(Text, nullable=True)
     smtp_from = Column(String(200), nullable=True)
     logo_url = Column(String(255), nullable=True)
+    moneda = Column(String(3), nullable=False, default="COP")
+    idioma = Column(String(2), nullable=False, default="es")
+    timezone = Column(String(100), nullable=False, default="America/Bogota")
+
+    # Relación inversa con Taller
+    taller = relationship("Taller", back_populates="configuracion")

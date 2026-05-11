@@ -20,6 +20,7 @@ from app.modelos.movimiento_caja import (
     MovimientoCaja,
     TipoMovimiento,
 )
+from app.seguridad.auth_middleware import require_auth
 from app.seguridad.dependencias import requerir_password_admin
 
 
@@ -55,7 +56,9 @@ def _validar_movimiento(datos: MovimientoCajaCrear):
 
 
 @router.get("/cobros-rapidos")
+@require_auth
 def listar_cobros_rapidos(
+    request: Request,
     db: Session = Depends(obtener_db),
     placa: str | None = Query(None),
     fecha_desde: date | None = Query(None),
@@ -63,7 +66,11 @@ def listar_cobros_rapidos(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ):
-    query = db.query(MovimientoCaja).filter(MovimientoCaja.tipo == TipoMovimiento.INGRESO_RAPIDO)
+    taller_id = request.state.taller_id
+    query = db.query(MovimientoCaja).filter(
+        MovimientoCaja.tipo == TipoMovimiento.INGRESO_RAPIDO,
+        MovimientoCaja.taller_id == taller_id,
+    )
     if placa:
         query = query.filter(MovimientoCaja.placa == placa.upper())
     if fecha_desde:
@@ -152,6 +159,7 @@ async def crear_cobro_rapido(
     db: Session = Depends(obtener_db),
 ):
     nuevo = MovimientoCaja(
+        taller_id=request.state.taller_id,
         tipo=TipoMovimiento.INGRESO_RAPIDO,
         placa=datos.placa.upper().strip(),
         concepto=datos.descripcion,
@@ -172,13 +180,16 @@ async def crear_cobro_rapido(
 
 
 @router.post("/", response_model=MovimientoCajaRespuesta)
+@require_auth
 async def crear_movimiento_caja(
     request: Request,
     datos: MovimientoCajaCrear,
     db: Session = Depends(obtener_db),
 ):
     _validar_movimiento(datos)
-    nuevo = MovimientoCaja(**datos.model_dump())
+    payload = datos.model_dump()
+    payload["taller_id"] = request.state.taller_id
+    nuevo = MovimientoCaja(**payload)
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
@@ -196,78 +207,10 @@ async def crear_movimiento_caja(
     "/",
     response_model=list[MovimientoCajaRespuesta],
     summary="List cash movements with filters",
-    description="""
-    Retrieve cash movements (income and expenses) with optional filtering.
-
-    **Use Case:**
-    - Daily cash report
-    - Financial audit trail
-    - Expense tracking
-    - Income analysis by payment method
-
-    **Filters:**
-    - tipo: Movement type (INGRESO_ANTICIPO, INGRESO_FINAL, INGRESO_RAPIDO, EGRESO)
-    - estado_ticket: Ticket status (ABIERTO, EN_PROCESO, FINALIZADO, ENTREGADO)
-    - categoria_egreso: Expense category (REPUESTOS, HERRAMIENTAS, SERVICIOS, OTROS)
-    - placa: Vehicle plate (exact match)
-    - fecha_desde: Start date (inclusive)
-    - fecha_hasta: End date (inclusive)
-
-    **Pagination:**
-    - Default: 50 movements per page
-    - Maximum: 200 movements per page
-    - Ordered by creation date (newest first)
-
-    **Rate Limiting:**
-    - 100 requests per minute (standard read limit)
-
-    **Permissions:**
-    - Requires ADMIN password authentication
-    """,
-    responses={
-        200: {
-            "description": "List of cash movements",
-            "content": {
-                "application/json": {
-                    "example": [
-                        {
-                            "id": 1,
-                            "tipo": "INGRESO_ANTICIPO",
-                            "ticket_codigo": "TK-ABC123-20260406103000",
-                            "placa": "ABC123",
-                            "estado_ticket": "ABIERTO",
-                            "valor": 50000,
-                            "metodo_pago": "EFECTIVO",
-                            "concepto": "Anticipo ticket",
-                            "fecha_creacion": "2026-04-06T10:30:00",
-                        },
-                        {
-                            "id": 2,
-                            "tipo": "EGRESO",
-                            "categoria_egreso": "REPUESTOS",
-                            "concepto": "Compra filtros",
-                            "valor": 25000,
-                            "responsable": "Juan Pérez",
-                            "fecha_creacion": "2026-04-06T11:00:00",
-                        },
-                    ]
-                }
-            },
-        },
-        401: {
-            "description": "Authentication required",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "authentication_failed",
-                        "message": "Admin password required",
-                    }
-                }
-            },
-        },
-    },
 )
+@require_auth
 def listar_movimientos_caja(
+    request: Request,
     db: Session = Depends(obtener_db),
     tipo: TipoMovimiento | None = Query(None),
     estado_ticket: EstadoTicket | None = Query(None),
@@ -278,7 +221,8 @@ def listar_movimientos_caja(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ):
-    query = db.query(MovimientoCaja)
+    taller_id = request.state.taller_id
+    query = db.query(MovimientoCaja).filter(MovimientoCaja.taller_id == taller_id)
 
     if tipo is not None:
         query = query.filter(MovimientoCaja.tipo == tipo)
@@ -310,6 +254,7 @@ async def corregir_movimiento_caja(
 
     cambio = CambioMovimientoCaja(
         movimiento_id=movimiento.id,
+        taller_id=request.state.taller_id,
         motivo=datos.motivo,
         valor_anterior=movimiento.valor,
         valor_nuevo=datos.valor,
@@ -335,14 +280,20 @@ async def corregir_movimiento_caja(
 
 
 @router.get("/{movimiento_id}/cambios", response_model=list[CambioMovimientoCajaRespuesta])
+@require_auth
 def listar_cambios_movimiento(
+    request: Request,
     movimiento_id: int,
     db: Session = Depends(obtener_db),
     _: bool = Depends(requerir_password_admin),
 ):
+    taller_id = request.state.taller_id
     return (
         db.query(CambioMovimientoCaja)
-        .filter(CambioMovimientoCaja.movimiento_id == movimiento_id)
+        .filter(
+            CambioMovimientoCaja.movimiento_id == movimiento_id,
+            CambioMovimientoCaja.taller_id == taller_id,
+        )
         .order_by(CambioMovimientoCaja.fecha_creacion.desc())
         .all()
     )

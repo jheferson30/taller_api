@@ -191,6 +191,44 @@ async def create_user(
 
 
 @router.get(
+    "/para-asignacion",
+    summary="Lista usuarios del taller para asignación de tickets",
+    description="Retorna id y nombre de los usuarios activos del taller. Accesible para todos los roles del taller.",
+)
+@require_auth
+@limiter.limit(f"{os.getenv('RATE_LIMIT_READ_PER_MINUTE', '100')}/minute")
+async def get_users_para_asignacion(
+    request: Request,
+    db: Session = Depends(obtener_db),
+):
+    """
+    Lista usuarios activos del taller con solo los campos necesarios para asignación.
+
+    Accesible para ADMIN, MECANICO y RECEPCIONISTA — no expone datos sensibles.
+    Filtra por taller_id del JWT (aislamiento multi-tenant).
+    """
+    from app.modelos.user import User
+
+    taller_id = request.state.taller_id
+    users = (
+        db.query(User)
+        .filter(User.taller_id == taller_id, User.is_active == True)
+        .order_by(User.nombre_completo, User.username)
+        .all()
+    )
+    return {
+        "users": [
+            {
+                "id": u.id,
+                "username": u.username,
+                "nombre_completo": u.nombre_completo or u.username,
+            }
+            for u in users
+        ]
+    }
+
+
+@router.get(
     "",
     response_model=UsersListResponse,
     summary="List all users with pagination",
@@ -278,11 +316,14 @@ async def get_users(
 
     user_repo = UserRepository(db)
 
-    # Obtener usuarios con paginación
-    users = user_repo.get_all(skip=skip, limit=limit, include_inactive=False)
+    # Filtrar por taller del usuario autenticado — aislamiento multi-tenant
+    taller_id = request.state.taller_id
 
-    # Contar total de usuarios activos
-    total = db.query(User).filter_by(is_active=True).count()
+    # Obtener usuarios con paginación
+    users = user_repo.get_all(skip=skip, limit=limit, include_inactive=False, taller_id=taller_id)
+
+    # Contar total de usuarios activos del mismo taller
+    total = db.query(User).filter(User.is_active == True, User.taller_id == taller_id).count()
 
     # Construir response
     users_response = [

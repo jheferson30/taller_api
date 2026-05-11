@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.configuracion.base_datos import obtener_db as get_db
 from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.modelos.mecanico import Mecanico
+from app.seguridad.auth_middleware import require_auth
 from app.seguridad.dependencias import requerir_password_admin as verificar_admin
 
 router = APIRouter(prefix="/configuracion", tags=["configuracion"])
@@ -50,8 +51,14 @@ class EmailConfigUpdate(BaseModel):
 
 
 @router.get("/mecanicos")
-def listar_mecanicos(db: Session = Depends(get_db)):
-    return db.query(Mecanico).order_by(Mecanico.nombre).all()
+@require_auth
+async def listar_mecanicos(request: Request, db: Session = Depends(get_db)):
+    return (
+        db.query(Mecanico)
+        .filter(Mecanico.taller_id == request.state.taller_id)
+        .order_by(Mecanico.nombre)
+        .all()
+    )
 
 
 @router.post("/mecanicos", dependencies=[Depends(verificar_admin)])
@@ -63,10 +70,14 @@ async def crear_mecanico(
     nombre = body.nombre.strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
-    existente = db.query(Mecanico).filter(Mecanico.nombre.ilike(nombre)).first()
+    taller_id = request.state.taller_id
+    existente = db.query(Mecanico).filter(
+        Mecanico.taller_id == taller_id,
+        Mecanico.nombre.ilike(nombre)
+    ).first()
     if existente:
         raise HTTPException(status_code=400, detail="Ya existe un mecánico con ese nombre")
-    m = Mecanico(nombre=nombre, activo=True)
+    m = Mecanico(nombre=nombre, activo=True, taller_id=taller_id)
     db.add(m)
     db.commit()
     db.refresh(m)
@@ -79,7 +90,10 @@ async def toggle_mecanico(
     mecanico_id: int,
     db: Session = Depends(get_db),
 ):
-    m = db.query(Mecanico).filter(Mecanico.id == mecanico_id).first()
+    m = db.query(Mecanico).filter(
+        Mecanico.id == mecanico_id,
+        Mecanico.taller_id == request.state.taller_id
+    ).first()
     if not m:
         raise HTTPException(status_code=404, detail="Mecánico no encontrado")
     m.activo = not m.activo
@@ -94,7 +108,10 @@ async def eliminar_mecanico(
     mecanico_id: int,
     db: Session = Depends(get_db),
 ):
-    m = db.query(Mecanico).filter(Mecanico.id == mecanico_id).first()
+    m = db.query(Mecanico).filter(
+        Mecanico.id == mecanico_id,
+        Mecanico.taller_id == request.state.taller_id
+    ).first()
     if not m:
         raise HTTPException(status_code=404, detail="Mecánico no encontrado")
     db.delete(m)

@@ -5,7 +5,7 @@ Requirements: 15.6
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -42,8 +42,10 @@ class AuditLogListResponse(BaseModel):
     limit: int
 
 
-@router.get("", response_model=AuditLogListResponse, dependencies=[Depends(require_role("ADMIN"))])
+@router.get("", response_model=AuditLogListResponse)
+@require_role("ADMIN")
 def get_audit_logs(
+    request: Request,
     user_id: int | None = Query(None, description="Filtrar por ID de usuario"),
     action: str | None = Query(None, description="Filtrar por tipo de acción"),
     start_date: datetime | None = Query(None, description="Fecha de inicio (ISO 8601)"),

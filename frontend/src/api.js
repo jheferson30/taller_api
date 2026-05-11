@@ -8,6 +8,19 @@ const API_BASE = import.meta.env.VITE_API_URL !== undefined
 const TIMEOUT_MS = 15000; // 15 segundos para requests normales
 const TIMEOUT_PDF_MS = 120000; // 2 minutos para generación de PDFs
 
+/**
+ * Lee el valor de una cookie por nombre.
+ * Retorna null si la cookie no existe.
+ */
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    return parts.pop().split(';').shift();
+  }
+  return null;
+}
+
 // Configurar axios con base URL y timeout
 axios.defaults.baseURL = API_BASE;
 axios.defaults.timeout = TIMEOUT_MS;
@@ -15,6 +28,48 @@ axios.defaults.withCredentials = true; // Importante para que envíe y reciba co
 
 // IMPORTANTE: Los interceptores de axios ya están configurados en authService
 // No necesitamos configurarlos aquí de nuevo
+
+// Métodos HTTP que requieren protección CSRF
+const WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+
+// Interceptor de request: agrega X-CSRF-Token en métodos de escritura
+axios.interceptors.request.use((config) => {
+  const method = (config.method || '').toLowerCase();
+  if (WRITE_METHODS.has(method)) {
+    // Leer CSRF token desde authService (guardado en login)
+    const csrfToken = authService.getCsrfToken() || getCookie('csrftoken');
+    if (csrfToken) {
+      config.headers['X-CSRF-Token'] = csrfToken;
+    }
+  }
+  return config;
+});
+
+// Interceptor de response: retry automático en error CSRF (403)
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Solo reintentar si es 403 por CSRF y no es ya un reintento
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.error === 'csrf_error' &&
+      !originalRequest._csrfRetry
+    ) {
+      originalRequest._csrfRetry = true;
+
+      // Refrescar el token leyendo la cookie actualizada
+      const newCsrfToken = getCookie('csrftoken');
+      if (newCsrfToken) {
+        originalRequest.headers['X-CSRF-Token'] = newCsrfToken;
+        return axios(originalRequest);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 async function request(path, options = {}) {
   try {
@@ -240,6 +295,7 @@ export const api = {
   },
   // Usuarios
   listarUsuarios: () => request("/users"),
+  listarUsuariosParaAsignacion: () => request("/users/para-asignacion"),
   crearUsuario: (body) => request("/users", { method: "POST", data: body }),
   eliminarUsuario: (id) => request(`/users/${id}`, { method: "DELETE" }),
   cambiarPasswordPropio: (body) => request("/users/me/change-password", { method: "POST", data: body }),
@@ -249,4 +305,46 @@ export const api = {
   obtenerLogo: () => request("/configuracion/logo"),
   subirLogo: (formData) => request("/configuracion/logo", { method: "POST", data: formData, headers: { "Content-Type": "multipart/form-data" } }),
   cambiarPasswordAdmin: (body) => request("/seguridad/admin/cambiar-password", { method: "POST", data: body }),
+};
+
+// ── API Super Admin ──────────────────────────────────────────────────────────
+export const apiSuperAdmin = {
+  // Métricas
+  metricasGlobales: () => request("/super-admin/metricas/global"),
+  metricasTaller: (tallerId) => request(`/super-admin/talleres/${tallerId}/metricas`),
+  recursosTaller: (tallerId) => request(`/super-admin/talleres/${tallerId}/recursos`),
+  
+  // Gestión de talleres
+  listarTalleres: () => request("/super-admin/talleres"),
+  crearTaller: (body) => request("/super-admin/talleres", { method: "POST", data: body }),
+  actualizarTaller: (tallerId, body) => request(`/super-admin/talleres/${tallerId}`, { method: "PATCH", data: body }),
+  cambiarEstado: (tallerId, estado) => request(`/super-admin/talleres/${tallerId}/estado`, { method: "PATCH", data: { estado } }),
+  
+  // Bloqueo de emergencia
+  bloquearEmergencia: (tallerId, motivo) => request(`/super-admin/talleres/${tallerId}/bloqueo-emergencia`, { method: "POST", data: { motivo } }),
+  desbloquearEmergencia: (tallerId) => request(`/super-admin/talleres/${tallerId}/bloqueo-emergencia`, { method: "DELETE" }),
+  
+  // Usuarios del taller
+  listarUsuariosTaller: (tallerId) => request(`/super-admin/talleres/${tallerId}/usuarios`),
+  crearAdminTaller: (tallerId, body) => request(`/super-admin/talleres/${tallerId}/usuarios`, { method: "POST", data: body }),
+  resetPasswordMasivo: (tallerId) => request(`/super-admin/talleres/${tallerId}/reset-passwords`, { method: "POST" }),
+  
+  // Notificaciones
+  enviarNotificacionMasiva: (body) => request("/super-admin/notificaciones/masivas", { method: "POST", data: body }),
+  obtenerNotificacionesNoLeidas: () => request("/notificaciones/no-leidas"),
+  marcarNotificacionLeida: (id) => request(`/notificaciones/${id}/leer`, { method: "PATCH" }),
+  marcarTodasNotificacionesLeidas: () => request("/notificaciones/leer-todas", { method: "PATCH" }),
+  
+  // Auditoría
+  obtenerAuditoria: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.taller_id) q.append("taller_id", params.taller_id);
+    if (params.usuario_id) q.append("usuario_id", params.usuario_id);
+    if (params.accion) q.append("accion", params.accion);
+    if (params.fecha_desde) q.append("fecha_desde", params.fecha_desde);
+    if (params.fecha_hasta) q.append("fecha_hasta", params.fecha_hasta);
+    if (params.page) q.append("page", params.page);
+    if (params.per_page) q.append("per_page", params.per_page);
+    return request(`/super-admin/auditoria?${q.toString()}`);
+  },
 };

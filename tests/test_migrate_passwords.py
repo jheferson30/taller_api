@@ -19,13 +19,11 @@ from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import Base, engine
 
-# Importar todos los modelos desde __init__ para asegurar orden correcto
-from app.modelos import (
-    AuditLog,
-    ConfiguracionSeguridad,
-    Role,
-    User,
-)
+# Importar modelos directamente desde sus archivos
+from app.modelos.audit_log import AuditLog
+from app.modelos.configuracion_seguridad import ConfiguracionSeguridad
+from app.modelos.role import Role
+from app.modelos.user import User
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from scripts.migrate_passwords import MigrationReport, get_username_from_clave, migrate_passwords

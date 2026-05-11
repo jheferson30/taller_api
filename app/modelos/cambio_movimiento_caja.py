@@ -9,6 +9,7 @@ class CambioMovimientoCaja(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     movimiento_id = Column(Integer, ForeignKey("movimientos_caja.id"), nullable=False, index=True)
+    taller_id = Column(Integer, ForeignKey("talleres.id"), nullable=False, index=True)
     motivo = Column(String(200), nullable=False)
     valor_anterior = Column(Integer, nullable=False)
     valor_nuevo = Column(Integer, nullable=False)

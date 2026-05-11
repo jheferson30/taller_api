@@ -146,3 +146,15 @@ class ConfigurationError(DomainException):
     """
 
     pass
+
+
+class MissingTenantContextError(DomainException):
+    """
+    Se lanza cuando se intenta acceder a datos de tenant sin contexto de taller_id.
+
+    Esto incluye:
+    - Operaciones en repositorios tenant-aware sin taller_id
+    - Acceso a recursos multi-tenant sin contexto
+    """
+
+    pass

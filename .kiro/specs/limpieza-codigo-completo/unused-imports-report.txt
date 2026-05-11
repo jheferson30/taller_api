@@ -1,0 +1,63 @@
+================================================================================
+UNUSED IMPORTS REPORT — app/
+Herramienta: autoflake 2.x + análisis manual
+Fecha: 2026-04-25
+Método: autoflake --check-diff -r app/ + revisión manual de patrones
+================================================================================
+
+RESULTADO AUTOFLAKE:
+  autoflake no detectó imports no usados en ningún archivo de app/.
+  Los únicos cambios sugeridos fueron eliminación de cuerpos "pass" vacíos
+  en clases de excepción (no son imports).
+
+ARCHIVOS CON CAMBIOS SUGERIDOS POR AUTOFLAKE (no imports, sino pass vacíos):
+
+  app/servicios/auth_service.py
+    - Línea: cuerpo "pass" en InvalidCredentialsError y InvalidTokenError
+    - Tipo: pass vacío en clases de excepción (no es import no usado)
+
+  app/configuracion/config_validator.py
+    - Línea: cuerpo "pass" en ConfigValidationError
+    - Tipo: pass vacío en clase de excepción (no es import no usado)
+
+  app/utils/exceptions.py
+    - Líneas: múltiples cuerpos "pass" en clases de excepción
+    - Tipo: pass vacíos en clases de excepción (no son imports no usados)
+
+  app/servicios/user_service.py
+    - Líneas: cuerpos "pass" en ValidationError y DuplicateError
+    - Tipo: pass vacíos en clases de excepción (no son imports no usados)
+
+================================================================================
+ANÁLISIS MANUAL DE IMPORTS POTENCIALMENTE PROBLEMÁTICOS:
+
+HALLAZGO 1 — app/rutas/whatsapp_ruta.py
+  Import dentro de función (línea ~47):
+    from app.modelos.configuracion_taller import ConfiguracionTaller
+  Contexto: Import lazy dentro del cuerpo de recibir_webhook()
+  Severidad: BAJO — funciona pero es antipatrón; debería estar al nivel del módulo
+  Recomendación: Mover al bloque de imports del archivo
+
+HALLAZGO 2 — app/rutas/seguridad_ruta.py
+  Import dentro de función (línea ~185):
+    import hmac as _hmac
+  Contexto: Import lazy dentro del cuerpo de cambiar_password_admin()
+  Severidad: BAJO — funciona pero es antipatrón; debería estar al nivel del módulo
+  Recomendación: Mover al bloque de imports del archivo
+
+HALLAZGO 3 — app/rutas/mobile_api_ruta.py
+  Import importado pero uso a verificar:
+    from app.servicios.whatsapp_service import TipoEvento
+  Contexto: TipoEvento se importa pero verificar si se usa en todas las rutas
+  Severidad: BAJO — requiere verificación manual
+
+================================================================================
+RESUMEN:
+  Imports no usados detectados por autoflake: 0
+  Imports lazy (dentro de funciones): 2
+  Imports a verificar manualmente: 1
+  Total hallazgos: 3 (todos de severidad BAJA)
+
+CONCLUSIÓN: El código tiene una gestión de imports muy limpia.
+Los únicos problemas son imports lazy que deberían moverse al nivel del módulo.
+================================================================================

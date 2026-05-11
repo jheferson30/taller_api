@@ -8,6 +8,7 @@ class Cita(Base):
     __tablename__ = "citas"
 
     id = Column(Integer, primary_key=True, index=True)
+    taller_id = Column(Integer, ForeignKey("talleres.id"), nullable=False, index=True)
     vehiculo_id = Column(Integer, ForeignKey("vehiculos.id"), nullable=True, index=True)
     placa = Column(String(20), nullable=False, index=True)
 

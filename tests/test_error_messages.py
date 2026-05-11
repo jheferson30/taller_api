@@ -4,8 +4,9 @@ Valida que los mensajes de error no revelan información sensible
 """
 from datetime import UTC
 
-from app.modelos.role import Role, UserRole
+from app.modelos.role import Role
 from app.modelos.user import User
+from app.modelos.user_role import UserRole
 
 
 class TestErrorMessages:

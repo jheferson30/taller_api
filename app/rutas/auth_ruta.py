@@ -203,11 +203,27 @@ async def login(
             key="refresh_token",
             value=result["refresh_token"],
             httponly=True,
-            secure=is_production,  # Solo HTTPS en producción
-            samesite="strict",  # Protección CSRF
+            secure=is_production,
+            samesite="strict",
             max_age=7 * 24 * 60 * 60,  # 7 días
         )
 
+        # Generar token CSRF — se retorna en el body para que el frontend
+        # lo guarde en memoria y lo envíe en el header X-CSRF-Token
+        from fastapi_csrf_protect import CsrfProtect
+        csrf = CsrfProtect()
+        csrf_token, signed_token = csrf.generate_csrf_tokens()
+        # Cookie firmada httponly para validación server-side
+        response.set_cookie(
+            key="fastapi-csrf-token",
+            value=signed_token,
+            httponly=True,
+            secure=is_production,
+            samesite="strict",
+            max_age=7 * 24 * 60 * 60,
+        )
+
+        result["csrf_token"] = csrf_token
         return LoginResponse(**result)
 
     except InvalidCredentialsError as e:

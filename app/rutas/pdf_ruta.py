@@ -7,18 +7,22 @@ Provides endpoints for async PDF generation using Celery.
 import os
 
 from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.configuracion.base_datos import obtener_db
+from app.seguridad.auth_middleware import require_auth
 from app.tasks.pdf_tasks import generate_ticket_pdf_task
 
 router = APIRouter(prefix="/pdf", tags=["PDF Generation"])
 
 
 @router.post("/tickets/{ticket_id}/generate")
-async def generate_ticket_pdf(ticket_id: int, db: Session = Depends(obtener_db)):
+@require_auth
+async def generate_ticket_pdf(
+    ticket_id: int, request: Request, db: Session = Depends(obtener_db)
+):
     """
     Start async PDF generation for a ticket.
 
@@ -26,6 +30,7 @@ async def generate_ticket_pdf(ticket_id: int, db: Session = Depends(obtener_db))
 
     Args:
         ticket_id: ID of the ticket to generate PDF for
+        request: FastAPI request object (contains authenticated user context)
 
     Returns:
         dict with task_id and status
@@ -36,15 +41,36 @@ async def generate_ticket_pdf(ticket_id: int, db: Session = Depends(obtener_db))
             "status": "processing",
             "ticket_id": 123
         }
+
+    Raises:
+        HTTPException 401: If user is not authenticated
+        HTTPException 404: If ticket not found or belongs to different taller
     """
-    # Verify ticket exists
+    # Extract taller_id from JWT (never from request body/params)
+    taller_id = request.state.taller_id
+
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot access tenant data.",
+        )
+
+    # Verify ticket exists and belongs to authenticated user's taller
+    from app.modelos.vehiculo import Vehiculo
     from app.repositorios.ticket_repository import TicketRepository
 
     ticket_repo = TicketRepository(db)
     ticket = ticket_repo.get_by_id(ticket_id)
 
     if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    # Verify ticket ownership through vehiculo.taller_id
+    vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+
+    if not vehiculo or vehiculo.taller_id != taller_id:
+        # Return 404 (not 403) to avoid revealing ticket exists in another taller
+        raise HTTPException(status_code=404, detail="Resource not found")
 
     # Start async task
     task = generate_ticket_pdf_task.delay(ticket_id)
@@ -58,12 +84,14 @@ async def generate_ticket_pdf(ticket_id: int, db: Session = Depends(obtener_db))
 
 
 @router.get("/tasks/{task_id}/status")
-async def get_task_status(task_id: str):
+@require_auth
+async def get_task_status(task_id: str, request: Request):
     """
     Check status of PDF generation task.
 
     Args:
         task_id: Task ID returned from generate endpoint
+        request: FastAPI request object (contains authenticated user context)
 
     Returns:
         dict with task status and result if completed
@@ -95,6 +123,9 @@ async def get_task_status(task_id: str):
                 "error": "Error message"
             }
         }
+
+    Raises:
+        HTTPException 401: If user is not authenticated
     """
     task_result = AsyncResult(task_id)
 
@@ -106,19 +137,33 @@ async def get_task_status(task_id: str):
 
 
 @router.get("/tasks/{task_id}/result")
-async def download_pdf(task_id: str):
+@require_auth
+async def download_pdf(task_id: str, request: Request, db: Session = Depends(obtener_db)):
     """
     Download generated PDF.
 
     Args:
         task_id: Task ID returned from generate endpoint
+        request: FastAPI request object (contains authenticated user context)
 
     Returns:
         PDF file as download
 
     Raises:
-        HTTPException: 202 if still processing, 404 if file not found, 500 if failed
+        HTTPException 401: If user is not authenticated
+        HTTPException 202: If still processing
+        HTTPException 404: If file not found or belongs to different taller
+        HTTPException 500: If generation failed
     """
+    # Extract taller_id from JWT (never from request body/params)
+    taller_id = request.state.taller_id
+
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot access tenant data.",
+        )
+
     task_result = AsyncResult(task_id)
 
     if not task_result.ready():
@@ -137,6 +182,25 @@ async def download_pdf(task_id: str):
         raise HTTPException(
             status_code=404, detail="PDF file not found. It may have been cleaned up."
         )
+
+    # Verify ticket ownership before serving PDF
+    ticket_id = result.get("ticket_id")
+    if ticket_id:
+        from app.modelos.vehiculo import Vehiculo
+        from app.repositorios.ticket_repository import TicketRepository
+
+        ticket_repo = TicketRepository(db)
+        ticket = ticket_repo.get_by_id(ticket_id)
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Resource not found")
+
+        # Verify ticket ownership through vehiculo.taller_id
+        vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+
+        if not vehiculo or vehiculo.taller_id != taller_id:
+            # Return 404 (not 403) to avoid revealing ticket exists in another taller
+            raise HTTPException(status_code=404, detail="Resource not found")
 
     return FileResponse(
         file_path,

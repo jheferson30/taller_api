@@ -1,0 +1,170 @@
+================================================================================
+BANDIT SECURITY REPORT — app/
+Herramienta: bandit 1.9.4
+Fecha: 2026-04-25
+Comando: bandit -r app/ -f txt
+================================================================================
+
+Run started: 2026-04-25
+
+Test results:
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'SecurePass123!'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/esquemas/auth_schema.py:18
+   Contexto: json_schema_extra (ejemplo de documentación OpenAPI — FALSO POSITIVO)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' (x3)
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/esquemas/auth_schema.py:50, 51, 70, 83
+   Contexto: json_schema_extra (ejemplos de tokens JWT en documentación — FALSO POSITIVO)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'abc123def456ghi789'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/esquemas/auth_schema.py:144
+   Contexto: json_schema_extra (ejemplo de token de reset — FALSO POSITIVO)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'NewSecurePass123!'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/esquemas/auth_schema.py:144
+   Contexto: json_schema_extra (ejemplo de nueva contraseña — FALSO POSITIVO)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'SecurePass123!'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/esquemas/user_schema.py:39
+   Contexto: json_schema_extra (ejemplo de creación de usuario — FALSO POSITIVO)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'OldPass123!' / 'NewSecurePass456!'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/esquemas/user_schema.py:70
+   Contexto: json_schema_extra (ejemplo de cambio de contraseña — FALSO POSITIVO)
+
+--------------------------------------------------
+>> Issue: [B310:blacklist] Audit url open for permitted schemes.
+   Severity: Medium   Confidence: High
+   CWE: CWE-22
+   Location: app/main.py:720
+   Código: urllib.request.urlopen("https://api.ipify.org", timeout=2)
+   Contexto: Obtención de IP pública para info del sistema. URL hardcodeada a HTTPS.
+   EVALUACIÓN: Riesgo bajo en contexto — solo se usa para mostrar IP en panel de info.
+               Considerar usar httpx o requests con timeout explícito.
+
+--------------------------------------------------
+>> Issue: [B310:blacklist] Audit url open for permitted schemes.
+   Severity: Medium   Confidence: High
+   CWE: CWE-22
+   Location: app/rutas/health.py:25
+   Código: urllib.request.urlopen("https://api.ipify.org", timeout=2)
+   Contexto: Duplicación del mismo patrón en health.py — misma función _get_ip_local
+   EVALUACIÓN: Código duplicado entre main.py y health.py. Consolidar en un helper.
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected. (x8)
+   Severity: Low   Confidence: High
+   CWE: CWE-703
+   Locations:
+     - app/main.py:722
+     - app/rutas/health.py:27
+     - app/rutas/mobile_api_ruta.py:463
+     - app/rutas/ticket_ruta.py:919
+     - app/rutas/ticket_ruta.py:1167
+     - app/rutas/vehiculo_ruta.py:561
+     - app/utils/pdf_economia.py:159
+     - app/utils/pdf_generator.py:213, 353
+   Contexto: Excepciones silenciadas sin logging. Algunos tienen comentario explicativo
+             (ej: "No hay event loop activo en tests síncronos") pero otros no.
+   EVALUACIÓN: Los de rutas/ticket_ruta.py y vehiculo_ruta.py son para manejo de
+               asyncio en contexto síncrono — aceptable con comentario. Los de PDF
+               silencian errores de imagen — deberían al menos loguear.
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'PASSWORD_CHANGE' / 'PASSWORD_RESET' / etc.
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/modelos/audit_log.py:20, 21, 35, 36
+   Contexto: Valores de enum AuditAction — FALSO POSITIVO (son nombres de acciones, no contraseñas)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' (x3)
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/rutas/auth_ruta.py:121, 122, 247
+   Contexto: Ejemplos de tokens en documentación OpenAPI — FALSO POSITIVO
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'access' / 'refresh'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/seguridad/token_manager.py:110, 146
+   Contexto: Valores de campo token_type en payload JWT — FALSO POSITIVO
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: 'refresh'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/servicios/auth_service.py:326
+   Contexto: token_type="refresh" como argumento de función — FALSO POSITIVO
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: 'access' (x3)
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/servicios/taller_service.py:224, 416, 460
+   Contexto: token_type="access" como argumento de función — FALSO POSITIVO
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'False'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259
+   Location: app/servicios/security_detection_service.py:137, 138
+   Contexto: Valores booleanos en diccionario de resultados — FALSO POSITIVO
+
+================================================================================
+MÉTRICAS DE ESCANEO:
+  Total líneas de código: 14,244
+  Total líneas omitidas (#nosec): 0
+  Total issues por severidad:
+    - Undefined: 0
+    - Low: 35
+    - Medium: 2
+    - High: 0
+  Total issues por confianza:
+    - Low: 0
+    - Medium: 25
+    - High: 12
+  Archivos omitidos: 0
+
+================================================================================
+ANÁLISIS DE HALLAZGOS REALES (no falsos positivos):
+
+SEVERIDAD MEDIA (2 hallazgos reales):
+  1. app/main.py:720 — urllib.request.urlopen a api.ipify.org
+     Recomendación: Usar httpx con timeout y manejo de error explícito
+  2. app/rutas/health.py:25 — Misma función duplicada en health.py
+     Recomendación: Consolidar _get_ip_local en un único helper en utils/
+
+SEVERIDAD BAJA — MERECEN ATENCIÓN (try/except/pass sin logging):
+  3. app/utils/pdf_economia.py:159 — Excepción silenciada en carga de imagen
+     Recomendación: Agregar logging.warning() con el error
+  4. app/utils/pdf_generator.py:213, 353 — Excepciones silenciadas en PDF
+     Recomendación: Agregar logging.warning() con el error
+
+FALSOS POSITIVOS (35 hallazgos — no requieren acción):
+  - Contraseñas en json_schema_extra (ejemplos de documentación OpenAPI)
+  - Valores de enum AuditAction con "PASSWORD" en el nombre
+  - Valores de campo token_type ("access", "refresh")
+  - Booleanos False en diccionarios de resultados
+
+================================================================================

@@ -24,6 +24,24 @@ class AuditAction(StrEnum):
     TICKET_FINALIZE = "TICKET_FINALIZE"
     CONFIG_CHANGE = "CONFIG_CHANGE"
     SECURITY_ALERT = "SECURITY_ALERT"
+    JWT_KEY_ROTATION = "JWT_KEY_ROTATION"
+    CROSS_TENANT_ATTEMPT = "CROSS_TENANT_ATTEMPT"
+    PII_ACCESS = "PII_ACCESS"
+    SECRET_MISSING = "SECRET_MISSING"
+    SECURITY_ALERT_DELIVERED = "SECURITY_ALERT_DELIVERED"
+    SECURITY_ALERT_FAILED = "SECURITY_ALERT_FAILED"
+    # Acciones de gestión de talleres (SUPER_ADMIN)
+    TALLER_CREATE = "TALLER_CREATE"
+    TALLER_UPDATE = "TALLER_UPDATE"
+    TALLER_ACTIVATE = "TALLER_ACTIVATE"
+    TALLER_SUSPEND = "TALLER_SUSPEND"
+    TALLER_CANCEL = "TALLER_CANCEL"
+    TALLER_DEACTIVATE = "TALLER_DEACTIVATE"
+    TALLER_EMERGENCY_BLOCK = "TALLER_EMERGENCY_BLOCK"
+    TALLER_EMERGENCY_UNBLOCK = "TALLER_EMERGENCY_UNBLOCK"
+    PASSWORD_RESET_FORCED = "PASSWORD_RESET_FORCED"
+    PASSWORD_RESET_MASS = "PASSWORD_RESET_MASS"
+    NOTIFICATION_MASS = "NOTIFICATION_MASS"
 
 
 class AuditLog(Base):
@@ -39,6 +57,9 @@ class AuditLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    taller_id = Column(
+        Integer, ForeignKey("talleres.id", ondelete="SET NULL"), nullable=True, index=True
     )
     action = Column(String(50), nullable=False, index=True)
     resource_type = Column(String(50), nullable=True, index=True)

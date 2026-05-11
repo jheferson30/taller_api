@@ -8,6 +8,9 @@ class LogNotificacion(Base):
     __tablename__ = "log_notificacion"
 
     id = Column(Integer, primary_key=True, index=True)
+    taller_id = Column(
+        Integer, ForeignKey("talleres.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     ticket_id = Column(
         Integer, ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True, index=True
     )

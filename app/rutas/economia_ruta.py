@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from fastapi_cache.decorator import cache
 from sqlalchemy import func
@@ -11,22 +11,25 @@ from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
 from app.modelos.ticket import Ticket
 from app.modelos.ticket_proceso import TicketProceso
+from app.seguridad.auth_middleware import require_auth
 from app.seguridad.dependencias import requerir_password_admin
 from app.utils.pdf_economia import generar_pdf_economia_profesional
 
 router = APIRouter(prefix="/economia-dia", tags=["Economia"])
 
 
-def _base_query_dia(db: Session, fecha_objetivo: date):
+def _base_query_dia(db: Session, fecha_objetivo: date, taller_id: int):
     return db.query(MovimientoCaja).filter(
+        MovimientoCaja.taller_id == taller_id,
         func.date(MovimientoCaja.fecha_creacion) == fecha_objetivo
     )
 
 
-def _sumar_por_tipo(db: Session, fecha_objetivo: date, tipo: TipoMovimiento) -> int:
+def _sumar_por_tipo(db: Session, fecha_objetivo: date, tipo: TipoMovimiento, taller_id: int) -> int:
     total = (
         db.query(func.coalesce(func.sum(MovimientoCaja.valor), 0))
         .filter(
+            MovimientoCaja.taller_id == taller_id,
             func.date(MovimientoCaja.fecha_creacion) == fecha_objetivo,
             MovimientoCaja.tipo == tipo,
         )
@@ -35,16 +38,17 @@ def _sumar_por_tipo(db: Session, fecha_objetivo: date, tipo: TipoMovimiento) -> 
     return int(total or 0)
 
 
-def _resumen_economia(db: Session, fecha_objetivo: date) -> dict[str, int]:
-    ingreso_anticipo = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_ANTICIPO)
-    ingreso_final = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_FINAL)
-    ingreso_rapido = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_RAPIDO)
-    egresos = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.EGRESO)
+def _resumen_economia(db: Session, fecha_objetivo: date, taller_id: int) -> dict[str, int]:
+    ingreso_anticipo = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_ANTICIPO, taller_id)
+    ingreso_final = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_FINAL, taller_id)
+    ingreso_rapido = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.INGRESO_RAPIDO, taller_id)
+    egresos = _sumar_por_tipo(db, fecha_objetivo, TipoMovimiento.EGRESO, taller_id)
     ingresos = ingreso_anticipo + ingreso_final + ingreso_rapido
 
     tickets_cerrados_hoy = (
         db.query(func.count(func.distinct(MovimientoCaja.ticket_codigo)))
         .filter(
+            MovimientoCaja.taller_id == taller_id,
             func.date(MovimientoCaja.fecha_creacion) == fecha_objetivo,
             MovimientoCaja.tipo == TipoMovimiento.INGRESO_FINAL,
             MovimientoCaja.ticket_codigo.isnot(None),
@@ -54,6 +58,7 @@ def _resumen_economia(db: Session, fecha_objetivo: date) -> dict[str, int]:
     tickets_abiertos_anticipo_hoy = (
         db.query(func.count(func.distinct(MovimientoCaja.ticket_codigo)))
         .filter(
+            MovimientoCaja.taller_id == taller_id,
             func.date(MovimientoCaja.fecha_creacion) == fecha_objetivo,
             MovimientoCaja.tipo == TipoMovimiento.INGRESO_ANTICIPO,
             MovimientoCaja.ticket_codigo.isnot(None),
@@ -73,21 +78,21 @@ def _resumen_economia(db: Session, fecha_objetivo: date) -> dict[str, int]:
     }
 
 
-def _detalle_ingresos(db: Session, fecha_objetivo: date):
+def _detalle_ingresos(db: Session, fecha_objetivo: date, taller_id: int):
     anticipos = (
-        _base_query_dia(db, fecha_objetivo)
+        _base_query_dia(db, fecha_objetivo, taller_id)
         .filter(MovimientoCaja.tipo == TipoMovimiento.INGRESO_ANTICIPO)
         .order_by(MovimientoCaja.fecha_creacion.desc())
         .all()
     )
     finales = (
-        _base_query_dia(db, fecha_objetivo)
+        _base_query_dia(db, fecha_objetivo, taller_id)
         .filter(MovimientoCaja.tipo == TipoMovimiento.INGRESO_FINAL)
         .order_by(MovimientoCaja.fecha_creacion.desc())
         .all()
     )
     rapidos = (
-        _base_query_dia(db, fecha_objetivo)
+        _base_query_dia(db, fecha_objetivo, taller_id)
         .filter(MovimientoCaja.tipo == TipoMovimiento.INGRESO_RAPIDO)
         .order_by(MovimientoCaja.fecha_creacion.desc())
         .all()
@@ -135,9 +140,9 @@ def _detalle_ingresos(db: Session, fecha_objetivo: date):
     }
 
 
-def _detalle_egresos(db: Session, fecha_objetivo: date):
+def _detalle_egresos(db: Session, fecha_objetivo: date, taller_id: int):
     egresos = (
-        _base_query_dia(db, fecha_objetivo)
+        _base_query_dia(db, fecha_objetivo, taller_id)
         .filter(MovimientoCaja.tipo == TipoMovimiento.EGRESO)
         .order_by(MovimientoCaja.fecha_creacion.desc())
         .all()
@@ -161,16 +166,22 @@ def _detalle_egresos(db: Session, fecha_objetivo: date):
 
 
 @router.get("/pdf")
-def generar_pdf_economia_dia(
+@require_auth
+async def generar_pdf_economia_dia(
+    request: Request,
     fecha: date = Query(default_factory=date.today),
     db: Session = Depends(obtener_db),
     _: bool = Depends(requerir_password_admin),
 ):
-    resumen = _resumen_economia(db, fecha)
-    ingresos = _detalle_ingresos(db, fecha)
-    egresos_list = _detalle_egresos(db, fecha)
+    taller_id = request.state.taller_id
+    
+    resumen = _resumen_economia(db, fecha, taller_id)
+    ingresos = _detalle_ingresos(db, fecha, taller_id)
+    egresos_list = _detalle_egresos(db, fecha, taller_id)
 
-    config_taller = db.query(ConfiguracionTaller).first()
+    config_taller = db.query(ConfiguracionTaller).filter(
+        ConfiguracionTaller.taller_id == taller_id
+    ).first()
     datos_taller = {
         "nombre": config_taller.nombre_taller if config_taller else "Taller Mecánico",
         "direccion": config_taller.direccion if config_taller else "",
@@ -197,37 +208,49 @@ def generar_pdf_economia_dia(
 
 
 @router.get("")
-def obtener_resumen_economia_dia(
+@require_auth
+async def obtener_resumen_economia_dia(
+    request: Request,
     fecha: date = Query(default_factory=date.today),
     db: Session = Depends(obtener_db),
 ):
-    resumen = _resumen_economia(db, fecha)
+    taller_id = request.state.taller_id
+    resumen = _resumen_economia(db, fecha, taller_id)
     return {"fecha": fecha.isoformat(), **resumen}
 
 
 @router.get("/ingresos")
-def obtener_detalle_ingresos_dia(
+@require_auth
+async def obtener_detalle_ingresos_dia(
+    request: Request,
     fecha: date = Query(default_factory=date.today),
     db: Session = Depends(obtener_db),
 ):
-    return {"fecha": fecha.isoformat(), **_detalle_ingresos(db, fecha)}
+    taller_id = request.state.taller_id
+    return {"fecha": fecha.isoformat(), **_detalle_ingresos(db, fecha, taller_id)}
 
 
 @router.get("/egresos")
-def obtener_detalle_egresos_dia(
+@require_auth
+async def obtener_detalle_egresos_dia(
+    request: Request,
     fecha: date = Query(default_factory=date.today),
     db: Session = Depends(obtener_db),
 ):
-    return {"fecha": fecha.isoformat(), "egresos": _detalle_egresos(db, fecha)}
+    taller_id = request.state.taller_id
+    return {"fecha": fecha.isoformat(), "egresos": _detalle_egresos(db, fecha, taller_id)}
 
 
 @router.get("/estadisticas")
+@require_auth
 @cache(expire=300)  # Cachear por 5 minutos (300 segundos)
-def obtener_estadisticas(
+async def obtener_estadisticas(
+    request: Request,
     periodo: str = Query(default="semana", pattern="^(semana|mes)$"),
     db: Session = Depends(obtener_db),
     _: bool = Depends(requerir_password_admin),
 ):
+    taller_id = request.state.taller_id
     hoy = date.today()
     dias = 7 if periodo == "semana" else 30
     fecha_desde = hoy - timedelta(days=dias - 1)
@@ -244,6 +267,7 @@ def obtener_estadisticas(
             func.sum(MovimientoCaja.valor).label("total"),
         )
         .filter(
+            MovimientoCaja.taller_id == taller_id,
             func.date(MovimientoCaja.fecha_creacion) >= fecha_desde,
             func.date(MovimientoCaja.fecha_creacion) <= hoy,
             MovimientoCaja.tipo.in_(tipos_ingreso),
@@ -267,6 +291,7 @@ def obtener_estadisticas(
             func.count(Ticket.id).label("cantidad"),
         )
         .filter(
+            Ticket.taller_id == taller_id,
             func.date(Ticket.fecha_ingreso) >= fecha_desde,
             func.date(Ticket.fecha_ingreso) <= hoy,
         )
@@ -286,6 +311,7 @@ def obtener_estadisticas(
             func.count(TicketProceso.id).label("procesos"),
         )
         .filter(
+            TicketProceso.taller_id == taller_id,
             TicketProceso.mecanico.isnot(None),
             TicketProceso.mecanico != "",
             func.date(TicketProceso.fecha_creacion) >= fecha_desde,
@@ -311,12 +337,16 @@ def obtener_estadisticas(
 
 
 @router.get("/historico")
-def obtener_historico_economia(
+@require_auth
+async def obtener_historico_economia(
+    request: Request,
     fecha_desde: date = Query(...),
     fecha_hasta: date = Query(...),
     db: Session = Depends(obtener_db),
     _: bool = Depends(requerir_password_admin),
 ):
+    taller_id = request.state.taller_id
+    
     if fecha_hasta < fecha_desde:
         return {"detalle": "Rango de fechas invalido", "items": []}
 
@@ -324,7 +354,7 @@ def obtener_historico_economia(
     from app.repositorios.movimiento_caja_repository import MovimientoCajaRepository
 
     repo = MovimientoCajaRepository(db)
-    items = repo.get_historico_economico(fecha_desde, fecha_hasta)
+    items = repo.get_historico_economico(fecha_desde, fecha_hasta, taller_id)
 
     return {
         "fecha_desde": fecha_desde.isoformat(),

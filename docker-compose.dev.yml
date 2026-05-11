@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # ── Backend API (FastAPI) ──────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taller-backend-dev
+    ports:
+      - "8000:8000"
+    environment:
+      # Base de datos
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/taller_db?client_encoding=utf8
+      - DATABASE_PASSWORD=postgres
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      # Celery
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # Entorno
+      - ENVIRONMENT=development
+      # Zona horaria
+      - TZ=America/Bogota
+      # CORS para desarrollo
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000
+      # Seguridad (requerido)
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY}
+      - PII_MASTER_KEY=${PII_MASTER_KEY}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      # Hot reload - montar código fuente
+      - ./app:/app/app
+      - ./migrations:/app/migrations
+      - ./scripts:/app/scripts
+      # Persistir uploads
+      - ./uploads:/app/uploads
+    networks:
+      - taller-network
+    restart: unless-stopped
+    # Usar script de desarrollo en Python (evita problemas de line endings)
+    entrypoint: ["python", "/app/scripts/entrypoint-dev.py"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/info"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  # ── PostgreSQL Database ────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: taller-db-dev
+    environment:
+      POSTGRES_DB: taller_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      TZ: America/Bogota
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taller_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+  # ── Redis Cache ────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: taller-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+  # ── Celery Worker ──────────────────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taller-celery-dev
+    entrypoint: []
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/taller_db?client_encoding=utf8
+      - DATABASE_PASSWORD=postgres
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - TZ=America/Bogota
+      # Seguridad (requerido)
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY}
+      - PII_MASTER_KEY=${PII_MASTER_KEY}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./app:/app/app
+      - ./uploads:/app/uploads
+    networks:
+      - taller-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Frontend (Vite Dev Server) ─────────────────────────────────────────────
+  frontend:
+    image: node:20-slim
+    container_name: taller-frontend-dev
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Evitar conflictos con node_modules local
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    networks:
+      - taller-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+
+networks:
+  taller-network:
+    driver: bridge

@@ -1,0 +1,175 @@
+================================================================================
+SECURITY TENANT QUERIES REPORT — Queries sin filtro taller_id
+Fecha: 2026-04-25
+Método: Análisis estático de app/repositorios/*.py y app/rutas/*.py
+Tablas operativas: tickets, vehiculos, clientes, citas, repuestos, caja,
+                   fotos, mecanicos, usuarios (non-super-admin)
+================================================================================
+
+METODOLOGÍA:
+Se analizaron todos los repositorios para verificar que las queries sobre
+tablas operativas incluyan filtro por taller_id. Se verificó el patrón
+TenantRepository que aplica el filtro automáticamente.
+
+================================================================================
+ARQUITECTURA DE AISLAMIENTO TENANT:
+
+El proyecto usa un patrón TenantRepository (app/repositorios/tenant_repository.py)
+que aplica automáticamente el filtro taller_id en todas las operaciones:
+
+  def _base_query(self):
+      return self.db.query(self.model).filter(self.model.taller_id == self.taller_id)
+
+Repositorios que HEREDAN de TenantRepository (CORRECTOS):
+  ✅ CitaRepository (cita_repository.py) — hereda TenantRepository
+  ✅ VehiculoRepository (vehiculo_repository.py) — hereda TenantRepository
+  ✅ TicketRepository (ticket_repository.py) — hereda TenantRepository
+  ✅ MovimientoCajaRepository (movimiento_caja_repository.py) — hereda TenantRepository
+  ✅ NotificacionRepository (notificacion_repository.py) — hereda TenantRepository
+
+================================================================================
+HALLAZGOS — QUERIES SIN FILTRO taller_id:
+
+HALLAZGO 1 — app/repositorios/ticket_repository.py — BAJO
+  Método: get_tickets_with_details()
+  Líneas: 91-100
+  Código:
+    procesos = self.db.query(TicketProceso).filter(TicketProceso.ticket_id.in_(ticket_ids)).all()
+    repuestos = self.db.query(TicketRepuesto).filter(TicketRepuesto.ticket_id.in_(ticket_ids)).all()
+    fotos = self.db.query(TicketFoto).filter(TicketFoto.ticket_id.in_(ticket_ids)).all()
+
+  SEVERIDAD: BAJO (no es una vulnerabilidad real)
+  DESCRIPCIÓN: Las sub-queries de TicketProceso, TicketRepuesto y TicketFoto
+  no filtran por taller_id, pero filtran por ticket_id.in_(ticket_ids) donde
+  ticket_ids ya fue obtenido de _base_query() que sí filtra por taller_id.
+  El código incluso tiene un comentario explicando esto:
+  "# Note: TicketProceso, TicketRepuesto, TicketFoto son sub-entidades del ticket
+  # ya filtrado por taller, no necesitan filtro taller_id adicional."
+  EVALUACIÓN: Correcto por diseño — no es una vulnerabilidad.
+
+HALLAZGO 2 — app/rutas/mobile_ruta.py — CRÍTICO
+  Método: tickets_activos_mobile()
+  Línea: 22
+  Código:
+    query = db.query(Ticket).filter(Ticket.estado.in_(["ABIERTO", "EN_PROCESO"]))
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: La query NO filtra por taller_id. Devuelve tickets de TODOS
+  los talleres mezclados. Combinado con la falta de autenticación (ver
+  security-auth-report.txt), esto es una violación grave del aislamiento
+  multi-tenant.
+  RECOMENDACIÓN: Agregar filtro Ticket.taller_id == taller_id (del JWT).
+
+HALLAZGO 3 — app/rutas/mobile_ruta.py — CRÍTICO
+  Método: timeline_ticket_mobile()
+  Líneas: 43-57
+  Código:
+    procesos = db.query(TicketProceso).filter(TicketProceso.ticket_id == ticket_id)
+    fotos = db.query(TicketFoto).filter(TicketFoto.ticket_id == ticket_id)
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: La query no verifica que el ticket pertenezca al taller del
+  usuario autenticado. Cualquier usuario puede consultar el timeline de
+  cualquier ticket de cualquier taller con solo conocer el ticket_id.
+  RECOMENDACIÓN: Verificar que el ticket pertenece al taller del JWT antes
+  de devolver los datos.
+
+HALLAZGO 4 — app/rutas/whatsapp_ruta.py — CRÍTICO
+  Método: recibir_webhook()
+  Línea: ~47
+  Código:
+    config = db.query(ConfiguracionTaller).filter(
+        ConfiguracionTaller.whatsapp_phone_id.isnot(None)
+    ).first()
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: La query obtiene la primera ConfiguracionTaller con whatsapp
+  configurado, sin filtrar por taller_id. Si hay múltiples talleres con
+  WhatsApp configurado, los mensajes entrantes siempre se asociarán al
+  primer taller encontrado, ignorando los demás.
+  RECOMENDACIÓN: Implementar lógica de routing por número de teléfono para
+  identificar correctamente el taller destinatario.
+
+HALLAZGO 5 — app/rutas/whatsapp_ruta.py — CRÍTICO
+  Métodos: enviar_whatsapp_mobile(), enviar_whatsapp_web()
+  Líneas: 73, 91
+  Código:
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: Las queries no verifican que el ticket pertenezca al taller
+  del usuario autenticado (además de que no hay autenticación). Cualquier
+  persona puede enviar mensajes de WhatsApp usando tickets de cualquier taller.
+  RECOMENDACIÓN: Agregar autenticación y verificar ticket.taller_id.
+
+HALLAZGO 6 — app/rutas/whatsapp_ruta.py — CRÍTICO
+  Método: obtener_logs()
+  Línea: 111
+  Código:
+    query = db.query(LogNotificacion)
+    if ticket_id is not None:
+        query = query.filter(LogNotificacion.ticket_id == ticket_id)
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: La query devuelve logs de TODOS los talleres sin filtrar por
+  taller_id. Sin autenticación, expone el historial de notificaciones de
+  todos los talleres.
+  RECOMENDACIÓN: Agregar autenticación y filtrar por taller_id del JWT.
+
+HALLAZGO 7 — app/rutas/economia_ruta.py — CRÍTICO
+  Múltiples funciones helper: _base_query_dia(), _sumar_por_tipo(), etc.
+  Líneas: 20-80
+  Código:
+    return db.query(MovimientoCaja).filter(
+        func.date(MovimientoCaja.fecha_creacion) == fecha_objetivo
+    )
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: Las funciones helper de economía NO filtran por taller_id.
+  Devuelven datos de movimientos de caja de TODOS los talleres mezclados.
+  Los endpoints de economía usan Depends(requerir_password_admin) para auth,
+  pero la contraseña admin es global (no por taller), por lo que cualquier
+  admin de cualquier taller puede ver los datos de todos los talleres.
+  RECOMENDACIÓN: Agregar filtro por taller_id en todas las queries de economía.
+  El taller_id debe venir del JWT, no de la contraseña admin.
+
+HALLAZGO 8 — app/rutas/pdf_ruta.py — ALTO
+  Método: generate_ticket_pdf()
+  Línea: ~43
+  Código:
+    ticket_repo = TicketRepository(db)  # Sin taller_id
+    ticket = ticket_repo.get_by_id(ticket_id)
+
+  SEVERIDAD: ALTO
+  DESCRIPCIÓN: TicketRepository se instancia sin taller_id, lo que viola el
+  contrato de TenantRepository (que requiere taller_id). Esto puede causar
+  un error en runtime o, si se maneja incorrectamente, devolver datos de
+  cualquier taller.
+  RECOMENDACIÓN: Instanciar TicketRepository con el taller_id del JWT.
+
+================================================================================
+RESUMEN DE SEVERIDADES:
+
+  CRÍTICO (7 hallazgos):
+    - app/rutas/mobile_ruta.py: tickets sin filtro taller_id (2 endpoints)
+    - app/rutas/whatsapp_ruta.py: queries sin taller_id (4 endpoints)
+    - app/rutas/economia_ruta.py: queries de caja sin taller_id
+
+  ALTO (1 hallazgo):
+    - app/rutas/pdf_ruta.py: TicketRepository sin taller_id
+
+  BAJO (1 hallazgo — no es vulnerabilidad real):
+    - app/repositorios/ticket_repository.py: sub-queries de sub-entidades
+      (correcto por diseño, documentado en el código)
+
+  BIEN IMPLEMENTADOS (sin hallazgos):
+    - Todos los repositorios que heredan TenantRepository
+    - app/rutas/citas_ruta.py (filtra por taller_id del JWT)
+    - app/rutas/ticket_ruta.py (usa request.state.taller_id)
+    - app/rutas/vehiculo_ruta.py (usa request.state.taller_id)
+    - app/rutas/users_ruta.py (usa request.state.taller_id)
+    - app/rutas/movimiento_caja_ruta.py (usa requerir_password_admin + taller_id)
+    - app/rutas/configuracion_ruta.py (usa request.state.taller_id)
+
+================================================================================

@@ -8,38 +8,57 @@ import EntregadosPage from "./pages/EntregadosPage";
 import InfoPage from "./pages/InfoPage";
 import ConfiguracionPage from "./pages/ConfiguracionPage";
 import ConfiguracionMecanicoPage from "./pages/ConfiguracionMecanicoPage";
+import SuperAdminPage from "./pages/SuperAdminPage";
 import Starfield from "./components/Starfield";
 import LoginPage from "./pages/LoginPage";
 import authService from "./services/authService";
-import { FiEdit2, FiCamera, FiGrid, FiClipboard, FiCalendar, FiCheckSquare, FiTrendingUp, FiSettings, FiInfo } from 'react-icons/fi';
+import NotificationBadge from "./components/NotificationBadge";
+import NotificationBanner from "./components/NotificationBanner";
+import { FiEdit2, FiCamera, FiGrid, FiClipboard, FiCalendar, FiCheckSquare, FiTrendingUp, FiSettings, FiInfo, FiShield } from 'react-icons/fi';
 import { api } from "./api";
 
 function getRoles() {
   const user = authService.getUser();
   const roles = user?.roles || [];
   return {
-    isAdmin: roles.includes("ADMIN"),
-    isMecanico: roles.includes("MECANICO") && !roles.includes("ADMIN"),
-    isRecepcionista: roles.includes("RECEPCIONISTA") && !roles.includes("ADMIN"),
+    isSuperAdmin: roles.includes("SUPER_ADMIN"),
+    isAdmin: roles.includes("ADMIN") && !roles.includes("SUPER_ADMIN"),
+    isMecanico: roles.includes("MECANICO") && !roles.includes("ADMIN") && !roles.includes("SUPER_ADMIN"),
+    isRecepcionista: roles.includes("RECEPCIONISTA") && !roles.includes("ADMIN") && !roles.includes("SUPER_ADMIN"),
     username: user?.username || "",
   };
 }
 
 function AppLayout({ children }) {
-  if (!authService.isAuthenticated()) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const { isAdmin, isMecanico, isRecepcionista, username } = getRoles();
+  const { isSuperAdmin, isAdmin, isMecanico, isRecepcionista, username } = getRoles();
   const [logoUrl, setLogoUrl] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const notifRefreshRef = useRef(null);
+
+  // Escuchar evento global para refrescar notificaciones desde cualquier página
+  useEffect(() => {
+    function handleNotifRefresh() {
+      if (notifRefreshRef.current) notifRefreshRef.current();
+    }
+    window.addEventListener("notif:refresh", handleNotifRefresh);
+    return () => window.removeEventListener("notif:refresh", handleNotifRefresh);
+  }, []);
 
   useEffect(() => {
     api.obtenerLogo()
       .then(r => setLogoUrl(r.logo_url || "/assets/logo.png"))
       .catch(() => setLogoUrl("/assets/logo.png"));
   }, []);
+
+  if (!authService.isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Si es SUPER_ADMIN, redirigir a su dashboard
+  if (isSuperAdmin && window.location.pathname !== "/super-admin") {
+    return <Navigate to="/super-admin" replace />;
+  }
 
   async function handleLogoChange(e) {
     const file = e.target.files[0];
@@ -92,20 +111,38 @@ function AppLayout({ children }) {
         </div>
         {isAdmin && <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleLogoChange} />}
         <nav className="nav">
-          <NavLink to="/" end onClick={() => setSidebarOpen(false)}><FiGrid size={17} style={{marginRight:8, verticalAlign:'middle'}} />Recepcion</NavLink>
-          <NavLink to="/tickets" onClick={() => setSidebarOpen(false)}><FiClipboard size={17} style={{marginRight:8, verticalAlign:'middle'}} />Tickets</NavLink>
-          <NavLink to="/citas" onClick={() => setSidebarOpen(false)}><FiCalendar size={17} style={{marginRight:8, verticalAlign:'middle'}} />Citas</NavLink>
-          {(isAdmin || isRecepcionista) && <NavLink to="/entregados" onClick={() => setSidebarOpen(false)}><FiCheckSquare size={17} style={{marginRight:8, verticalAlign:'middle'}} />Entregados</NavLink>}
-          {isAdmin && <NavLink to="/economia" onClick={() => setSidebarOpen(false)}><FiTrendingUp size={17} style={{marginRight:8, verticalAlign:'middle'}} />Economia</NavLink>}
-          {(isAdmin || isMecanico || isRecepcionista) && <NavLink to="/configuracion" onClick={() => setSidebarOpen(false)}><FiSettings size={17} style={{marginRight:8, verticalAlign:'middle'}} />Configuracion</NavLink>}
-          <NavLink to="/info" onClick={() => setSidebarOpen(false)}><FiInfo size={17} style={{marginRight:8, verticalAlign:'middle'}} />Info</NavLink>
+          {isSuperAdmin ? (
+            // Menú para SUPER_ADMIN
+            <>
+              <NavLink to="/super-admin" onClick={() => setSidebarOpen(false)}>
+                <FiShield size={17} style={{marginRight:8, verticalAlign:'middle'}} />Dashboard
+              </NavLink>
+              <NavLink to="/info" onClick={() => setSidebarOpen(false)}>
+                <FiInfo size={17} style={{marginRight:8, verticalAlign:'middle'}} />Info
+              </NavLink>
+            </>
+          ) : (
+            // Menú para roles de taller (ADMIN, MECANICO, RECEPCIONISTA)
+            <>
+              <NavLink to="/" end onClick={() => setSidebarOpen(false)}><FiGrid size={17} style={{marginRight:8, verticalAlign:'middle'}} />Recepcion</NavLink>
+              <NavLink to="/tickets" onClick={() => setSidebarOpen(false)}><FiClipboard size={17} style={{marginRight:8, verticalAlign:'middle'}} />Tickets</NavLink>
+              <NavLink to="/citas" onClick={() => setSidebarOpen(false)}><FiCalendar size={17} style={{marginRight:8, verticalAlign:'middle'}} />Citas</NavLink>
+              {(isAdmin || isRecepcionista) && <NavLink to="/entregados" onClick={() => setSidebarOpen(false)}><FiCheckSquare size={17} style={{marginRight:8, verticalAlign:'middle'}} />Entregados</NavLink>}
+              {isAdmin && <NavLink to="/economia" onClick={() => setSidebarOpen(false)}><FiTrendingUp size={17} style={{marginRight:8, verticalAlign:'middle'}} />Economia</NavLink>}
+              {(isAdmin || isMecanico || isRecepcionista) && <NavLink to="/configuracion" onClick={() => setSidebarOpen(false)}><FiSettings size={17} style={{marginRight:8, verticalAlign:'middle'}} />Configuracion</NavLink>}
+              <NavLink to="/info" onClick={() => setSidebarOpen(false)}><FiInfo size={17} style={{marginRight:8, verticalAlign:'middle'}} />Info</NavLink>
+            </>
+          )}
         </nav>
         <div className="sidebar-footer">
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#1e293b", border: "2px solid var(--brand-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "0.8rem", color: "var(--brand-primary)", flexShrink: 0 }}>
-              {username.slice(0, 2).toUpperCase()}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#1e293b", border: "2px solid var(--brand-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "0.8rem", color: "var(--brand-primary)", flexShrink: 0 }}>
+                {username.slice(0, 2).toUpperCase()}
+              </div>
+              <span className="sidebar-user" style={{ fontSize: "0.9rem" }}>{username}</span>
             </div>
-            <span className="sidebar-user" style={{ fontSize: "0.9rem" }}>{username}</span>
+            {!isSuperAdmin && <NotificationBadge onRefreshRef={notifRefreshRef} />}
           </div>
           <button className="sidebar-logout" onClick={handleLogout}>
             Cerrar Sesión
@@ -113,6 +150,7 @@ function AppLayout({ children }) {
         </div>
       </aside>
       <main className="content">
+        {!isSuperAdmin && <NotificationBanner />}
         {children}
       </main>
     </div>
@@ -121,8 +159,9 @@ function AppLayout({ children }) {
 
 // Componente que bloquea acceso si el rol no tiene permiso
 function RoleGuard({ allowed, children }) {
-  const { isAdmin, isMecanico, isRecepcionista } = getRoles();
+  const { isSuperAdmin, isAdmin, isMecanico, isRecepcionista } = getRoles();
   const hasAccess =
+    (allowed.includes("SUPER_ADMIN") && isSuperAdmin) ||
     (allowed.includes("ADMIN") && isAdmin) ||
     (allowed.includes("MECANICO") && isMecanico) ||
     (allowed.includes("RECEPCIONISTA") && isRecepcionista);
@@ -138,18 +177,47 @@ function ConfiguracionRouter() {
 }
 
 export default function App() {
-  const { isAdmin, isMecanico } = getRoles();
-
   return (
     <>
       <Starfield />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 
-        {/* Páginas para todos los roles */}
-        <Route path="/" element={<AppLayout><RecepcionPage /></AppLayout>} />
-        <Route path="/tickets" element={<AppLayout><TicketPage /></AppLayout>} />
-        <Route path="/citas" element={<AppLayout><CitasPage /></AppLayout>} />
+        {/* Ruta exclusiva para SUPER_ADMIN */}
+        <Route path="/super-admin" element={
+          <AppLayout>
+            <RoleGuard allowed={["SUPER_ADMIN"]}>
+              <SuperAdminPage />
+            </RoleGuard>
+          </AppLayout>
+        } />
+
+        {/* Páginas para roles de taller (ADMIN, MECANICO, RECEPCIONISTA) */}
+        <Route path="/" element={
+          <AppLayout>
+            <RoleGuard allowed={["ADMIN", "MECANICO", "RECEPCIONISTA"]}>
+              <RecepcionPage />
+            </RoleGuard>
+          </AppLayout>
+        } />
+        
+        <Route path="/tickets" element={
+          <AppLayout>
+            <RoleGuard allowed={["ADMIN", "MECANICO", "RECEPCIONISTA"]}>
+              <TicketPage />
+            </RoleGuard>
+          </AppLayout>
+        } />
+        
+        <Route path="/citas" element={
+          <AppLayout>
+            <RoleGuard allowed={["ADMIN", "MECANICO", "RECEPCIONISTA"]}>
+              <CitasPage />
+            </RoleGuard>
+          </AppLayout>
+        } />
+
+        {/* Info: accesible para todos los roles */}
         <Route path="/info" element={<AppLayout><InfoPage /></AppLayout>} />
 
         {/* Entregados: ADMIN y RECEPCIONISTA */}

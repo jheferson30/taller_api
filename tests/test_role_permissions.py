@@ -2,8 +2,9 @@
 Tests de roles y permisos
 Valida que el control de acceso basado en roles funciona correctamente
 """
-from app.modelos.role import Role, UserRole
+from app.modelos.role import Role
 from app.modelos.user import User
+from app.modelos.user_role import UserRole
 from app.seguridad.token_manager import TokenManager
 
 

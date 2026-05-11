@@ -1,0 +1,159 @@
+================================================================================
+RADON REPORT — Complejidad Ciclomática de app/
+Herramienta: radon 6.0.1
+Fecha: 2026-04-25
+Comando: radon cc app/ -a -s
+================================================================================
+
+app\main.py
+    F 99:0 lifespan - B (6)
+    F 752:0 admin_info_sistema - A (5)
+    F 78:0 _generar_token_qr - A (4)
+    F 530:0 generic_exception_handler - A (4)
+    F 712:0 _get_ip_local - A (4)
+    F 800:0 servir_frontend - A (4)
+    F 89:0 validar_token_qr - A (3)
+    F 502:0 configuration_error_handler - A (3)
+    F 517:0 domain_exception_handler - A (3)
+    F 684:0 _anunciar_mdns - A (3)
+    F 144:0 custom_openapi - A (2)
+    F 383:0 invalid_credentials_handler - A (2)
+    F 396:0 insufficient_permissions_handler - A (2)
+    F 422:0 resource_not_found_handler - A (2)
+    F 463:0 token_blacklisted_handler - A (2)
+    F 476:0 security_alert_handler - A (2)
+    F 792:0 inicio - A (2)
+    F 409:0 validation_error_handler - A (1)
+    F 435:0 duplicate_error_handler - A (1)
+    F 448:0 rate_limit_exceeded_error_handler - A (1)
+    F 489:0 conflict_error_handler - A (1)
+    F 736:0 info_sistema - A (1)
+    F 776:0 info_conexion_qr - A (1)
+app\configuracion\base_datos.py
+    F 8:0 _get_database_url - A (3)
+    F 57:0 obtener_db - A (1)
+app\configuracion\cache.py
+    F 15:0 init_cache - A (2)
+app\configuracion\config_validator.py
+    F 18:0 validate_config - D (26)   *** CANDIDATA A REFACTORIZACIÓN ***
+    F 174:0 _mask_sensitive - A (3)
+    F 148:0 get_config_summary - A (1)
+    C 12:0 ConfigValidationError - A (1)
+app\configuracion\limiter.py
+    F 8:0 _get_whitelist_ips - A (4)
+    F 16:0 _key_func - A (3)
+app\configuracion\secrets_manager.py
+    M 26:4 SecretsManager.get_secret - B (9)
+    C 8:0 SecretsManager - B (7)
+    M 17:4 SecretsManager.__init__ - A (3)
+app\esquemas\auth_schema.py
+    C 113:0 ResetPasswordRequest - B (9)
+    M 120:4 ResetPasswordRequest.validate_password_complexity - B (8)
+    C 94:0 ForgotPasswordRequest - A (4)
+    M 100:4 ForgotPasswordRequest.validate_email_format - A (3)
+    C 11:0 LoginRequest - A (1)
+    C 21:0 UserResponse - A (1)
+    C 40:0 LoginResponse - A (1)
+    C 62:0 RefreshRequest - A (1)
+    C 75:0 RefreshResponse - A (1)
+    C 88:0 LogoutRequest - A (1)
+    C 107:0 ForgotPasswordResponse - A (1)
+    C 148:0 ResetPasswordResponse - A (1)
+app\repositorios\movimiento_caja_repository.py
+    M 33:4 MovimientoCajaRepository.get_all - B (7)
+    M 87:4 MovimientoCajaRepository.get_historico_economico - B (7)
+    C 21:0 MovimientoCajaRepository - A (4)
+    M 65:4 MovimientoCajaRepository.get_cobros_rapidos - A (4)
+app\repositorios\ticket_repository.py
+    M 57:4 TicketRepository.get_tickets_with_details - C (16)   *** ALTA COMPLEJIDAD ***
+    M 162:4 TicketRepository.find_by_criteria - B (6)
+app\rutas\mobile_api_ruta.py
+    F 713:0 sincronizar_operaciones_batch - D (29)   *** CANDIDATA A REFACTORIZACIÓN ***
+    F 981:0 economia_hoy_mobile - C (15)   *** ALTA COMPLEJIDAD ***
+    F 157:0 crear_proceso_con_foto_mobile - B (8)
+    F 271:0 actualizar_estado_mobile - B (6)
+    F 501:0 crear_compra_mobile - B (6)
+app\rutas\ticket_ruta.py
+    F 926:0 generar_pdf_cliente - D (26)   *** CANDIDATA A REFACTORIZACIÓN ***
+    F 198:0 buscar_tickets - C (11)   *** ALTA COMPLEJIDAD ***
+app\rutas\seguridad_ruta.py
+    F 161:0 cambiar_password_admin - C (13)   *** ALTA COMPLEJIDAD ***
+    F 64:0 crear_password_economia - B (6)
+    F 115:0 recuperar_password_economia - B (6)
+app\rutas\users_ruta.py
+    F 355:0 update_user - B (9)
+    F 311:0 get_user - B (6)
+app\rutas\vehiculo_ruta.py
+    F 494:0 crear_ticket_ingreso - B (6)
+app\rutas\whatsapp_ruta.py
+    F 32:0 recibir_webhook - B (8)
+app\seguridad\auth_middleware.py
+    M 52:4 AuthMiddleware.dispatch - D (28)   *** CANDIDATA A REFACTORIZACIÓN ***
+    C 24:0 AuthMiddleware - C (16)   *** ALTA COMPLEJIDAD ***
+app\seguridad\dependencias.py
+    F 39:0 requerir_password_admin - B (9)
+app\servicios\auth_service.py
+    M 231:4 AuthService.refresh_access_token - B (10)
+    M 102:4 AuthService.authenticate - B (9)
+    M 389:4 AuthService.reset_password - B (6)
+app\servicios\cita_service.py
+    M 105:4 CitaService.generar_ticket_desde_cita - C (15)   *** ALTA COMPLEJIDAD ***
+    M 23:4 CitaService.crear_o_actualizar_vehiculo - C (11)   *** ALTA COMPLEJIDAD ***
+    C 16:0 CitaService - B (7)
+app\servicios\taller_service.py
+    M 505:4 TallerService.obtener_auditoria_global - B (10)
+    M 102:4 TallerService.actualizar_taller - B (8)
+    M 308:4 TallerService.obtener_recursos - B (6)
+    M 343:4 TallerService.crear_admin_taller - B (6)
+app\servicios\ticket_service.py
+    M 143:4 TicketService.entregar_ticket - C (14)   *** ALTA COMPLEJIDAD ***
+app\servicios\twilio_whatsapp_service.py
+    M 14:4 TwilioWhatsAppService.enviar_notificacion - C (11)   *** ALTA COMPLEJIDAD ***
+    M 126:4 TwilioWhatsAppService.enviar_mensaje_manual - C (11)   *** ALTA COMPLEJIDAD ***
+    C 8:0 TwilioWhatsAppService - B (9)
+    M 218:4 TwilioWhatsAppService._construir_mensaje - B (9)
+app\servicios\user_service.py
+    M 69:4 UserService.create_user - B (10)
+    M 447:4 UserService._is_complex_password - B (7)
+    M 216:4 UserService.update_user_roles - B (6)
+app\tasks\notificacion_tasks.py
+    F 19:0 verificar_vencimientos_plan - B (9)
+app\tasks\pdf_tasks.py
+    F 81:0 cleanup_old_pdfs - B (6)
+app\utils\input_validator.py
+    M 99:4 FileValidator.detect_mime_type - B (7)
+    C 88:0 FileValidator - B (6)
+app\utils\pdf_economia.py
+    F 70:0 generar_pdf_economia_profesional - F (49)   *** CRÍTICA — REFACTORIZAR URGENTE ***
+app\utils\pdf_generator.py
+    F 114:0 generar_pdf_ticket_completo - F (77)   *** CRÍTICA — REFACTORIZAR URGENTE ***
+
+================================================================================
+RESUMEN ESTADÍSTICO:
+  Total bloques analizados: 590 (clases, funciones, métodos)
+  Complejidad promedio: A (2.88)
+
+FUNCIONES CON COMPLEJIDAD CRÍTICA (F — > 50):
+  - app\utils\pdf_generator.py:114 generar_pdf_ticket_completo  CC=77
+  - app\utils\pdf_economia.py:70  generar_pdf_economia_profesional  CC=49
+
+FUNCIONES CON COMPLEJIDAD MUY ALTA (D — 21-50):
+  - app\rutas\mobile_api_ruta.py:713  sincronizar_operaciones_batch  CC=29
+  - app\seguridad\auth_middleware.py:52  AuthMiddleware.dispatch  CC=28
+  - app\rutas\ticket_ruta.py:926  generar_pdf_cliente  CC=26
+  - app\configuracion\config_validator.py:18  validate_config  CC=26
+
+FUNCIONES CON COMPLEJIDAD ALTA (C — 11-20):
+  - app\seguridad\auth_middleware.py:24  AuthMiddleware  CC=16
+  - app\repositorios\ticket_repository.py:57  get_tickets_with_details  CC=16
+  - app\rutas\mobile_api_ruta.py:981  economia_hoy_mobile  CC=15
+  - app\servicios\ticket_service.py:143  entregar_ticket  CC=14
+  - app\rutas\seguridad_ruta.py:161  cambiar_password_admin  CC=13
+  - app\servicios\cita_service.py:105  generar_ticket_desde_cita  CC=15
+  - app\servicios\twilio_whatsapp_service.py:14  enviar_notificacion  CC=11
+  - app\servicios\twilio_whatsapp_service.py:126  enviar_mensaje_manual  CC=11
+  - app\servicios\cita_service.py:23  crear_o_actualizar_vehiculo  CC=11
+  - app\rutas\ticket_ruta.py:198  buscar_tickets  CC=11
+
+UMBRAL DE REFACTORIZACIÓN (CC > 10): 10 funciones/métodos
+================================================================================

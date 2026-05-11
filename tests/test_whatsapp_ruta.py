@@ -19,6 +19,7 @@ import app.modelos.configuracion_seguridad  # noqa: F401
 import app.modelos.configuracion_taller  # noqa: F401
 import app.modelos.log_notificacion  # noqa: F401
 import app.modelos.movimiento_caja  # noqa: F401
+import app.modelos.taller  # noqa: F401
 import app.modelos.ticket  # noqa: F401
 import app.modelos.ticket_cobro  # noqa: F401
 import app.modelos.ticket_compra  # noqa: F401

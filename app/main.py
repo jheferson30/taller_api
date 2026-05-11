@@ -19,6 +19,32 @@ from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
+# ── Configuración de CSRF Protection ─────────────────────────────────────────
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
+
+
+@CsrfProtect.load_config
+def get_csrf_config():
+    """
+    Configuración de CSRF Protection.
+
+    Carga la clave secreta desde CSRF_SECRET_KEY (validada en startup).
+    Configura cookies con SameSite=Strict, HttpOnly=True, y Secure solo en producción.
+    El token se lee del header X-CSRF-Token sin prefijo.
+    """
+    is_production = os.getenv("ENVIRONMENT") == "production"
+    return [
+        ("secret_key", os.getenv("CSRF_SECRET_KEY", "")),
+        ("cookie_samesite", "strict"),
+        ("cookie_secure", is_production),
+        ("cookie_httponly", True),
+        ("token_location", "header"),
+        ("header_name", "X-CSRF-Token"),
+        ("header_type", ""),  # Sin prefijo "Bearer"
+    ]
+
+
 # Validar configuración al iniciar
 from app.configuracion.config_validator import ConfigValidationError, validate_config
 from app.utils.exceptions import (
@@ -64,6 +90,8 @@ from app.rutas import (
     vehiculo_ruta,
     whatsapp_ruta,
 )
+from app.rutas.super_admin import seguridad as super_admin_seguridad
+from app.rutas import super_admin_ruta
 
 Base.metadata.create_all(bind=engine)
 
@@ -91,6 +119,36 @@ def validar_token_qr(token: str) -> bool:
     return False
 
 
+def _validate_required_secrets(secrets_manager) -> None:
+    """
+    Verifica que todos los secretos críticos estén disponibles antes de aceptar requests.
+
+    Lanza RuntimeError con el nombre del secreto faltante si alguno no está configurado.
+    Debe ejecutarse durante el evento startup, antes de que la app comience a servir tráfico.
+
+    Args:
+        secrets_manager: Instancia de SecretsManager ya inicializada.
+
+    Raises:
+        RuntimeError: Si algún secreto requerido no está disponible en Key Vault ni en env vars.
+    """
+    required_secrets = [
+        ("jwt-secret-key", "JWT_SECRET_KEY"),
+        ("pii-master-key", "PII_MASTER_KEY"),
+        ("database-password", "DATABASE_PASSWORD"),
+        ("csrf-secret-key", "CSRF_SECRET_KEY"),
+    ]
+    for secret_name, env_var in required_secrets:
+        try:
+            secrets_manager.get_secret(secret_name, fallback_env_var=env_var)
+        except RuntimeError:
+            raise RuntimeError(
+                f"Secreto requerido no configurado: '{env_var}'. "
+                f"Configurar en Azure Key Vault como '{secret_name}' "
+                f"o como variable de entorno '{env_var}'."
+            )
+
+
 # ── Ciclo de vida (reemplaza @app.on_event deprecado) ───────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -100,7 +158,10 @@ async def lifespan(app: FastAPI):
     secrets_manager = SecretsManager()
     app.state.secrets_manager = secrets_manager
 
-    # Validar variables de entorno
+    # Validar secretos críticos antes de aceptar cualquier request HTTP
+    _validate_required_secrets(secrets_manager)
+
+    # Validar variables de entorno adicionales
     try:
         secrets_manager.get_secret("pdf-password", fallback_env_var="PDF_PASSWORD")
     except RuntimeError:
@@ -129,9 +190,26 @@ async def lifespan(app: FastAPI):
         print(f"[ADVERTENCIA] No se pudo inicializar caché Redis: {e}")
         print("La aplicación continuará sin caché. Asegúrate de que Redis esté corriendo.")
 
+    # Iniciar scheduler de jobs programados (rotación JWT, alertas LOW, limpieza)
+    try:
+        from app.jobs import iniciar_scheduler
+
+        iniciar_scheduler()
+    except Exception as e:
+        print(f"[ADVERTENCIA] No se pudo iniciar el scheduler de jobs: {e}")
+        print("Los jobs programados no estarán activos en esta instancia.")
+
     # mDNS
     threading.Thread(target=_anunciar_mdns, daemon=True).start()
     yield
+
+    # Detener scheduler al apagar la aplicación
+    try:
+        from app.jobs import detener_scheduler
+
+        detener_scheduler()
+    except Exception as e:
+        print(f"[ADVERTENCIA] Error al detener el scheduler: {e}")
 
 
 app = FastAPI(title="API Taller Mecanico", lifespan=lifespan)
@@ -523,6 +601,18 @@ async def domain_exception_handler(request: Request, exc: DomainException):
     )
 
 
+@app.exception_handler(CsrfProtectError)
+async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    """Maneja errores de validación CSRF (403 Forbidden)."""
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "csrf_error",
+            "message": "CSRF token missing or invalid",
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     """
@@ -616,6 +706,23 @@ from app.seguridad.dependencias import require_jwt_auth
 
 app.add_middleware(AuthMiddleware)
 
+# ── CSRF Protection Middleware ────────────────────────────────────────────────
+# IMPORTANTE: Los middlewares se ejecutan en orden INVERSO al que se agregan.
+# CSRFMiddleware se agrega DESPUÉS de AuthMiddleware → ejecuta ANTES que Auth
+# Esto garantiza que la validación CSRF ocurre DESPUÉS de validar el JWT,
+# pero ANTES de llegar al route handler
+from app.seguridad.csrf_middleware import CSRFMiddleware
+
+app.add_middleware(CSRFMiddleware)
+
+# ── Security Headers Middleware ───────────────────────────────────────────────
+# SecurityHeadersMiddleware se agrega AL FINAL → ejecuta PRIMERO en la cadena de salida
+# Esto garantiza que los headers de seguridad se agregan a TODAS las respuestas,
+# incluyendo errores 403 del CSRF, errores de autenticación, y cualquier otra respuesta
+from app.seguridad.security_headers_middleware import SecurityHeadersMiddleware
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # ── HTTPS and Security Middleware (Production Only) ───────────────────────────
 if os.getenv("ENVIRONMENT") == "production":
     # Redirigir HTTP → HTTPS solo si FORCE_HTTPS está habilitado
@@ -666,6 +773,8 @@ app.include_router(citas_ruta.router)
 app.include_router(mobile_api_ruta.router)
 app.include_router(configuracion_ruta.router)
 app.include_router(whatsapp_ruta.router)
+app.include_router(super_admin_seguridad.router)  # Security Dashboard
+app.include_router(super_admin_ruta.router)       # Panel SUPER_ADMIN
 
 
 # ── mDNS ──────────────────────────────────────────────────────────────────────
@@ -798,6 +907,13 @@ def servir_frontend(full_path: str):
         "uploads",
         "configuracion",
         "info",
+        "super-admin",
+        "auth",
+        "users",
+        "auditoria",
+        "pdf",
+        "whatsapp",
+        "mobile",
     )
     if any(full_path.startswith(p) for p in api_prefixes):
         from fastapi import HTTPException

@@ -2,34 +2,30 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 
 /**
- * Select de mecánicos activos con fallback a input de texto si no hay mecánicos.
- * Uso: <SelectMecanico value={val} onChange={(v) => setVal(v)} placeholder="Sin asignar" />
+ * Selector de usuarios del taller para asignar como mecánico/responsable.
+ * Devuelve el user_id (entero) en onChange, no el nombre.
+ *
+ * Uso: <SelectMecanico value={val} onChange={(id) => setVal(id)} placeholder="Sin asignar" />
  */
 export default function SelectMecanico({ value, onChange, placeholder = "— Sin asignar —" }) {
-  const [mecanicos, setMecanicos] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
 
   useEffect(() => {
-    api.listarMecanicos()
-      .then((data) => setMecanicos(data.filter((m) => m.activo)))
+    api.listarUsuariosParaAsignacion()
+      .then((data) => setUsuarios(data.users || []))
       .catch(() => {});
   }, []);
 
-  if (mecanicos.length === 0) {
-    return (
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    );
-  }
-
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
+    <select
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+    >
       <option value="">{placeholder}</option>
-      {mecanicos.map((m) => (
-        <option key={m.id} value={m.nombre}>{m.nombre}</option>
+      {usuarios.map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.nombre_completo || u.username}
+        </option>
       ))}
     </select>
   );

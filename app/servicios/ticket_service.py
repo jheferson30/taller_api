@@ -171,6 +171,7 @@ class TicketService:
         responsable: str,
         nota: str | None = None,
         soporte_url: str | None = None,
+        responsable_user_id: int | None = None,
     ) -> TicketCompra:
         """
         Crea una compra y su movimiento de caja asociado.
@@ -187,9 +188,11 @@ class TicketService:
         # Crear compra
         compra = TicketCompra(
             ticket_id=ticket.id,
+            taller_id=ticket.taller_id,
             descripcion=descripcion_sanitized,
             valor=valor,
             responsable=responsable,
+            responsable_user_id=responsable_user_id,
             nota=nota_sanitized,
             soporte_url=soporte_url,
         )

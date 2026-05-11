@@ -5,6 +5,8 @@ from datetime import datetime
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
+from app.configuracion.limiter import limiter
+from app.seguridad.auth_middleware import require_auth
 from app.utils.input_validator import FileValidator
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
@@ -30,17 +32,33 @@ def _generar_nombre_archivo(original_filename: str) -> str:
 
 
 @router.post("/foto")
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_UPLOAD_PER_MINUTE", "10") + "/minute")
 async def subir_foto(
     request: Request,
     file: UploadFile = File(...),
 ):
     """Sube una foto de evidencia del ticket"""
+    # Extract taller_id from JWT
+    taller_id = request.state.taller_id
+    
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot upload files."
+        )
+    
     # Validate file using FileValidator (checks size and MIME type)
     await FileValidator.validate_file(file)
 
     # Generar nombre único
     filename = _generar_nombre_archivo(file.filename)
-    filepath = os.path.join(FOTOS_DIR, filename)
+    
+    # Create tenant-specific directory: uploads/talleres/{taller_id}/fotos/
+    tenant_fotos_dir = os.path.join(UPLOAD_DIR, "talleres", str(taller_id), "fotos")
+    os.makedirs(tenant_fotos_dir, exist_ok=True)
+    
+    filepath = os.path.join(tenant_fotos_dir, filename)
 
     # Guardar archivo
     try:
@@ -50,22 +68,38 @@ async def subir_foto(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al guardar archivo: {str(e)}")
 
-    # Retornar URL relativa
-    return {"filename": filename, "url": f"/uploads/fotos/{filename}", "size": len(content)}
+    # Retornar URL relativa con taller_id en el path
+    return {"filename": filename, "url": f"/uploads/talleres/{taller_id}/fotos/{filename}", "size": len(content)}
 
 
 @router.post("/compra")
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_UPLOAD_PER_MINUTE", "10") + "/minute")
 async def subir_soporte_compra(
     request: Request,
     file: UploadFile = File(...),
 ):
     """Sube un soporte de compra (factura, recibo)"""
+    # Extract taller_id from JWT
+    taller_id = request.state.taller_id
+    
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot upload files."
+        )
+    
     # Validate file using FileValidator (checks size and MIME type)
     await FileValidator.validate_file(file)
 
     # Generar nombre único
     filename = _generar_nombre_archivo(file.filename)
-    filepath = os.path.join(COMPRAS_DIR, filename)
+    
+    # Create tenant-specific directory: uploads/talleres/{taller_id}/compras/
+    tenant_compras_dir = os.path.join(UPLOAD_DIR, "talleres", str(taller_id), "compras")
+    os.makedirs(tenant_compras_dir, exist_ok=True)
+    
+    filepath = os.path.join(tenant_compras_dir, filename)
 
     # Guardar archivo
     try:
@@ -75,22 +109,38 @@ async def subir_soporte_compra(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al guardar archivo: {str(e)}")
 
-    # Retornar URL relativa
-    return {"filename": filename, "url": f"/uploads/compras/{filename}", "size": len(content)}
+    # Retornar URL relativa con taller_id en el path
+    return {"filename": filename, "url": f"/uploads/talleres/{taller_id}/compras/{filename}", "size": len(content)}
 
 
 @router.post("/firma")
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_UPLOAD_PER_MINUTE", "10") + "/minute")
 async def subir_firma(
     request: Request,
     file: UploadFile = File(...),
 ):
     """Sube una firma de entrega"""
+    # Extract taller_id from JWT
+    taller_id = request.state.taller_id
+    
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot upload files."
+        )
+    
     # Validate file using FileValidator (checks size and MIME type)
     await FileValidator.validate_file(file)
 
     # Generar nombre único
     filename = _generar_nombre_archivo(file.filename)
-    filepath = os.path.join(FIRMAS_DIR, filename)
+    
+    # Create tenant-specific directory: uploads/talleres/{taller_id}/firmas/
+    tenant_firmas_dir = os.path.join(UPLOAD_DIR, "talleres", str(taller_id), "firmas")
+    os.makedirs(tenant_firmas_dir, exist_ok=True)
+    
+    filepath = os.path.join(tenant_firmas_dir, filename)
 
     # Guardar archivo
     try:
@@ -100,8 +150,8 @@ async def subir_firma(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al guardar archivo: {str(e)}")
 
-    # Retornar URL relativa
-    return {"filename": filename, "url": f"/uploads/firmas/{filename}", "size": len(content)}
+    # Retornar URL relativa con taller_id en el path
+    return {"filename": filename, "url": f"/uploads/talleres/{taller_id}/firmas/{filename}", "size": len(content)}
 
 
 def _safe_filepath(base_dir: str, filename: str) -> str:
@@ -116,27 +166,69 @@ def _safe_filepath(base_dir: str, filename: str) -> str:
 
 
 @router.get("/fotos/{filename}")
-async def obtener_foto(filename: str):
+@require_auth
+async def obtener_foto(request: Request, filename: str):
     """Sirve una foto"""
-    filepath = _safe_filepath(FOTOS_DIR, filename)
+    # Extract taller_id from JWT
+    taller_id = request.state.taller_id
+    
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot access files."
+        )
+    
+    # Build path with taller_id: uploads/talleres/{taller_id}/fotos/{filename}
+    tenant_fotos_dir = os.path.join(UPLOAD_DIR, "talleres", str(taller_id), "fotos")
+    filepath = _safe_filepath(tenant_fotos_dir, filename)
+    
     if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        raise HTTPException(status_code=404, detail="File not found")
+    
     return FileResponse(filepath)
 
 
 @router.get("/compras/{filename}")
-async def obtener_compra(filename: str):
+@require_auth
+async def obtener_compra(request: Request, filename: str):
     """Sirve un soporte de compra"""
-    filepath = _safe_filepath(COMPRAS_DIR, filename)
+    # Extract taller_id from JWT
+    taller_id = request.state.taller_id
+    
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot access files."
+        )
+    
+    # Build path with taller_id: uploads/talleres/{taller_id}/compras/{filename}
+    tenant_compras_dir = os.path.join(UPLOAD_DIR, "talleres", str(taller_id), "compras")
+    filepath = _safe_filepath(tenant_compras_dir, filename)
+    
     if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        raise HTTPException(status_code=404, detail="File not found")
+    
     return FileResponse(filepath)
 
 
 @router.get("/firmas/{filename}")
-async def obtener_firma(filename: str):
+@require_auth
+async def obtener_firma(request: Request, filename: str):
     """Sirve una firma"""
-    filepath = _safe_filepath(FIRMAS_DIR, filename)
+    # Extract taller_id from JWT
+    taller_id = request.state.taller_id
+    
+    if taller_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires a tenant context. SUPER_ADMIN cannot access files."
+        )
+    
+    # Build path with taller_id: uploads/talleres/{taller_id}/firmas/{filename}
+    tenant_firmas_dir = os.path.join(UPLOAD_DIR, "talleres", str(taller_id), "firmas")
+    filepath = _safe_filepath(tenant_firmas_dir, filename)
+    
     if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        raise HTTPException(status_code=404, detail="File not found")
+    
     return FileResponse(filepath)

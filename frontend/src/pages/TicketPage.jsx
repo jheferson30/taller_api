@@ -34,15 +34,15 @@ export default function TicketPage() {
   const [cobrosRapidos, setCobrosRapidos] = useState([]);
 
   // Forms
-  const [proceso, setProceso] = useState({ nombre: "", descripcion: "", mecanico: "" });
+  const [proceso, setProceso] = useState({ nombre: "", descripcion: "", mecanico_user_id: null });
   const [repuesto, setRepuesto] = useState({ nombre: "", cantidad: 1, marca_referencia: "" });
   const [fueComprado, setFueComprado] = useState(false);
-  const [compraRepuesto, setCompraRepuesto] = useState({ valor: 0, responsable: "", nota: "" });
+  const [compraRepuesto, setCompraRepuesto] = useState({ valor: 0, responsable_user_id: null, nota: "" });
   const [compraRepuestoFile, setCompraRepuestoFile] = useState(null);
   const [foto, setFoto] = useState({ tipo: "OTRA", archivo_url: "", descripcion: "" });
   const [fotoFile, setFotoFile] = useState(null);
   const [fotoPreview, setFotoPreview] = useState("");
-  const [compra, setCompra] = useState({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable: "" });
+  const [compra, setCompra] = useState({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable_user_id: null });
   const [compraFile, setCompraFile] = useState(null);
   const [cobro, setCobro] = useState({ concepto: "", valor: 0 });
   const [finanzas, setFinanzas] = useState({ total_servicio: 0, metodo_pago_final: "EFECTIVO" });
@@ -104,7 +104,7 @@ export default function TicketPage() {
         setFotoPreview("");
       }
       await api.agregarProceso(selectedId, { ...proceso, foto_url });
-      setProceso({ nombre: "", descripcion: "", mecanico: "" });
+      setProceso({ nombre: "", descripcion: "", mecanico_user_id: null });
       await loadResumen(selectedId);
       setMsg("✓ Proceso agregado");
       setTimeout(() => setMsg(""), 2000);
@@ -134,7 +134,7 @@ export default function TicketPage() {
         await api.agregarCompra(selectedId, {
           descripcion: repuesto.nombre,
           valor: Number(compraRepuesto.valor),
-          responsable: compraRepuesto.responsable || null,
+          responsable_user_id: compraRepuesto.responsable_user_id || null,
           nota: compraRepuesto.nota || null,
           soporte_url: foto_url ? `${API_BASE}${foto_url}` : null,
         });
@@ -142,7 +142,7 @@ export default function TicketPage() {
 
       setRepuesto({ nombre: "", cantidad: 1, marca_referencia: "" });
       setFueComprado(false);
-      setCompraRepuesto({ valor: 0, responsable: "", nota: "" });
+      setCompraRepuesto({ valor: 0, responsable_user_id: null, nota: "" });
       setCompraRepuestoFile(null);
       await loadResumen(selectedId);
       setMsg("✓ Repuesto agregado");
@@ -207,7 +207,7 @@ export default function TicketPage() {
       }
       
       await api.agregarCompra(selectedId, { ...compra, valor: Number(compra.valor), soporte_url: soporteUrl });
-      setCompra({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable: "" });
+      setCompra({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable_user_id: null });
       setCompraFile(null);
       await loadResumen(selectedId);
       setMsg("✓ Compra registrada");
@@ -580,8 +580,8 @@ export default function TicketPage() {
                           <label>
                             <span className="label-text">Mecánico</span>
                             <SelectMecanico
-                              value={proceso.mecanico}
-                              onChange={(v) => setProceso({ ...proceso, mecanico: v })}
+                              value={proceso.mecanico_user_id}
+                              onChange={(v) => setProceso({ ...proceso, mecanico_user_id: v })}
                               placeholder="— Sin asignar —"
                             />
                           </label>
@@ -712,8 +712,8 @@ export default function TicketPage() {
                             <label>
                               <span className="label-text">Responsable</span>
                               <SelectMecanico
-                                value={compraRepuesto.responsable}
-                                onChange={(v) => setCompraRepuesto({ ...compraRepuesto, responsable: v })}
+                                value={compraRepuesto.responsable_user_id}
+                                onChange={(v) => setCompraRepuesto({ ...compraRepuesto, responsable_user_id: v })}
                                 placeholder="— Sin asignar —"
                               />
                             </label>

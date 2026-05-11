@@ -15,13 +15,15 @@ router = APIRouter(prefix="/citas", tags=["Citas"], dependencies=[Depends(requir
 
 @router.get("", response_model=list[CitaRespuesta])
 def listar_citas(
+    request: Request,
     fecha_desde: str | None = Query(None),
     fecha_hasta: str | None = Query(None),
     estado: str | None = Query(None),
     db: Session = Depends(obtener_db),
 ):
-    """Lista citas con filtros opcionales"""
-    query = db.query(Cita)
+    """Lista citas del taller con filtros opcionales"""
+    taller_id = request.state.taller_id
+    query = db.query(Cita).filter(Cita.taller_id == taller_id)
 
     if fecha_desde:
         query = query.filter(Cita.fecha_cita >= datetime.fromisoformat(fecha_desde))
@@ -34,14 +36,20 @@ def listar_citas(
 
 
 @router.get("/proximas", response_model=list[CitaRespuesta])
-def listar_citas_proximas(dias: int = Query(7, ge=1, le=30), db: Session = Depends(obtener_db)):
-    """Lista citas de hoy y los próximos N días"""
+def listar_citas_proximas(
+    request: Request,
+    dias: int = Query(7, ge=1, le=30),
+    db: Session = Depends(obtener_db),
+):
+    """Lista citas del taller de hoy y los próximos N días"""
+    taller_id = request.state.taller_id
     hoy = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     fecha_limite = hoy + timedelta(days=dias)
 
     return (
         db.query(Cita)
         .filter(
+            Cita.taller_id == taller_id,
             Cita.fecha_cita >= hoy,
             Cita.fecha_cita <= fecha_limite,
             Cita.estado.in_(["PENDIENTE", "CONFIRMADA"]),
@@ -58,10 +66,14 @@ async def crear_cita(
     db: Session = Depends(obtener_db),
 ):
     """Crea una nueva cita y opcionalmente crea o actualiza el vehículo"""
+    taller_id = request.state.taller_id
     placa_norm = datos.placa.strip().upper()
 
-    # Buscar si el vehículo ya existe
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == placa_norm).first()
+    # Buscar si el vehículo ya existe en este taller
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.placa == placa_norm,
+        Vehiculo.taller_id == taller_id,
+    ).first()
 
     if vehiculo:
         # Vehículo existe - actualizar datos si se proporcionaron
@@ -75,15 +87,14 @@ async def crear_cita(
             vehiculo.cilindraje = datos.cilindraje
         if datos.color:
             vehiculo.color = datos.color
-
-        # Actualizar datos del propietario si cambiaron
         if datos.nombre_cliente and datos.nombre_cliente != vehiculo.nombre_propietario:
             vehiculo.nombre_propietario = datos.nombre_cliente
         if datos.telefono_cliente and datos.telefono_cliente != vehiculo.telefono_propietario:
             vehiculo.telefono_propietario = datos.telefono_cliente
     else:
-        # Vehículo no existe - crear uno nuevo
+        # Vehículo no existe - crear uno nuevo con taller_id
         vehiculo = Vehiculo(
+            taller_id=taller_id,
             placa=placa_norm,
             marca=datos.marca,
             modelo=datos.modelo,
@@ -96,8 +107,9 @@ async def crear_cita(
         db.add(vehiculo)
         db.flush()
 
-    # Crear la cita con todos los datos
+    # Crear la cita con taller_id
     cita = Cita(
+        taller_id=taller_id,
         vehiculo_id=vehiculo.id,
         placa=placa_norm,
         marca=datos.marca,
@@ -120,9 +132,17 @@ async def crear_cita(
 
 
 @router.get("/{cita_id}", response_model=CitaRespuesta)
-def obtener_cita(cita_id: int, db: Session = Depends(obtener_db)):
-    """Obtiene una cita por ID"""
-    cita = db.query(Cita).filter(Cita.id == cita_id).first()
+def obtener_cita(
+    request: Request,
+    cita_id: int,
+    db: Session = Depends(obtener_db),
+):
+    """Obtiene una cita por ID — solo del taller autenticado"""
+    taller_id = request.state.taller_id
+    cita = db.query(Cita).filter(
+        Cita.id == cita_id,
+        Cita.taller_id == taller_id,
+    ).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     return cita
@@ -135,8 +155,12 @@ async def actualizar_cita(
     datos: CitaActualizar,
     db: Session = Depends(obtener_db),
 ):
-    """Actualiza una cita"""
-    cita = db.query(Cita).filter(Cita.id == cita_id).first()
+    """Actualiza una cita del taller autenticado"""
+    taller_id = request.state.taller_id
+    cita = db.query(Cita).filter(
+        Cita.id == cita_id,
+        Cita.taller_id == taller_id,
+    ).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
@@ -145,7 +169,6 @@ async def actualizar_cita(
             status_code=400, detail="No se puede editar una cita ya convertida en ticket"
         )
 
-    # Actualizar campos
     payload = datos.model_dump(exclude_unset=True)
     for campo, valor in payload.items():
         setattr(cita, campo, valor)
@@ -162,7 +185,11 @@ async def cancelar_cita(
     db: Session = Depends(obtener_db),
 ):
     """Cancela una cita (cambia estado a CANCELADA)"""
-    cita = db.query(Cita).filter(Cita.id == cita_id).first()
+    taller_id = request.state.taller_id
+    cita = db.query(Cita).filter(
+        Cita.id == cita_id,
+        Cita.taller_id == taller_id,
+    ).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
@@ -181,7 +208,11 @@ async def generar_ticket_desde_cita(
     db: Session = Depends(obtener_db),
 ):
     """Convierte una cita en un ticket de ingreso"""
-    cita = db.query(Cita).filter(Cita.id == cita_id).first()
+    taller_id = request.state.taller_id
+    cita = db.query(Cita).filter(
+        Cita.id == cita_id,
+        Cita.taller_id == taller_id,
+    ).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
@@ -193,12 +224,15 @@ async def generar_ticket_desde_cita(
             status_code=400, detail="La cita debe tener una placa para generar ticket"
         )
 
-    # El vehículo ya debe existir porque se creó/actualizó al crear la cita
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.placa == cita.placa).first()
+    # Buscar vehículo del mismo taller
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.placa == cita.placa,
+        Vehiculo.taller_id == taller_id,
+    ).first()
 
     if not vehiculo:
-        # Esto no debería pasar, pero por seguridad creamos el vehículo
         vehiculo = Vehiculo(
+            taller_id=taller_id,
             placa=cita.placa,
             marca=cita.marca,
             modelo=cita.modelo,
@@ -211,7 +245,6 @@ async def generar_ticket_desde_cita(
         db.add(vehiculo)
         db.flush()
     else:
-        # Actualizar vehículo con datos de la cita si están más completos
         if cita.marca and not vehiculo.marca:
             vehiculo.marca = cita.marca
         if cita.modelo and not vehiculo.modelo:
@@ -223,12 +256,12 @@ async def generar_ticket_desde_cita(
         if cita.color and not vehiculo.color:
             vehiculo.color = cita.color
 
-    # Generar código de ticket
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     ticket_codigo = f"TK-{cita.placa}-{timestamp}"
 
-    # Crear ticket
+    # Crear ticket con taller_id
     ticket = Ticket(
+        taller_id=taller_id,
         vehiculo_id=vehiculo.id,
         ticket_codigo=ticket_codigo,
         placa=cita.placa,
@@ -241,7 +274,6 @@ async def generar_ticket_desde_cita(
     db.add(ticket)
     db.flush()
 
-    # Actualizar cita
     cita.estado = "CONVERTIDA"
     cita.ticket_id = ticket.id
     cita.ticket_codigo = ticket_codigo

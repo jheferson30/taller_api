@@ -1,0 +1,89 @@
+================================================================================
+SECURITY TALLER-ID REPORT — Uso de taller_id del cliente vs JWT
+Fecha: 2026-04-25
+Método: Búsqueda de patrones datos.taller_id, body.taller_id,
+        request.query_params["taller_id"], request.query_params.get("taller_id")
+        en app/rutas/ y app/servicios/
+================================================================================
+
+PATRÓN CORRECTO:
+  taller_id = request.state.taller_id  ← viene del JWT, validado por middleware
+
+PATRONES INCORRECTOS A BUSCAR:
+  datos.taller_id
+  body.taller_id
+  request.query_params["taller_id"]
+  request.query_params.get("taller_id")
+
+================================================================================
+RESULTADO DE BÚSQUEDA AUTOMATIZADA:
+
+  Comando: grep -rn "datos\.taller_id|body\.taller_id|query_params\[.taller_id|query_params\.get\(.taller_id" app/
+  Resultado: NO SE ENCONTRARON COINCIDENCIAS
+
+================================================================================
+ANÁLISIS MANUAL COMPLEMENTARIO:
+
+Se verificó manualmente el uso de taller_id en los archivos de rutas y servicios:
+
+PATRONES CORRECTOS ENCONTRADOS (request.state.taller_id):
+  ✅ app/rutas/ticket_ruta.py: taller_id = request.state.taller_id
+  ✅ app/rutas/vehiculo_ruta.py: taller_id = request.state.taller_id
+  ✅ app/rutas/citas_ruta.py: taller_id = request.state.taller_id
+  ✅ app/rutas/users_ruta.py: taller_id = request.state.taller_id
+  ✅ app/rutas/configuracion_ruta.py: taller_id = request.state.taller_id
+  ✅ app/rutas/movimiento_caja_ruta.py: taller_id = request.state.taller_id
+  ✅ app/rutas/notificacion_ruta.py: taller_id = request.state.taller_id
+  ✅ app/rutas/super_admin_ruta.py: taller_id del path param (correcto para SUPER_ADMIN)
+  ✅ app/servicios/ticket_service.py: recibe taller_id del constructor (del JWT)
+  ✅ app/servicios/vehiculo_service.py: recibe taller_id del constructor (del JWT)
+  ✅ app/servicios/cita_service.py: recibe taller_id del constructor (del JWT)
+  ✅ app/servicios/taller_service.py: opera sobre talleres (SUPER_ADMIN, correcto)
+
+HALLAZGO 1 — app/rutas/whatsapp_ruta.py — CRÍTICO
+  Método: enviar_whatsapp_mobile()
+  Línea: ~80
+  Código:
+    resultado = await whatsapp_service.enviar_mensaje_manual(
+        ticket_id, ticket.taller_id, telefono, body.mensaje, db
+    )
+  DESCRIPCIÓN: Se usa ticket.taller_id (del objeto de BD) en lugar del JWT.
+  Aunque en este caso el ticket ya fue consultado de la BD, el problema es
+  que no hay autenticación previa — cualquiera puede llamar este endpoint.
+  Si hubiera autenticación, usar ticket.taller_id sería aceptable (es de BD,
+  no del cliente), pero el patrón correcto sería verificar que
+  ticket.taller_id == request.state.taller_id.
+  SEVERIDAD: CRÍTICO (combinado con falta de autenticación)
+
+HALLAZGO 2 — app/rutas/whatsapp_ruta.py — CRÍTICO
+  Método: enviar_whatsapp_web()
+  Línea: ~100
+  Código:
+    resultado = await whatsapp_service.enviar_mensaje_manual(
+        ticket_id, ticket.taller_id, telefono, body.mensaje, db
+    )
+  DESCRIPCIÓN: Mismo patrón que el anterior — usa ticket.taller_id sin
+  verificar que coincida con el taller del usuario autenticado.
+  SEVERIDAD: CRÍTICO (combinado con falta de autenticación)
+
+HALLAZGO 3 — app/rutas/mobile_ruta.py — CRÍTICO
+  Métodos: tickets_activos_mobile(), timeline_ticket_mobile()
+  DESCRIPCIÓN: No usan taller_id en absoluto — devuelven datos de todos
+  los talleres sin filtrar. Ver security-tenant-queries-report.txt.
+  SEVERIDAD: CRÍTICO
+
+================================================================================
+RESUMEN:
+
+  Patrones incorrectos (datos.taller_id, body.taller_id, query_params): 0
+  Uso de ticket.taller_id sin verificación de JWT: 2 (en whatsapp_ruta.py)
+  Ausencia total de filtro taller_id: 3 (en mobile_ruta.py)
+
+  CONCLUSIÓN: No se encontraron casos donde el taller_id venga directamente
+  del body o query params del cliente. Sin embargo, hay endpoints que:
+  1. No usan taller_id en absoluto (mobile_ruta.py) — CRÍTICO
+  2. Usan taller_id de objetos de BD sin verificar contra el JWT (whatsapp_ruta.py)
+
+  Los archivos que sí usan request.state.taller_id lo hacen correctamente.
+
+================================================================================

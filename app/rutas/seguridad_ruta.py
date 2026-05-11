@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.configuracion.base_datos import obtener_db
 from app.configuracion.limiter import limiter
 from app.modelos.configuracion_seguridad import ConfiguracionSeguridad
+from app.seguridad.auth_middleware import require_auth
 
 router = APIRouter(prefix="/seguridad", tags=["Seguridad"])
 
@@ -157,6 +158,7 @@ def verificar_tiene_password_admin_bd(db: Session = Depends(obtener_db)):
 
 
 @router.post("/admin/cambiar-password")
+@require_auth
 @limiter.limit("5/minute")
 async def cambiar_password_admin(
     request: Request,

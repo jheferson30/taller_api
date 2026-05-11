@@ -8,6 +8,7 @@ class Ticket(Base):
     __tablename__ = "tickets"
 
     id = Column(Integer, primary_key=True, index=True)
+    taller_id = Column(Integer, ForeignKey("talleres.id"), nullable=False, index=True)
     vehiculo_id = Column(Integer, ForeignKey("vehiculos.id"), nullable=False, index=True)
     ticket_codigo = Column(String(40), unique=True, nullable=False, index=True)
     placa = Column(String(20), nullable=False, index=True)
@@ -21,6 +22,7 @@ class Ticket(Base):
     anticipo_recibido = Column(Integer, default=0, nullable=False)
     metodo_pago_anticipo = Column(String(50), nullable=True)
     recepcionado_por = Column(String(120), nullable=True)
+    asignado_a_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     estado = Column(String(20), default="ABIERTO", nullable=False, index=True)
     total_servicio = Column(Integer, nullable=True)
