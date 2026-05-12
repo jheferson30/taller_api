@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getApiBaseUrl, getPdfBaseUrl, getAdminPassword } from './config';
+import { getApiBaseUrl, getPdfBaseUrl } from './config';
 import authService from './services/authService';
 
 // Mensajes amigables por código de error HTTP
@@ -180,9 +180,10 @@ export const api = {
     }),
 
   getPdfUrl: async (ticketId) => {
+    // DEPRECATED: usar descargarPdf() que envía el token en el header Authorization.
+    // Esta función solo se mantiene por compatibilidad — no usar en nuevas pantallas.
     const base = await getPdfBaseUrl();
-    const password = await getAdminPassword();
-    return `${base}/tickets/${ticketId}/pdf?token=${encodeURIComponent(password)}`;
+    return `${base}/tickets/${ticketId}/pdf`;
   },
 
   descargarPdf: async (ticketId) => {
@@ -199,6 +200,8 @@ export const api = {
   },
 
   getMecanicos: () => request('/mecanicos'),
+
+  getPersonal: () => request('/personal'),
 
   getProcesosRapidos: () => request('/procesos-rapidos'),
 
@@ -376,6 +379,55 @@ export const api = {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || mensajeError(response.status));
     }
+    return response.json();
+  },
+
+  // ── Notificaciones ─────────────────────────────────────────────────────────
+  getNotificacionesNoLeidas: async () => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/notificaciones/no-leidas`, {}
+    );
+    if (!response.ok) throw new Error(mensajeError(response.status));
+    return response.json();
+  },
+
+  getNotificacionesTodas: async () => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/notificaciones/todas`, {}
+    );
+    if (!response.ok) throw new Error(mensajeError(response.status));
+    return response.json();
+  },
+
+  marcarNotificacionLeida: async (id) => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/notificaciones/${id}/leer`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
+    );
+    if (!response.ok) throw new Error(mensajeError(response.status));
+    return response.json();
+  },
+
+  marcarTodasNotificacionesLeidas: async () => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/notificaciones/leer-todas`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
+    );
+    if (!response.ok) throw new Error(mensajeError(response.status));
+    return response.json();
+  },
+
+  eliminarNotificacionesLeidas: async () => {
+    const baseUrl = await getPdfBaseUrl();
+    const response = await authService.authenticatedRequest(
+      `${baseUrl}/notificaciones/limpiar-leidas`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) throw new Error(mensajeError(response.status));
     return response.json();
   },
 };

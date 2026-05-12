@@ -78,12 +78,21 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Obtener path de la request
         path = request.url.path
 
-        # Saltar rutas exentas
+        # Saltar rutas exentas (match exacto)
         if path in CSRF_EXEMPT_PATHS:
             return await call_next(request)
 
         # Saltar rutas de documentación (pueden tener prefijos)
         if path.startswith("/docs") or path.startswith("/redoc"):
+            return await call_next(request)
+
+        # Saltar requests de la app móvil nativa.
+        # La app envía el header X-Mobile-App: taller-app junto con Authorization: Bearer.
+        # Un atacante web no puede forjar este header desde otro dominio (bloqueado por CORS),
+        # y sin él el CSRF sigue activo para todos los clientes web.
+        x_mobile = request.headers.get("X-Mobile-App", "")
+        auth_header = request.headers.get("Authorization", "")
+        if x_mobile == "taller-app" and auth_header.startswith("Bearer "):
             return await call_next(request)
 
         # Validar que el header X-CSRF-Token esté presente

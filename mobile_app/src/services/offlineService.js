@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { getApiBaseUrl } from '../config';
+import { getApiBaseUrl, getAuthBaseUrl } from '../config';
 import authService from './authService';
 
 const QUEUE_KEY = '@offline_queue';
@@ -25,7 +25,9 @@ class OfflineService {
     // Escuchar cambios de conexión
     this.unsubscribeNetInfo = NetInfo.addEventListener(state => {
       const wasOnline = this.isOnline;
-      this.isOnline = state.isConnected && state.isInternetReachable;
+      // isInternetReachable puede ser null (indeterminado) — tratar null como online
+      // para no bloquear operaciones cuando la red está disponible pero no verificada
+      this.isOnline = state.isConnected === true && state.isInternetReachable !== false;
 
       // Si pasamos de offline a online, sincronizar
       if (!wasOnline && this.isOnline) {
@@ -37,7 +39,7 @@ class OfflineService {
 
     // Obtener estado inicial
     const state = await NetInfo.fetch();
-    this.isOnline = state.isConnected && state.isInternetReachable;
+    this.isOnline = state.isConnected === true && state.isInternetReachable !== false;
   }
 
   /**
@@ -85,7 +87,10 @@ class OfflineService {
     this.notifyListeners();
 
     try {
-      const baseUrl = await getApiBaseUrl();
+      const apiBaseUrl = await getApiBaseUrl();
+      // Las operaciones DELETE/PATCH de tickets usan la base sin prefijo /api/mobile
+      const baseUrl = await getAuthBaseUrl();
+
       const successIds = [];
       const failedOps = [];
 
@@ -93,15 +98,17 @@ class OfflineService {
         try {
           // Operaciones multipart con archivo
           if (op.type === 'CREATE_PROCESO_CON_FOTO') {
-            await this._syncProcesoConFoto(op, baseUrl);
+            await this._syncProcesoConFoto(op, apiBaseUrl);
           } else if (op.type === 'CREATE_FOTO') {
-            await this._syncFoto(op, baseUrl);
+            await this._syncFoto(op, apiBaseUrl);
           } else if (op.type === 'CREATE_REPUESTO_CON_FOTO') {
-            await this._syncRepuestoConFoto(op, baseUrl);
+            await this._syncRepuestoConFoto(op, apiBaseUrl);
           } else if (op.type === 'CREATE_COMPRA_CON_SOPORTE') {
-            await this._syncCompraConSoporte(op, baseUrl);
+            await this._syncCompraConSoporte(op, apiBaseUrl);
           } else {
             // Operaciones JSON simples: POST, PATCH, DELETE
+            // Las operaciones sobre /tickets/... usan baseUrl (sin /api/mobile)
+            // Las operaciones sobre /movimientos-caja/... también usan baseUrl
             const method = op.method || 'POST';
             const headers = { 'Content-Type': 'application/json' };
             const body = method !== 'DELETE' ? JSON.stringify(op.data || {}) : undefined;
@@ -136,7 +143,7 @@ class OfflineService {
       return { successful: successIds.length, failed: failedOps.length };
     } catch (error) {
       console.error('Sync error:', error);
-      await this.scheduleRetry();
+      await this.scheduleRetry(0);
       throw error;
     } finally {
       this.isSyncing = false;
@@ -264,7 +271,8 @@ class OfflineService {
   }
 
   /**
-   * Programa un reintento con backoff exponencial
+   * Programa un reintento con backoff exponencial.
+   * @param {number} attempt - Número de intento actual (0-indexed)
    */
   async scheduleRetry(attempt = 0) {
     const delays = [1000, 2000, 4000, 8000, 30000]; // 1s, 2s, 4s, 8s, 30s

@@ -458,8 +458,14 @@ def entregar_ticket_mobile(request: Request, ticket_id: int, data: EntregarTicke
 
 
 @router.delete("/tickets/{ticket_id}/fotos/{foto_id}")
-def eliminar_foto_mobile(ticket_id: int, foto_id: int, db: Session = Depends(get_db)):
-    """Elimina una foto de un ticket"""
+def eliminar_foto_mobile(request: Request, ticket_id: int, foto_id: int, db: Session = Depends(get_db)):
+    """Elimina una foto de un ticket — verifica aislamiento por taller_id del JWT."""
+    taller_id = _get_taller_id(request)
+    # Verificar que el ticket pertenece al taller del JWT antes de eliminar la foto
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+
     foto = (
         db.query(TicketFoto)
         .filter(TicketFoto.id == foto_id, TicketFoto.ticket_id == ticket_id)
@@ -538,7 +544,12 @@ async def crear_compra_mobile(
 
 
 @router.delete("/tickets/{ticket_id}/compras/{compra_id}")
-def eliminar_compra_mobile(ticket_id: int, compra_id: int, db: Session = Depends(get_db)):
+def eliminar_compra_mobile(request: Request, ticket_id: int, compra_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    # Verificar que el ticket pertenece al taller del JWT
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
     compra = (
         db.query(TicketCompra)
         .filter(TicketCompra.id == compra_id, TicketCompra.ticket_id == ticket_id)
@@ -581,7 +592,12 @@ def crear_cobro_mobile(request: Request, ticket_id: int, data: CobroCreate, db: 
 
 
 @router.delete("/tickets/{ticket_id}/cobros/{cobro_id}")
-def eliminar_cobro_mobile(ticket_id: int, cobro_id: int, db: Session = Depends(get_db)):
+def eliminar_cobro_mobile(request: Request, ticket_id: int, cobro_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    # Verificar que el ticket pertenece al taller del JWT
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
     cobro = (
         db.query(TicketCobro)
         .filter(TicketCobro.id == cobro_id, TicketCobro.ticket_id == ticket_id)
@@ -680,6 +696,32 @@ def listar_cobros_rapidos_mobile(request: Request, db: Session = Depends(get_db)
     return {"cobros": cobros}
 
 
+@router.get("/personal")
+def listar_personal_mobile(request: Request, db: Session = Depends(get_db)):
+    """
+    Devuelve todos los usuarios activos del taller para los selectores
+    de 'Recepcionado por' y 'Mecánico responsable'.
+    Combina usuarios con cualquier rol activo, sin duplicados, ordenados por nombre.
+    """
+    taller_id = _get_taller_id(request)
+    usuarios = (
+        db.query(User)
+        .filter(
+            User.taller_id == taller_id,
+            User.is_active == True,
+        )
+        .order_by(User.nombre_completo, User.username)
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "nombre": u.nombre_completo or u.username,
+        }
+        for u in usuarios
+    ]
+
+
 # ── Sincronización por lotes (Modo Offline) ──────────────────────────────────
 
 
@@ -752,6 +794,8 @@ def sincronizar_operaciones_batch(
 
     from app.utils.exceptions import ValidationError
 
+    taller_id = _get_taller_id(request)
+
     # Validar que no haya demasiadas operaciones
     if len(sync_request.operaciones) > 100:
         raise HTTPException(status_code=400, detail="Máximo 100 operaciones por batch")
@@ -777,8 +821,11 @@ def sincronizar_operaciones_batch(
 
     for op in operaciones_ordenadas:
         try:
-            # Verificar que el ticket existe
-            ticket = db.query(Ticket).filter(Ticket.id == op.ticket_id).first()
+            # Verificar que el ticket existe Y pertenece al taller del JWT (aislamiento multi-tenant)
+            ticket = db.query(Ticket).filter(
+                Ticket.id == op.ticket_id,
+                Ticket.taller_id == taller_id,
+            ).first()
             if not ticket:
                 resultados.append(
                     ResultadoOperacion(
@@ -815,6 +862,7 @@ def sincronizar_operaciones_batch(
 
                 nuevo_proceso = TicketProceso(
                     ticket_id=op.ticket_id,
+                    taller_id=taller_id,
                     nombre=op.datos["nombre"],
                     descripcion=op.datos.get("descripcion"),
                     mecanico=op.datos.get("mecanico"),
@@ -842,6 +890,7 @@ def sincronizar_operaciones_batch(
 
                 nuevo_repuesto = TicketRepuesto(
                     ticket_id=op.ticket_id,
+                    taller_id=taller_id,
                     nombre=op.datos["nombre"],
                     cantidad=op.datos["cantidad"],
                     marca_referencia=op.datos.get("marca_referencia"),
@@ -867,6 +916,7 @@ def sincronizar_operaciones_batch(
 
                 nueva_foto = TicketFoto(
                     ticket_id=op.ticket_id,
+                    taller_id=taller_id,
                     tipo=op.datos.get("tipo", "OTRA"),
                     archivo_url=op.datos["archivo_url"],
                     descripcion=op.datos.get("descripcion"),
@@ -1002,9 +1052,11 @@ def sincronizar_operaciones_batch(
 
 
 @router.get("/economia-hoy")
-def economia_hoy_mobile(fecha: str | None = None, db: Session = Depends(get_db)):
+def economia_hoy_mobile(request: Request, fecha: str | None = None, db: Session = Depends(get_db)):
     """Resumen económico del día para el panel admin móvil."""
     from datetime import date
+
+    taller_id = _get_taller_id(request)
 
     if fecha:
         try:
@@ -1015,7 +1067,10 @@ def economia_hoy_mobile(fecha: str | None = None, db: Session = Depends(get_db))
         hoy = date.today()
 
     movimientos = (
-        db.query(MovimientoCaja).filter(func.date(MovimientoCaja.fecha_creacion) == hoy).all()
+        db.query(MovimientoCaja).filter(
+            MovimientoCaja.taller_id == taller_id,
+            func.date(MovimientoCaja.fecha_creacion) == hoy,
+        ).all()
     )
 
     anticipos = sum(m.valor for m in movimientos if m.tipo == TipoMovimiento.INGRESO_ANTICIPO)
@@ -1027,7 +1082,9 @@ def economia_hoy_mobile(fecha: str | None = None, db: Session = Depends(get_db))
     tickets_hoy = (
         db.query(Ticket)
         .filter(
-            func.date(Ticket.fecha_ingreso) == hoy, Ticket.estado.in_(["FINALIZADO", "ENTREGADO"])
+            Ticket.taller_id == taller_id,
+            func.date(Ticket.fecha_ingreso) == hoy,
+            Ticket.estado.in_(["FINALIZADO", "ENTREGADO"]),
         )
         .count()
     )

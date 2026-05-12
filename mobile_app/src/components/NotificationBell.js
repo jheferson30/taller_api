@@ -7,6 +7,7 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
@@ -21,6 +22,7 @@ export default function NotificationBell() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [marcando, setMarcando] = useState(null);
+  const [limpiando, setLimpiando] = useState(false);
   const toast = useToast();
 
   const fetchNoLeidas = useCallback(async () => {
@@ -29,19 +31,15 @@ export default function NotificationBell() {
       setTotal(data?.total ?? 0);
       setNotificaciones(data?.notificaciones ?? []);
     } catch (error) {
-      // Silencioso - no mostrar error en polling
-      console.log('Error al obtener notificaciones:', error.message);
+      // Silencioso — no mostrar error en polling
     }
   }, []);
 
   const fetchTodas = useCallback(async () => {
     setLoading(true);
     try {
-      // Obtener conteo de no leídas
       const dataNoLeidas = await api.getNotificacionesNoLeidas();
       setTotal(dataNoLeidas?.total ?? 0);
-
-      // Obtener todas las notificaciones
       const dataTodas = await api.getNotificacionesTodas();
       setNotificaciones(dataTodas?.notificaciones ?? []);
     } catch (error) {
@@ -62,13 +60,9 @@ export default function NotificationBell() {
     setMarcando(id);
     try {
       await api.marcarNotificacionLeida(id);
-      
-      // Actualizar estado local
-      setNotificaciones(prev =>
-        prev.map(n => (n.id === id ? { ...n, leida: true } : n))
-      );
+      setNotificaciones(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n));
       setTotal(prev => Math.max(0, prev - 1));
-    } catch (error) {
+    } catch {
       toast('Error al marcar como leída', 'error');
     } finally {
       setMarcando(null);
@@ -79,17 +73,40 @@ export default function NotificationBell() {
     setMarcando('all');
     try {
       await api.marcarTodasNotificacionesLeidas();
-      
-      // Actualizar estado local
       setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
       setTotal(0);
-      
       toast('Todas marcadas como leídas', 'success');
-    } catch (error) {
+    } catch {
       toast('Error al marcar todas como leídas', 'error');
     } finally {
       setMarcando(null);
     }
+  };
+
+  const limpiarLeidas = () => {
+    Alert.alert(
+      'Limpiar notificaciones',
+      '¿Eliminar todas las notificaciones ya leídas?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Limpiar',
+          style: 'destructive',
+          onPress: async () => {
+            setLimpiando(true);
+            try {
+              await api.eliminarNotificacionesLeidas();
+              setNotificaciones(prev => prev.filter(n => !n.leida));
+              toast('Notificaciones leídas eliminadas', 'success');
+            } catch {
+              toast('Error al limpiar notificaciones', 'error');
+            } finally {
+              setLimpiando(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleOpenModal = () => {
@@ -102,58 +119,42 @@ export default function NotificationBell() {
     const ahora = new Date();
     const diffMs = ahora - d;
     const diffMin = Math.floor(diffMs / 60000);
-    
     if (diffMin < 1) return 'ahora';
     if (diffMin < 60) return `hace ${diffMin} min`;
-    
     const diffH = Math.floor(diffMin / 60);
     if (diffH < 24) return `hace ${diffH}h`;
-    
     const diffD = Math.floor(diffH / 24);
     if (diffD < 7) return `hace ${diffD}d`;
-    
     return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
   };
 
   const getIcono = (tipo) => {
     switch (tipo) {
-      case 'TICKET_ASIGNADO':
-        return 'construct-outline';
-      case 'RENOVACION_PLAN':
-        return 'alert-circle-outline';
-      case 'LIMITE_PLAN':
-        return 'warning-outline';
-      case 'VENCIMIENTO':
-        return 'time-outline';
-      case 'SEGURIDAD':
-        return 'shield-outline';
-      default:
-        return 'notifications-outline';
+      case 'TICKET_ASIGNADO':    return 'construct-outline';
+      case 'RENOVACION_PLAN':    return 'alert-circle-outline';
+      case 'LIMITE_PLAN':        return 'warning-outline';
+      case 'VENCIMIENTO':        return 'time-outline';
+      case 'SEGURIDAD':          return 'shield-outline';
+      case 'MENSAJE_PLATAFORMA': return 'megaphone-outline';
+      default:                   return 'notifications-outline';
     }
   };
 
-  // Filtrar notificaciones de tipo RENOVACION_PLAN (tienen su propio banner)
+  // Filtrar RENOVACION_PLAN — tienen su propio banner en la web
   const notifDropdown = notificaciones.filter(n => n.tipo !== 'RENOVACION_PLAN');
+  const hayLeidas = notifDropdown.some(n => n.leida);
 
   const renderNotificacion = ({ item }) => (
-    <View
-      style={[
-        styles.notifItem,
-        !item.leida && styles.notifItemNoLeida,
-      ]}
-    >
-      {/* Punto azul para no leídas */}
+    <View style={[styles.notifItem, !item.leida && styles.notifItemNoLeida]}>
       {!item.leida && <View style={styles.puntoAzul} />}
 
-      {/* Ícono */}
       <Ionicons
         name={getIcono(item.tipo)}
-        size={24}
+        size={22}
         color={item.leida ? colors.textMuted : colors.primary}
         style={styles.notifIcon}
       />
 
-      {/* Contenido */}
       <View style={styles.notifContent}>
         <Text style={[styles.notifTitulo, !item.leida && styles.notifTituloNoLeida]}>
           {item.titulo}
@@ -164,18 +165,16 @@ export default function NotificationBell() {
         <Text style={styles.notifFecha}>{formatFecha(item.fecha_creacion)}</Text>
       </View>
 
-      {/* Botón marcar leída */}
       {!item.leida && (
         <TouchableOpacity
           onPress={() => marcarLeida(item.id)}
           disabled={marcando === item.id}
           style={styles.btnMarcarLeida}
         >
-          {marcando === item.id ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Ionicons name="checkmark" size={18} color={colors.primary} />
-          )}
+          {marcando === item.id
+            ? <ActivityIndicator size="small" color={colors.primary} />
+            : <Ionicons name="checkmark" size={18} color={colors.primary} />
+          }
         </TouchableOpacity>
       )}
     </View>
@@ -187,9 +186,7 @@ export default function NotificationBell() {
       <TouchableOpacity
         onPress={handleOpenModal}
         style={styles.bellButton}
-        accessibilityLabel={
-          total > 0 ? `${total} notificaciones no leídas` : 'Sin notificaciones'
-        }
+        accessibilityLabel={total > 0 ? `${total} notificaciones no leídas` : 'Sin notificaciones'}
       >
         <Ionicons name="notifications-outline" size={24} color="#fff" />
         {total > 0 && (
@@ -217,26 +214,44 @@ export default function NotificationBell() {
                 )}
               </Text>
               <View style={styles.headerButtons}>
+                {/* Leer todas */}
                 {total > 0 && (
                   <TouchableOpacity
                     onPress={marcarTodasLeidas}
                     disabled={marcando === 'all'}
-                    style={styles.btnLeerTodas}
+                    style={styles.btnAccion}
                   >
-                    {marcando === 'all' ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark-done" size={16} color={colors.primary} />
-                        <Text style={styles.btnLeerTodasText}>Leer todas</Text>
-                      </>
-                    )}
+                    {marcando === 'all'
+                      ? <ActivityIndicator size="small" color={colors.primary} />
+                      : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="checkmark-done" size={16} color={colors.primary} />
+                          <Text style={styles.btnAccionText}>Leer todas</Text>
+                        </View>
+                      )
+                    }
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity
-                  onPress={() => setModalVisible(false)}
-                  style={styles.btnCerrar}
-                >
+                {/* Limpiar leídas */}
+                {hayLeidas && (
+                  <TouchableOpacity
+                    onPress={limpiarLeidas}
+                    disabled={limpiando}
+                    style={styles.btnAccion}
+                  >
+                    {limpiando
+                      ? <ActivityIndicator size="small" color="#ef4444" />
+                      : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                          <Text style={[styles.btnAccionText, { color: '#ef4444' }]}>Limpiar</Text>
+                        </View>
+                      )
+                    }
+                  </TouchableOpacity>
+                )}
+                {/* Cerrar */}
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.btnCerrar}>
                   <Ionicons name="close" size={24} color="#fff" />
                 </TouchableOpacity>
               </View>
@@ -292,7 +307,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -308,7 +323,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   modalTitle: {
     fontSize: 18,
@@ -323,16 +338,18 @@ const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  btnLeerTodas: {
+  btnAccion: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  btnLeerTodasText: {
+  btnAccionText: {
     color: colors.primary,
     fontSize: 12,
     fontWeight: '600',
@@ -357,18 +374,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
   },
-  lista: {
-    flex: 1,
-  },
-  listaContent: {
-    paddingBottom: 16,
-  },
+  lista: { flex: 1 },
+  listaContent: { paddingBottom: 16 },
   notifItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255,255,255,0.05)',
     backgroundColor: '#0f172a',
   },
   notifItemNoLeida: {
@@ -381,22 +394,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#3b82f6',
     marginTop: 8,
     marginRight: 8,
+    flexShrink: 0,
   },
   notifIcon: {
     marginRight: 12,
     marginTop: 2,
+    flexShrink: 0,
   },
-  notifContent: {
-    flex: 1,
-  },
+  notifContent: { flex: 1 },
   notifTitulo: {
     fontSize: 14,
     color: '#f1f5f9',
     marginBottom: 4,
   },
-  notifTituloNoLeida: {
-    fontWeight: '600',
-  },
+  notifTituloNoLeida: { fontWeight: '600' },
   notifMensaje: {
     fontSize: 13,
     color: colors.textMuted,
@@ -410,8 +421,9 @@ const styles = StyleSheet.create({
   btnMarcarLeida: {
     padding: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255,255,255,0.1)',
     borderRadius: 6,
     marginLeft: 8,
+    flexShrink: 0,
   },
 });

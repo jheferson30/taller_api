@@ -17,7 +17,7 @@ import { useOffline } from '../hooks/useOffline';
 const PROCESOS_RAPIDOS_DEFAULT = [
   'Cambio de aceite',
   'Mantenimiento de frenos',
-  'Cambio de cunas de diracion',
+  'Cambio de cuñas de dirección',
   'Mantenimiento de suspensión',
   'Cambio de kit de arrastre',
   'Cambio de refrigerante',
@@ -36,11 +36,15 @@ export default function AddProcesoScreen({ route, navigation }) {
   const [mecanico, setMecanico] = useState('');
   const [fotoUri, setFotoUri] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [mecanicos, setMecanicos] = useState([]);
+  const [personal, setPersonal] = useState([]);
   const [procesosRapidos, setProcesosRapidos] = useState(PROCESOS_RAPIDOS_DEFAULT);
 
   useEffect(() => {
-    api.getMecanicos().then((data) => setMecanicos(data)).catch(() => {});
+    api.getPersonal().then(setPersonal).catch(() => {
+      api.getMecanicos().then((data) =>
+        setPersonal(data.map((m) => ({ id: m.id, nombre: m.nombre })))
+      ).catch(() => {});
+    });
     api.getProcesosRapidos().then((data) => {
       if (data.procesos && data.procesos.length > 0) setProcesosRapidos(data.procesos);
     }).catch(() => {});
@@ -157,29 +161,19 @@ export default function AddProcesoScreen({ route, navigation }) {
           )}
 
           <Text style={styles.label}>Mecánico responsable</Text>
-          {mecanicos.length > 0 ? (
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={mecanico}
-                onValueChange={(v) => setMecanico(v)}
-                style={styles.picker}
-                dropdownIconColor={colors.textMuted}
-              >
-                <Picker.Item label="— Sin asignar —" value="" />
-                {mecanicos.filter(m => m.activo).map((m) => (
-                  <Picker.Item key={m.id} label={m.nombre} value={m.nombre} />
-                ))}
-              </Picker>
-            </View>
-          ) : (
-            <TextInput
-              style={styles.input}
-              placeholder="Nombre del mecánico"
-              placeholderTextColor={colors.textMuted}
-              value={mecanico}
-              onChangeText={setMecanico}
-            />
-          )}
+          <View style={styles.pickerWrapper}>
+            <Picker
+              selectedValue={mecanico}
+              onValueChange={(v) => setMecanico(v)}
+              style={styles.picker}
+              dropdownIconColor={colors.textMuted}
+            >
+              <Picker.Item label="— Sin asignar —" value="" />
+              {personal.map((p) => (
+                <Picker.Item key={p.id} label={p.nombre} value={p.nombre} />
+              ))}
+            </Picker>
+          </View>
 
           <Text style={styles.label}>Descripción</Text>
           <TextInput
@@ -287,4 +281,26 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   picker: { color: '#fff', height: 50 },
+
+  // Chips de selección de mecánico
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#1C2B3A',
+  },
+  chipActive: {
+    borderColor: '#D4920A',
+    backgroundColor: '#D4920A',
+  },
+  chipText: { fontSize: 13, color: '#fff', fontWeight: '500' },
+  chipTextActive: { color: '#0A1017', fontWeight: '700' },
 });
