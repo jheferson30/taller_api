@@ -22,6 +22,14 @@ export default function TicketPage() {
   const API_BASE = import.meta.env.VITE_API_URL !== undefined 
     ? import.meta.env.VITE_API_URL 
     : (import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000');
+
+  // Normaliza una URL de archivo: si ya es absoluta la usa tal cual,
+  // si es relativa le antepone API_BASE
+  const resolverUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${API_BASE}${url}`;
+  };
   
   const [tickets, setTickets] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -136,7 +144,7 @@ export default function TicketPage() {
           valor: Number(compraRepuesto.valor),
           responsable_user_id: compraRepuesto.responsable_user_id || null,
           nota: compraRepuesto.nota || null,
-          soporte_url: foto_url ? `${API_BASE}${foto_url}` : null,
+          soporte_url: foto_url ? foto_url : null,
         });
       }
 
@@ -164,7 +172,7 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (fotoFile) {
         const uploadResult = await api.subirFoto(fotoFile);
-        fotoUrl = `${API_BASE}${uploadResult.url}`;
+        fotoUrl = uploadResult.url; // URL relativa: /uploads/talleres/{id}/fotos/...
       }
       
       await api.agregarFoto(selectedId, { ...foto, archivo_url: fotoUrl });
@@ -203,7 +211,7 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (compraFile) {
         const uploadResult = await api.subirSoporteCompra(compraFile);
-        soporteUrl = `${API_BASE}${uploadResult.url}`;
+        soporteUrl = uploadResult.url; // URL relativa
       }
       
       await api.agregarCompra(selectedId, { ...compra, valor: Number(compra.valor), soporte_url: soporteUrl });
@@ -616,7 +624,7 @@ export default function TicketPage() {
                             )}
                             {p.foto_url && (
                               <img
-                                src={`${API_BASE}${p.foto_url}`}
+                                src={resolverUrl(p.foto_url)}
                                 alt={p.nombre}
                                 style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: "8px 8px 0 0", marginBottom: 8 }}
                               />
@@ -758,8 +766,8 @@ export default function TicketPage() {
                             const compra = cola[idx] || null;
                             comprasUsadas[r.nombre] = idx + 1;
                             const fotoSrc = r.foto_url
-                              ? `${API_BASE}${r.foto_url}`
-                              : compra?.soporte_url || null;
+                              ? resolverUrl(r.foto_url)
+                              : compra?.soporte_url ? resolverUrl(compra.soporte_url) : null;
                             return (
                               <div key={r.id} className="item-card" style={{ position: "relative" }}>
                                 {isEditable && (
@@ -884,7 +892,7 @@ export default function TicketPage() {
                                   ✕
                                 </button>
                               )}
-                              <img src={`${API_BASE}${f.archivo_url}`} alt={f.descripcion} className="foto-img" />
+                              <img src={resolverUrl(f.archivo_url)} alt={f.descripcion} className="foto-img" />
                               {f.descripcion && <p className="foto-desc">{f.descripcion}</p>}
                             </div>
                           ))}
