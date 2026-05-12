@@ -13,6 +13,7 @@ import TicketListScreen from './src/screens/TicketListScreen';
 import TicketDetailScreen from './src/screens/TicketDetailScreen';
 import AddProcesoScreen from './src/screens/AddProcesoScreen';
 import AddRepuestoScreen from './src/screens/AddRepuestoScreen';
+import AddCompraScreen from './src/screens/AddCompraScreen';
 import AddFotoScreen from './src/screens/AddFotoScreen';
 import CobroRapidoScreen from './src/screens/CobroRapidoScreen';
 import ConfiguracionScreen from './src/screens/ConfiguracionScreen';
@@ -142,6 +143,7 @@ export default function App() {
           <Stack.Screen name="TicketDetail" component={TicketDetailScreen} options={{ title: 'Detalle del Ticket' }} />
           <Stack.Screen name="AddProceso" component={AddProcesoScreen} options={{ title: 'Agregar Proceso' }} />
           <Stack.Screen name="AddRepuesto" component={AddRepuestoScreen} options={{ title: 'Agregar Repuesto' }} />
+          <Stack.Screen name="AddCompra" component={AddCompraScreen} options={{ title: 'Agregar Compra' }} />
           <Stack.Screen name="AddFoto" component={AddFotoScreen} options={{ title: 'Agregar Foto' }} />
           <Stack.Screen name="CobroRapido" component={CobroRapidoScreen} options={{ title: 'Cobro Rápido' }} />
           <Stack.Screen name="Recepcion" component={RecepcionScreen} options={{ title: 'Recepción de Vehículos' }} />
