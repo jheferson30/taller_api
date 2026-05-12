@@ -129,6 +129,7 @@ class TicketService:
         valor_ingreso = (ticket.total_servicio or 0) - (ticket.anticipo_recibido or 0)
         if valor_ingreso > 0:
             movimiento = MovimientoCaja(
+                taller_id=ticket.taller_id,
                 tipo=TipoMovimiento.INGRESO_FINAL,
                 ticket_id=ticket.id,
                 ticket_codigo=ticket.ticket_codigo,
@@ -201,6 +202,7 @@ class TicketService:
 
         # Crear movimiento de caja
         movimiento = MovimientoCaja(
+            taller_id=ticket.taller_id,
             tipo=TipoMovimiento.EGRESO,
             ticket_id=ticket.id,
             ticket_codigo=ticket.ticket_codigo,
