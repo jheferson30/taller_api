@@ -82,6 +82,7 @@ from app.rutas import (
     health,
     mobile_api_ruta,
     movimiento_caja_ruta,
+    notificacion_ruta,
     pdf_ruta,
     seguridad_ruta,
     ticket_ruta,
@@ -773,6 +774,7 @@ app.include_router(citas_ruta.router)
 app.include_router(mobile_api_ruta.router)
 app.include_router(configuracion_ruta.router)
 app.include_router(whatsapp_ruta.router)
+app.include_router(notificacion_ruta.router)      # Notificaciones internas (campana)
 app.include_router(super_admin_seguridad.router)  # Security Dashboard
 app.include_router(super_admin_ruta.router)       # Panel SUPER_ADMIN
 
@@ -914,6 +916,7 @@ def servir_frontend(full_path: str):
         "pdf",
         "whatsapp",
         "mobile",
+        "notificaciones",
     )
     if any(full_path.startswith(p) for p in api_prefixes):
         from fastapi import HTTPException

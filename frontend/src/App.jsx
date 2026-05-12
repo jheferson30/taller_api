@@ -46,9 +46,22 @@ function AppLayout({ children }) {
   }, []);
 
   useEffect(() => {
+    // Solo pedir el logo si hay sesión activa con taller_id
+    if (!authService.isAuthenticated()) return;
+    const user = authService.getUser();
+    // SUPER_ADMIN no tiene taller, no pedir logo
+    if (!user || user.roles?.includes("SUPER_ADMIN")) return;
+
     api.obtenerLogo()
-      .then(r => setLogoUrl(r.logo_url || "/assets/logo.png"))
-      .catch(() => setLogoUrl("/assets/logo.png"));
+      .then(r => {
+        if (r.logo_url) {
+          setLogoUrl(r.logo_url);
+        }
+        // Si no hay logo configurado, dejar null para mostrar el placeholder de "Subir logo"
+      })
+      .catch(() => {
+        // Error de red — no sobreescribir con logo por defecto
+      });
   }, []);
 
   if (!authService.isAuthenticated()) {
@@ -67,7 +80,7 @@ function AppLayout({ children }) {
     formData.append("file", file);
     try {
       const r = await api.subirLogo(formData);
-      setLogoUrl(r.logo_url);
+      if (r.logo_url) setLogoUrl(r.logo_url);
     } catch (err) {
       alert("Error subiendo logo: " + err.message);
     }

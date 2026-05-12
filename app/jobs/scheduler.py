@@ -16,6 +16,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.jobs.alertas_trial import verificar_trials_proximos_a_vencer
 from app.jobs.limpieza_notificaciones import limpiar_notificaciones_leidas
 from app.jobs.security_jobs import check_jwt_rotation, flush_security_alerts
 
@@ -52,7 +53,17 @@ def iniciar_scheduler():
         id="limpieza_notificaciones",
         name="Limpieza de notificaciones leídas",
         replace_existing=True,
-        misfire_grace_time=3600,  # Si falla, puede ejecutarse hasta 1h después
+        misfire_grace_time=3600,
+    )
+
+    # Job: Alertas de vencimiento de trial (diario a las 09:00)
+    scheduler.add_job(
+        func=verificar_trials_proximos_a_vencer,
+        trigger=CronTrigger(hour=9, minute=0),  # 09:00 todos los días
+        id="alertas_trial",
+        name="Alertas de vencimiento de trial",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
 
     # Job: Verificación y rotación automática de clave JWT (diario a las 02:00)
@@ -80,6 +91,7 @@ def iniciar_scheduler():
     scheduler.start()
     logger.info("✅ Scheduler de jobs iniciado correctamente")
     logger.info("   - Limpieza de notificaciones: diaria a las 00:00")
+    logger.info("   - Alertas de vencimiento de trial: diaria a las 09:00")
     logger.info("   - Verificación rotación JWT: diaria a las 02:00")
     logger.info("   - Flush alertas LOW: cada 15 minutos")
 

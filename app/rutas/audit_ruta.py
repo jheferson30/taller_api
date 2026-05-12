@@ -44,7 +44,7 @@ class AuditLogListResponse(BaseModel):
 
 @router.get("", response_model=AuditLogListResponse)
 @require_role("ADMIN")
-def get_audit_logs(
+async def get_audit_logs(
     request: Request,
     user_id: int | None = Query(None, description="Filtrar por ID de usuario"),
     action: str | None = Query(None, description="Filtrar por tipo de acción"),

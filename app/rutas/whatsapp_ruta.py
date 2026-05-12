@@ -137,7 +137,7 @@ async def enviar_whatsapp_mobile(
     telefono = getattr(vehiculo, "telefono_propietario", None) if vehiculo else None
     if not telefono:
         return {"ok": False, "error": "sin_telefono"}
-    resultado = await whatsapp_service.enviar_mensaje_manual(ticket_id, telefono, body.mensaje, db)
+    resultado = await whatsapp_service.enviar_mensaje_manual(ticket_id, telefono, body.mensaje, db, taller_id=taller_id)
     return resultado
 
 

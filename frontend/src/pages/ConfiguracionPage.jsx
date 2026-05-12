@@ -20,9 +20,7 @@ function ConfiguracionInterna() {
   const [mostrarFormUsuario, setMostrarFormUsuario] = useState(false);
 
   // ── Mecánicos ──
-  const [mecanicos, setMecanicos] = useState([]);
-  const [nuevoMecanico, setNuevoMecanico] = useState("");
-  const [loadingMec, setLoadingMec] = useState(false);
+  // (eliminado: los mecánicos son los usuarios con rol MECANICO)
 
   // ── Taller ──
   const [taller, setTaller] = useState({ nombre_taller: "", direccion: "", telefono: "", nit: "" });
@@ -59,7 +57,6 @@ function ConfiguracionInterna() {
   const [msgAdminPwd, setMsgAdminPwd] = useState("");
 
   useEffect(() => {
-    cargarMecanicos();
     api.obtenerConfigTaller().then(setTaller);
     api.obtenerProcesosRapidos().then((r) => setProcesos(r.procesos));
     api.obtenerCobrosRapidos().then((r) => setCobros(r.cobros));
@@ -122,37 +119,6 @@ function ConfiguracionInterna() {
     } finally {
       setLoadingUsuarios(false);
     }
-  }
-
-  async function cargarMecanicos() {
-    const data = await api.listarMecanicos();
-    setMecanicos(data);
-  }
-
-  async function handleAgregarMecanico(e) {
-    e.preventDefault();
-    if (!nuevoMecanico.trim()) return;
-    setLoadingMec(true);
-    try {
-      await api.crearMecanico({ nombre: nuevoMecanico.trim() });
-      setNuevoMecanico("");
-      await cargarMecanicos();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setLoadingMec(false);
-    }
-  }
-
-  async function handleToggleMecanico(id) {
-    await api.toggleMecanico(id);
-    await cargarMecanicos();
-  }
-
-  async function handleEliminarMecanico(id, nombre) {
-    if (!confirm(`¿Eliminar a ${nombre}?`)) return;
-    await api.eliminarMecanico(id);
-    await cargarMecanicos();
   }
 
   async function handleGuardarTaller(e) {
@@ -361,44 +327,6 @@ function ConfiguracionInterna() {
           </div>
         </section>
       )}
-
-      {/* ── Mecánicos ── */}
-      <section className="config-section config-section-full">
-        <h2 className="config-section-title">Mecánicos del taller</h2>
-        <form onSubmit={handleAgregarMecanico} className="config-add-row">
-          <input
-            className="config-input"
-            placeholder="Nombre del mecánico"
-            value={nuevoMecanico}
-            onChange={(e) => setNuevoMecanico(e.target.value)}
-          />
-          <button className="btn-primary" type="submit" disabled={loadingMec}>
-            {loadingMec ? "..." : "Agregar"}
-          </button>
-        </form>
-        <div className="config-list">
-          {mecanicos.length === 0 && <p className="config-empty">Sin mecánicos registrados</p>}
-          {mecanicos.map((m) => (
-            <div key={m.id} className={`config-list-item ${!m.activo ? "inactivo" : ""}`}>
-              <span className="config-item-name">{m.nombre}</span>
-              <div className="config-item-actions">
-                <button
-                  className={`btn-chip ${m.activo ? "btn-chip-warning" : "btn-chip-success"}`}
-                  onClick={() => handleToggleMecanico(m.id)}
-                >
-                  {m.activo ? "Desactivar" : "Activar"}
-                </button>
-                <button
-                  className="btn-chip btn-chip-danger"
-                  onClick={() => handleEliminarMecanico(m.id, m.nombre)}
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* ── Datos del taller ── */}
       <section className="config-section">

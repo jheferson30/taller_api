@@ -636,7 +636,7 @@ class TallerService:
         self._audit(
             user_id=created_by,
             taller_id=None,  # SUPER_ADMIN no tiene taller
-            action=AuditAction.NOTIFICACION_MASIVA_ENVIADA,
+            action=AuditAction.NOTIFICATION_MASS,
             resource_type="notificacion_masiva",
             resource_id=None,
             ip_address=ip_address,

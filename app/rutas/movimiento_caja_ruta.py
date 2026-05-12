@@ -57,7 +57,7 @@ def _validar_movimiento(datos: MovimientoCajaCrear):
 
 @router.get("/cobros-rapidos")
 @require_auth
-def listar_cobros_rapidos(
+async def listar_cobros_rapidos(
     request: Request,
     db: Session = Depends(obtener_db),
     placa: str | None = Query(None),
@@ -209,7 +209,7 @@ async def crear_movimiento_caja(
     summary="List cash movements with filters",
 )
 @require_auth
-def listar_movimientos_caja(
+async def listar_movimientos_caja(
     request: Request,
     db: Session = Depends(obtener_db),
     tipo: TipoMovimiento | None = Query(None),
@@ -281,7 +281,7 @@ async def corregir_movimiento_caja(
 
 @router.get("/{movimiento_id}/cambios", response_model=list[CambioMovimientoCajaRespuesta])
 @require_auth
-def listar_cambios_movimiento(
+async def listar_cambios_movimiento(
     request: Request,
     movimiento_id: int,
     db: Session = Depends(obtener_db),

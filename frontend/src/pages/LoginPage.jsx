@@ -13,6 +13,15 @@ export default function LoginPage() {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef(null);
 
+  // Mostrar mensaje de sesión cerrada por taller suspendido/cancelado
+  useEffect(() => {
+    const sessionError = sessionStorage.getItem('session_error');
+    if (sessionError) {
+      setError(sessionError);
+      sessionStorage.removeItem('session_error');
+    }
+  }, []);
+
   useEffect(() => {
     if (countdown > 0) {
       setBloqueado(true);

@@ -19,6 +19,7 @@ class TwilioWhatsAppService(WhatsAppService):
         db,
     ) -> ResultadoEnvio:
         config = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+        taller_id = getattr(ticket, "taller_id", None)
 
         # 1. WhatsApp deshabilitado
         if config is None or not config.whatsapp_enabled:
@@ -30,6 +31,7 @@ class TwilioWhatsAppService(WhatsAppService):
                 mensaje=None,
                 resultado=ResultadoEnvio.OMITIDO,
                 error_detalle=None,
+                taller_id=taller_id,
             )
             return ResultadoEnvio.OMITIDO
 
@@ -43,6 +45,7 @@ class TwilioWhatsAppService(WhatsAppService):
                 mensaje=None,
                 resultado=ResultadoEnvio.ERROR,
                 error_detalle="token_vacio",
+                taller_id=taller_id,
             )
             return ResultadoEnvio.ERROR
 
@@ -57,6 +60,7 @@ class TwilioWhatsAppService(WhatsAppService):
                 mensaje=None,
                 resultado=ResultadoEnvio.OMITIDO,
                 error_detalle="sin_telefono",
+                taller_id=taller_id,
             )
             return ResultadoEnvio.OMITIDO
 
@@ -90,6 +94,7 @@ class TwilioWhatsAppService(WhatsAppService):
                     mensaje=mensaje,
                     resultado=ResultadoEnvio.ENVIADO,
                     error_detalle=message_sid if message_sid else None,
+                    taller_id=taller_id,
                 )
                 return ResultadoEnvio.ENVIADO
             else:
@@ -101,6 +106,7 @@ class TwilioWhatsAppService(WhatsAppService):
                     mensaje=mensaje,
                     resultado=ResultadoEnvio.ERROR,
                     error_detalle=f"HTTP {response.status_code}",
+                    taller_id=taller_id,
                 )
                 return ResultadoEnvio.ERROR
 
@@ -113,6 +119,7 @@ class TwilioWhatsAppService(WhatsAppService):
                 mensaje=mensaje,
                 resultado=ResultadoEnvio.ERROR,
                 error_detalle=str(exc),
+                taller_id=taller_id,
             )
             return ResultadoEnvio.ERROR
 
@@ -122,6 +129,7 @@ class TwilioWhatsAppService(WhatsAppService):
         telefono: str,
         mensaje: str,
         db,
+        taller_id=None,
     ) -> dict:
         # 1. Validar longitud del mensaje (req 5.2 / 6.3)
         if len(mensaje) < 1 or len(mensaje) > 1024:
@@ -143,6 +151,7 @@ class TwilioWhatsAppService(WhatsAppService):
                 mensaje=mensaje,
                 resultado=ResultadoEnvio.ERROR,
                 error_detalle="whatsapp_no_configurado",
+                taller_id=taller_id,
             )
             return {"ok": False, "error": "whatsapp_no_configurado"}
 
@@ -176,6 +185,7 @@ class TwilioWhatsAppService(WhatsAppService):
                     mensaje=mensaje,
                     resultado=ResultadoEnvio.ENVIADO,
                     error_detalle=sid if sid else None,
+                    taller_id=taller_id,
                 )
                 return {"ok": True, "message_id": sid}
             else:
@@ -188,6 +198,7 @@ class TwilioWhatsAppService(WhatsAppService):
                     mensaje=mensaje,
                     resultado=ResultadoEnvio.ERROR,
                     error_detalle=error_detalle,
+                    taller_id=taller_id,
                 )
                 return {"ok": False, "error": error_detalle}
 
@@ -200,6 +211,7 @@ class TwilioWhatsAppService(WhatsAppService):
                 mensaje=mensaje,
                 resultado=ResultadoEnvio.ERROR,
                 error_detalle=str(exc),
+                taller_id=taller_id,
             )
             return {"ok": False, "error": str(exc)}
 
@@ -251,10 +263,12 @@ class TwilioWhatsAppService(WhatsAppService):
         mensaje,
         resultado: ResultadoEnvio,
         error_detalle,
+        taller_id=None,
     ) -> None:
         """Persiste un registro en log_notificacion. Nunca propaga excepciones."""
         try:
             log = LogNotificacion(
+                taller_id=taller_id,
                 ticket_id=ticket_id,
                 telefono_destino=telefono,
                 tipo_evento=tipo.value,

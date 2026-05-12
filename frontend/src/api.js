@@ -82,8 +82,19 @@ async function request(path, options = {}) {
     if (error.code === 'ECONNABORTED') {
       throw new Error('El servidor no respondió. Verifica la conexión.');
     }
-    const detail = error.response?.data?.detail || error.message || 'Error de servidor';
-    throw new Error(detail);
+    const detail = error.response?.data?.detail;
+    let message;
+    if (typeof detail === 'string') {
+      message = detail;
+    } else if (Array.isArray(detail)) {
+      // Errores de validación Pydantic: [{loc, msg, type}, ...]
+      message = detail.map(e => e.msg || JSON.stringify(e)).join(', ');
+    } else if (detail && typeof detail === 'object') {
+      message = detail.msg || detail.message || JSON.stringify(detail);
+    } else {
+      message = error.message || 'Error de servidor';
+    }
+    throw new Error(message);
   }
 }
 
@@ -299,12 +310,17 @@ export const api = {
   crearUsuario: (body) => request("/users", { method: "POST", data: body }),
   eliminarUsuario: (id) => request(`/users/${id}`, { method: "DELETE" }),
   cambiarPasswordPropio: (body) => request("/users/me/change-password", { method: "POST", data: body }),
+  actualizarPerfilPropio: (body) => request("/users/me", { method: "PATCH", data: body }),
   obtenerPerfil: (userId) => request(`/users/${userId}`),
   obtenerConfigEmail: () => request("/configuracion/email"),
   actualizarConfigEmail: (body) => request("/configuracion/email", { method: "PUT", data: body }),
   obtenerLogo: () => request("/configuracion/logo"),
   subirLogo: (formData) => request("/configuracion/logo", { method: "POST", data: formData, headers: { "Content-Type": "multipart/form-data" } }),
   cambiarPasswordAdmin: (body) => request("/seguridad/admin/cambiar-password", { method: "POST", data: body }),
+  // Notificaciones internas (campana)
+  obtenerNotificacionesNoLeidas: () => request("/notificaciones/no-leidas"),
+  marcarNotificacionLeida: (id) => request(`/notificaciones/${id}/leer`, { method: "PATCH" }),
+  marcarTodasNotificacionesLeidas: () => request("/notificaciones/leer-todas", { method: "PATCH" }),
 };
 
 // ── API Super Admin ──────────────────────────────────────────────────────────
@@ -329,13 +345,33 @@ export const apiSuperAdmin = {
   crearAdminTaller: (tallerId, body) => request(`/super-admin/talleres/${tallerId}/usuarios`, { method: "POST", data: body }),
   resetPasswordMasivo: (tallerId) => request(`/super-admin/talleres/${tallerId}/reset-passwords`, { method: "POST" }),
   
-  // Notificaciones
+  // Notificaciones masivas (solo SUPER_ADMIN)
   enviarNotificacionMasiva: (body) => request("/super-admin/notificaciones/masivas", { method: "POST", data: body }),
-  obtenerNotificacionesNoLeidas: () => request("/notificaciones/no-leidas"),
-  marcarNotificacionLeida: (id) => request(`/notificaciones/${id}/leer`, { method: "PATCH" }),
-  marcarTodasNotificacionesLeidas: () => request("/notificaciones/leer-todas", { method: "PATCH" }),
-  
+
+  // Seguridad — intentos de login fallidos
+  intentosFallidos: (tallerId, params = {}) => {
+    const q = new URLSearchParams();
+    if (params.desde) q.append("desde", params.desde);
+    if (params.page) q.append("page", params.page);
+    if (params.page_size) q.append("page_size", params.page_size);
+    const qs = q.toString();
+    return request(`/super-admin/talleres/${tallerId}/seguridad/intentos-fallidos${qs ? `?${qs}` : ""}`);
+  },
+
   // Auditoría
+  auditoriaGlobal: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.taller_id) q.append("taller_id", params.taller_id);
+    if (params.user_id)   q.append("user_id", params.user_id);
+    if (params.accion)    q.append("accion", params.accion);
+    if (params.desde)     q.append("desde", params.desde);
+    if (params.hasta)     q.append("hasta", params.hasta);
+    if (params.page)      q.append("page", params.page);
+    if (params.page_size) q.append("page_size", params.page_size);
+    const qs = q.toString();
+    return request(`/super-admin/auditoria${qs ? `?${qs}` : ""}`);
+  },
+  // Alias legacy — mantener por compatibilidad
   obtenerAuditoria: (params = {}) => {
     const q = new URLSearchParams();
     if (params.taller_id) q.append("taller_id", params.taller_id);

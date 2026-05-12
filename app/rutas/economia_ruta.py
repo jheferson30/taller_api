@@ -11,6 +11,7 @@ from app.modelos.configuracion_taller import ConfiguracionTaller
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
 from app.modelos.ticket import Ticket
 from app.modelos.ticket_proceso import TicketProceso
+from app.modelos.user import User
 from app.seguridad.auth_middleware import require_auth
 from app.seguridad.dependencias import requerir_password_admin
 from app.utils.pdf_economia import generar_pdf_economia_profesional
@@ -305,25 +306,38 @@ async def obtener_estadisticas(
     ]
 
     # Ranking mecánicos por procesos en el período
+    # Prioriza mecanico_user_id (FK a users); cae en el campo string legacy si no hay FK
     rows_mecanicos = (
         db.query(
-            TicketProceso.mecanico,
+            func.coalesce(
+                User.nombre_completo,
+                User.username,
+                TicketProceso.mecanico,
+            ).label("nombre"),
             func.count(TicketProceso.id).label("procesos"),
         )
+        .outerjoin(User, User.id == TicketProceso.mecanico_user_id)
         .filter(
             TicketProceso.taller_id == taller_id,
-            TicketProceso.mecanico.isnot(None),
-            TicketProceso.mecanico != "",
+            # Incluir procesos con user_id asignado O con nombre legacy
+            (TicketProceso.mecanico_user_id.isnot(None)) |
+            (TicketProceso.mecanico.isnot(None) & (TicketProceso.mecanico != "")),
             func.date(TicketProceso.fecha_creacion) >= fecha_desde,
             func.date(TicketProceso.fecha_creacion) <= hoy,
         )
-        .group_by(TicketProceso.mecanico)
+        .group_by(
+            func.coalesce(
+                User.nombre_completo,
+                User.username,
+                TicketProceso.mecanico,
+            )
+        )
         .order_by(func.count(TicketProceso.id).desc())
         .limit(5)
         .all()
     )
     mecanicos_ranking = [
-        {"mecanico": r.mecanico, "procesos": int(r.procesos)} for r in rows_mecanicos
+        {"mecanico": r.nombre, "procesos": int(r.procesos)} for r in rows_mecanicos
     ]
 
     return {

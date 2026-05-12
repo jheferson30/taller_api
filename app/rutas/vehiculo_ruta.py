@@ -97,7 +97,7 @@ def _generar_codigo_ticket(placa: str) -> str:
 )
 @require_auth
 @limiter.limit(os.getenv("RATE_LIMIT_VEHICULOS_PER_MINUTE", "30") + "/minute")
-def buscar_por_placa(
+async def buscar_por_placa(
     request: Request,
     placa: str = Query(..., min_length=3, max_length=20),
     db: Session = Depends(obtener_db),
@@ -255,7 +255,7 @@ async def crear_vehiculo(
 )
 @require_auth
 @limiter.limit(os.getenv("RATE_LIMIT_VEHICULOS_PER_MINUTE", "30") + "/minute")
-def listar_vehiculos(
+async def listar_vehiculos(
     request: Request,
     db: Session = Depends(obtener_db),
     skip: int = Query(0, ge=0),
@@ -300,7 +300,7 @@ async def actualizar_vehiculo_por_placa(
 
 @router.get("/{placa}", response_model=VehiculoRespuesta)
 @require_auth
-def obtener_vehiculo_por_placa(
+async def obtener_vehiculo_por_placa(
     request: Request,
     placa: str,
     db: Session = Depends(obtener_db),
@@ -340,7 +340,7 @@ def obtener_vehiculo_por_placa(
     """,
 )
 @require_auth
-def obtener_ficha_vehiculo(
+async def obtener_ficha_vehiculo(
     request: Request,
     placa: str,
     db: Session = Depends(obtener_db),

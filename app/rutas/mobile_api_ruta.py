@@ -24,10 +24,12 @@ from app.esquemas.mobile_schema import (
     TicketListResponse,
 )
 from app.modelos.configuracion_taller import ConfiguracionTaller
-from app.modelos.mecanico import Mecanico
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
+from app.modelos.role import Role
 from app.modelos.ticket import Ticket
 from app.modelos.ticket_cobro import TicketCobro
+from app.modelos.user import User
+from app.modelos.user_role import UserRole
 from app.modelos.ticket_compra import TicketCompra
 from app.modelos.ticket_foto import TicketFoto
 from app.modelos.ticket_proceso import TicketProceso
@@ -628,11 +630,28 @@ def actualizar_finanzas_mobile(
 
 @router.get("/mecanicos")
 def listar_mecanicos_mobile(request: Request, db: Session = Depends(get_db)):
+    """Devuelve los usuarios activos con rol MECANICO del taller."""
     taller_id = _get_taller_id(request)
-    return db.query(Mecanico).filter(
-        Mecanico.activo == True,
-        Mecanico.taller_id == taller_id,
-    ).order_by(Mecanico.nombre).all()
+    mecanicos = (
+        db.query(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .filter(
+            User.taller_id == taller_id,
+            User.is_active == True,
+            Role.name == "MECANICO",
+        )
+        .order_by(User.nombre_completo, User.username)
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "nombre": u.nombre_completo or u.username,
+            "activo": u.is_active,
+        }
+        for u in mecanicos
+    ]
 
 
 @router.get("/procesos-rapidos")

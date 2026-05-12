@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.configuracion.base_datos import obtener_db
 from app.esquemas.taller_schema import (
     BloqueoEmergenciaRequest,
+    CambiarEstadoRequest,
     CrearAdminTallerRequest,
     EstadoTallerEnum,
     MetricasGlobalesResponse,
@@ -161,7 +162,7 @@ async def actualizar_taller(
 async def cambiar_estado_taller(
     request: Request,
     taller_id: int,
-    nuevo_estado: EstadoTallerEnum,
+    body: CambiarEstadoRequest,
     db: Session = Depends(obtener_db),
 ):
     """Cambia el estado del taller (TRIAL → ACTIVO → SUSPENDIDO → CANCELADO)."""
@@ -169,7 +170,7 @@ async def cambiar_estado_taller(
     try:
         taller = service.cambiar_estado(
             taller_id=taller_id,
-            nuevo_estado=nuevo_estado,
+            nuevo_estado=body.estado,
             updated_by=request.state.user.id,
             ip_address=_get_ip(request),
             user_agent=request.headers.get("user-agent", ""),

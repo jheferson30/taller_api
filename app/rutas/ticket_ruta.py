@@ -445,10 +445,21 @@ async def agregar_proceso(
     ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
+
+    datos_dict = datos.model_dump()
+
+    # Si viene mecanico_user_id, resolver el nombre y guardarlo en el campo string
+    # para compatibilidad con el PDF y la app mobile
+    if datos_dict.get("mecanico_user_id") and not datos_dict.get("mecanico"):
+        from app.modelos.user import User as _User
+        usuario = db.query(_User).filter(_User.id == datos_dict["mecanico_user_id"]).first()
+        if usuario:
+            datos_dict["mecanico"] = usuario.nombre_completo or usuario.username
+
     proceso = TicketProceso(
         ticket_id=ticket_id,
         taller_id=request.state.taller_id,
-        **datos.model_dump()
+        **datos_dict,
     )
     db.add(proceso)
     db.commit()

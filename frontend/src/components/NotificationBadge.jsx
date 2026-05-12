@@ -15,10 +15,11 @@ export default function NotificationBadge({ onRefreshRef }) {
   const fetchNoLeidas = useCallback(async () => {
     try {
       const data = await api.obtenerNotificacionesNoLeidas();
+      console.log("[NotificationBadge] respuesta:", JSON.stringify(data));
       setTotal(data?.total ?? 0);
       setNotificaciones(data?.notificaciones ?? []);
     } catch (error) {
-      // Silencioso — no romper la UI si falla
+      console.error("[NotificationBadge] Error:", error?.message, error?.response?.status, error?.response?.data);
     }
   }, []);
 

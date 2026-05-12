@@ -75,6 +75,10 @@ class TallerRecursosResponse(BaseModel):
     limite_tickets_mes: int | None = None
 
 
+class CambiarEstadoRequest(BaseModel):
+    estado: EstadoTallerEnum
+
+
 class BloqueoEmergenciaRequest(BaseModel):
     motivo: str = Field(..., min_length=10, max_length=500)
 

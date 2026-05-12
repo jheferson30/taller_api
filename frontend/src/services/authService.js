@@ -77,6 +77,20 @@ class AuthService {
           }
         }
 
+        // Si es 403 por taller suspendido/cancelado, limpiar sesión y redirigir al login con mensaje
+        if (error.response?.status === 403) {
+          const detail = error.response?.data?.detail || '';
+          const esTallerSuspendido =
+            detail.includes('suspendido') || detail.includes('cancelado');
+          if (esTallerSuspendido) {
+            this.clearTokens();
+            // Guardar el mensaje para mostrarlo en la pantalla de login
+            sessionStorage.setItem('session_error', detail);
+            window.location.href = '/login';
+            return Promise.reject(error);
+          }
+        }
+
         return Promise.reject(error);
       }
     );

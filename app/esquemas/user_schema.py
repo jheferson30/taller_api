@@ -46,7 +46,7 @@ class CreateUserRequest(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    """Request para actualizar un usuario."""
+    """Request para actualizar un usuario (solo ADMIN)."""
 
     email: EmailStr | None = Field(None, description="Nuevo email del usuario")
     roles: list[str] | None = Field(None, min_items=1, description="Nueva lista de roles")
@@ -54,6 +54,25 @@ class UpdateUserRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {"email": "newemail@taller.com", "roles": ["MECANICO", "RECEPCIONISTA"]}
+        }
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request para que el usuario actualice su propio perfil."""
+
+    nombre_completo: str | None = Field(None, max_length=150, description="Nombre completo")
+    telefono: str | None = Field(None, max_length=20, description="Teléfono")
+    direccion: str | None = Field(None, max_length=255, description="Dirección")
+    email: EmailStr | None = Field(None, description="Email")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "nombre_completo": "Juan Pérez",
+                "telefono": "3001234567",
+                "direccion": "Calle 10 #5-20",
+                "email": "juan@gmail.com",
+            }
         }
 
 
