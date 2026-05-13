@@ -30,14 +30,15 @@ def get_csrf_config():
     Configuración de CSRF Protection.
 
     Carga la clave secreta desde CSRF_SECRET_KEY (validada en startup).
-    Configura cookies con SameSite=Strict, HttpOnly=True, y Secure solo en producción.
+    cookie_secure se activa solo cuando FORCE_HTTPS=true — no cuando ENVIRONMENT=production,
+    porque en producción sin SSL la cookie Secure no se envía por HTTP.
     El token se lee del header X-CSRF-Token sin prefijo.
     """
-    is_production = os.getenv("ENVIRONMENT") == "production"
+    force_https = os.getenv("FORCE_HTTPS", "false").lower() == "true"
     return [
         ("secret_key", os.getenv("CSRF_SECRET_KEY", "")),
         ("cookie_samesite", "strict"),
-        ("cookie_secure", is_production),
+        ("cookie_secure", force_https),
         ("cookie_httponly", True),
         ("token_location", "header"),
         ("header_name", "X-CSRF-Token"),
