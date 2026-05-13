@@ -131,7 +131,10 @@ def listar_procesos_mobile(request: Request, ticket_id: int, db: Session = Depen
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    procesos = db.query(TicketProceso).filter(TicketProceso.ticket_id == ticket_id).all()
+    procesos = db.query(TicketProceso).filter(
+        TicketProceso.ticket_id == ticket_id,
+        TicketProceso.taller_id == taller_id,
+    ).all()
     return procesos
 
 
@@ -220,7 +223,10 @@ def listar_repuestos_mobile(request: Request, ticket_id: int, db: Session = Depe
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    repuestos = db.query(TicketRepuesto).filter(TicketRepuesto.ticket_id == ticket_id).all()
+    repuestos = db.query(TicketRepuesto).filter(
+        TicketRepuesto.ticket_id == ticket_id,
+        TicketRepuesto.taller_id == taller_id,
+    ).all()
     return repuestos
 
 
@@ -254,7 +260,10 @@ def listar_fotos_mobile(request: Request, ticket_id: int, db: Session = Depends(
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    fotos = db.query(TicketFoto).filter(TicketFoto.ticket_id == ticket_id).all()
+    fotos = db.query(TicketFoto).filter(
+        TicketFoto.ticket_id == ticket_id,
+        TicketFoto.taller_id == taller_id,
+    ).all()
     return fotos
 
 
@@ -493,7 +502,10 @@ def listar_compras_mobile(request: Request, ticket_id: int, db: Session = Depend
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    return db.query(TicketCompra).filter(TicketCompra.ticket_id == ticket_id).all()
+    return db.query(TicketCompra).filter(
+        TicketCompra.ticket_id == ticket_id,
+        TicketCompra.taller_id == taller_id,
+    ).all()
 
 
 @router.post("/tickets/{ticket_id}/compras", response_model=CompraResponse)
@@ -575,7 +587,10 @@ def listar_cobros_mobile(request: Request, ticket_id: int, db: Session = Depends
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    return db.query(TicketCobro).filter(TicketCobro.ticket_id == ticket_id).all()
+    return db.query(TicketCobro).filter(
+        TicketCobro.ticket_id == ticket_id,
+        TicketCobro.taller_id == taller_id,
+    ).all()
 
 
 @router.post("/tickets/{ticket_id}/cobros", response_model=CobroResponse)

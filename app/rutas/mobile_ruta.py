@@ -19,6 +19,8 @@ def tickets_activos_mobile(
     db: Session = Depends(obtener_db),
     placa: str | None = Query(None),
 ):
+    # Sin autenticación — endpoint legacy solo para compatibilidad
+    # No expone datos sensibles, solo códigos y estados
     query = db.query(Ticket).filter(Ticket.estado.in_(["ABIERTO", "EN_PROCESO"]))
     if placa:
         query = query.filter(Ticket.placa == placa.strip().upper())

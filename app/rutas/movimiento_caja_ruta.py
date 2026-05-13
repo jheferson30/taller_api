@@ -248,7 +248,10 @@ async def corregir_movimiento_caja(
     db: Session = Depends(obtener_db),
     _: bool = Depends(requerir_password_admin),
 ):
-    movimiento = db.query(MovimientoCaja).filter(MovimientoCaja.id == movimiento_id).first()
+    movimiento = db.query(MovimientoCaja).filter(
+        MovimientoCaja.id == movimiento_id,
+        MovimientoCaja.taller_id == request.state.taller_id,
+    ).first()
     if not movimiento:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado")
 
