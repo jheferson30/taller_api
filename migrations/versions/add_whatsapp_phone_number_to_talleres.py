@@ -25,28 +25,37 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """
     Agrega el campo whatsapp_phone_number a la tabla talleres.
-    
-    Este campo almacena el número de WhatsApp Business en formato E.164
-    (ej: "+573001234567") que se usa para enrutar mensajes entrantes
-    al taller correcto en un entorno multi-tenant.
+    Usa IF NOT EXISTS para ser idempotente si el schema inicial ya lo incluye.
     """
-    op.add_column(
-        'talleres',
-        sa.Column(
-            'whatsapp_phone_number',
-            sa.String(length=50),
-            nullable=True,
-            comment='Número de WhatsApp Business en formato E.164 para routing de webhooks multi-tenant'
+    # Verificar si la columna ya existe antes de agregarla
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name='talleres' AND column_name='whatsapp_phone_number'"
+    ))
+    if result.fetchone() is None:
+        op.add_column(
+            'talleres',
+            sa.Column(
+                'whatsapp_phone_number',
+                sa.String(length=50),
+                nullable=True,
+                comment='Número de WhatsApp Business en formato E.164 para routing de webhooks multi-tenant'
+            )
         )
-    )
-    
-    # Crear índice único para búsquedas rápidas en el webhook router
-    op.create_index(
-        'ix_talleres_whatsapp_phone_number',
-        'talleres',
-        ['whatsapp_phone_number'],
-        unique=True
-    )
+
+    # Crear índice único si no existe
+    result2 = conn.execute(sa.text(
+        "SELECT indexname FROM pg_indexes "
+        "WHERE tablename='talleres' AND indexname='ix_talleres_whatsapp_phone_number'"
+    ))
+    if result2.fetchone() is None:
+        op.create_index(
+            'ix_talleres_whatsapp_phone_number',
+            'talleres',
+            ['whatsapp_phone_number'],
+            unique=True
+        )
 
 
 def downgrade() -> None:
