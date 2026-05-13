@@ -152,6 +152,7 @@ class UserService:
                 ip_address=ip_address,
                 user_agent=user_agent,
                 roles=roles,
+                taller_id=taller_id,
             )
 
         # Verificar si el email ya existe (activo o inactivo)
@@ -172,6 +173,7 @@ class UserService:
                 ip_address=ip_address,
                 user_agent=user_agent,
                 roles=roles,
+                taller_id=taller_id,
             )
 
         # Crear usuario nuevo
@@ -395,6 +397,7 @@ class UserService:
         ip_address: str,
         user_agent: str,
         roles: list[str],
+        taller_id: int | None = None,
     ) -> User:
         """Reactiva un usuario inactivo con nuevos datos."""
         # Actualizar datos
@@ -405,6 +408,8 @@ class UserService:
         user.nombre_completo = nombre_completo
         user.telefono = telefono
         user.direccion = direccion
+        if taller_id is not None:
+            user.taller_id = taller_id
         self.user_repo.update(user)
 
         # Reemplazar roles
