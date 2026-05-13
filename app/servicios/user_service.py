@@ -75,6 +75,7 @@ class UserService:
         created_by: int,
         ip_address: str,
         user_agent: str,
+        taller_id: int | None = None,
         nombre_completo: str | None = None,
         telefono: str | None = None,
         direccion: str | None = None,
@@ -175,6 +176,7 @@ class UserService:
 
         # Crear usuario nuevo
         user = User(
+            taller_id=taller_id,
             username=username,
             email=email,
             password_hash=password_hash,

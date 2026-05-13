@@ -75,6 +75,7 @@ async def create_user(
             email=user_data.email,
             password=user_data.password,
             roles=user_data.roles,
+            taller_id=request.state.taller_id,
             created_by=current_user.id,
             ip_address=ip_address,
             user_agent=user_agent,
