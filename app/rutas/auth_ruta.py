@@ -198,12 +198,12 @@ async def login(
         )
 
         # Configurar refresh_token como cookie segura
-        is_production = os.getenv("ENVIRONMENT") == "production"
+        force_https = os.getenv("FORCE_HTTPS", "false").lower() == "true"
         response.set_cookie(
             key="refresh_token",
             value=result["refresh_token"],
             httponly=True,
-            secure=is_production,
+            secure=force_https,
             samesite="strict",
             max_age=7 * 24 * 60 * 60,  # 7 días
         )
@@ -218,7 +218,7 @@ async def login(
             key="fastapi-csrf-token",
             value=signed_token,
             httponly=True,
-            secure=is_production,
+            secure=force_https,
             samesite="strict",
             max_age=7 * 24 * 60 * 60,
         )
