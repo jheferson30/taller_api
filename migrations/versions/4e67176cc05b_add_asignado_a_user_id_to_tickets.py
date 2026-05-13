@@ -20,17 +20,31 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Agrega asignado_a_user_id a tickets para asignación de usuario del taller."""
-    op.add_column(
-        'tickets',
-        sa.Column('asignado_a_user_id', sa.Integer(), nullable=True)
-    )
-    op.create_foreign_key(
-        'fk_tickets_asignado_a_user_id',
-        'tickets', 'users',
-        ['asignado_a_user_id'], ['id'],
-        ondelete='SET NULL'
-    )
-    op.create_index('ix_tickets_asignado_a_user_id', 'tickets', ['asignado_a_user_id'])
+    conn = op.get_bind()
+
+    # Columna
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='tickets' AND column_name='asignado_a_user_id'"
+    )).fetchone():
+        op.add_column('tickets', sa.Column('asignado_a_user_id', sa.Integer(), nullable=True))
+
+    # FK
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.table_constraints "
+        "WHERE constraint_name='fk_tickets_asignado_a_user_id'"
+    )).fetchone():
+        op.create_foreign_key(
+            'fk_tickets_asignado_a_user_id', 'tickets', 'users',
+            ['asignado_a_user_id'], ['id'], ondelete='SET NULL'
+        )
+
+    # Índice
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM pg_indexes WHERE tablename='tickets' "
+        "AND indexname='ix_tickets_asignado_a_user_id'"
+    )).fetchone():
+        op.create_index('ix_tickets_asignado_a_user_id', 'tickets', ['asignado_a_user_id'])
 
 
 def downgrade() -> None:

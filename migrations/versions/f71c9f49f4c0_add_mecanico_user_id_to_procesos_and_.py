@@ -21,31 +21,51 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ticket_procesos: agregar mecanico_user_id FK a users
-    op.add_column(
-        'ticket_procesos',
-        sa.Column('mecanico_user_id', sa.Integer(), nullable=True)
-    )
-    op.create_foreign_key(
-        'fk_ticket_procesos_mecanico_user_id',
-        'ticket_procesos', 'users',
-        ['mecanico_user_id'], ['id'],
-        ondelete='SET NULL'
-    )
-    op.create_index('ix_ticket_procesos_mecanico_user_id', 'ticket_procesos', ['mecanico_user_id'])
+    conn = op.get_bind()
 
-    # ticket_compras: agregar responsable_user_id FK a users
-    op.add_column(
-        'ticket_compras',
-        sa.Column('responsable_user_id', sa.Integer(), nullable=True)
-    )
-    op.create_foreign_key(
-        'fk_ticket_compras_responsable_user_id',
-        'ticket_compras', 'users',
-        ['responsable_user_id'], ['id'],
-        ondelete='SET NULL'
-    )
-    op.create_index('ix_ticket_compras_responsable_user_id', 'ticket_compras', ['responsable_user_id'])
+    # ticket_procesos: mecanico_user_id
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='ticket_procesos' AND column_name='mecanico_user_id'"
+    )).fetchone():
+        op.add_column('ticket_procesos', sa.Column('mecanico_user_id', sa.Integer(), nullable=True))
+
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.table_constraints "
+        "WHERE constraint_name='fk_ticket_procesos_mecanico_user_id'"
+    )).fetchone():
+        op.create_foreign_key(
+            'fk_ticket_procesos_mecanico_user_id', 'ticket_procesos', 'users',
+            ['mecanico_user_id'], ['id'], ondelete='SET NULL'
+        )
+
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM pg_indexes WHERE tablename='ticket_procesos' "
+        "AND indexname='ix_ticket_procesos_mecanico_user_id'"
+    )).fetchone():
+        op.create_index('ix_ticket_procesos_mecanico_user_id', 'ticket_procesos', ['mecanico_user_id'])
+
+    # ticket_compras: responsable_user_id
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='ticket_compras' AND column_name='responsable_user_id'"
+    )).fetchone():
+        op.add_column('ticket_compras', sa.Column('responsable_user_id', sa.Integer(), nullable=True))
+
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.table_constraints "
+        "WHERE constraint_name='fk_ticket_compras_responsable_user_id'"
+    )).fetchone():
+        op.create_foreign_key(
+            'fk_ticket_compras_responsable_user_id', 'ticket_compras', 'users',
+            ['responsable_user_id'], ['id'], ondelete='SET NULL'
+        )
+
+    if not conn.execute(sa.text(
+        "SELECT 1 FROM pg_indexes WHERE tablename='ticket_compras' "
+        "AND indexname='ix_ticket_compras_responsable_user_id'"
+    )).fetchone():
+        op.create_index('ix_ticket_compras_responsable_user_id', 'ticket_compras', ['responsable_user_id'])
 
 
 def downgrade() -> None:
