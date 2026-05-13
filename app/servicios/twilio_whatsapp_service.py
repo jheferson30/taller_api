@@ -8,7 +8,7 @@ from app.servicios.whatsapp_service import ResultadoEnvio, TipoEvento, WhatsAppS
 class TwilioWhatsAppService(WhatsAppService):
     """
     Implementación concreta de WhatsAppService usando Twilio.
-    Lee credenciales de ConfiguracionTaller (id=1) en cada llamada.
+    Lee credenciales de ConfiguracionTaller filtrado por taller_id del ticket.
     """
 
     async def enviar_notificacion(
@@ -18,8 +18,10 @@ class TwilioWhatsAppService(WhatsAppService):
         vehiculo,
         db,
     ) -> ResultadoEnvio:
-        config = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
         taller_id = getattr(ticket, "taller_id", None)
+        config = db.query(ConfiguracionTaller).filter(
+            ConfiguracionTaller.taller_id == taller_id
+        ).first()
 
         # 1. WhatsApp deshabilitado
         if config is None or not config.whatsapp_enabled:
@@ -135,7 +137,9 @@ class TwilioWhatsAppService(WhatsAppService):
         if len(mensaje) < 1 or len(mensaje) > 1024:
             raise ValueError("El mensaje debe tener entre 1 y 1024 caracteres")
 
-        config = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+        config = db.query(ConfiguracionTaller).filter(
+            ConfiguracionTaller.taller_id == taller_id
+        ).first()
 
         # 2. WhatsApp deshabilitado o token vacío (req 1.3 / 1.4)
         if (

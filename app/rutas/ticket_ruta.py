@@ -1028,8 +1028,10 @@ async def generar_pdf_cliente(
         for c in compras
     ]
 
-    # Datos del taller
-    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+    # Datos del taller — filtrar por taller_id del JWT (nunca hardcodear id=1)
+    cfg = db.query(ConfiguracionTaller).filter(
+        ConfiguracionTaller.taller_id == request.state.taller_id
+    ).first()
     taller_data = {
         "nombre_taller": cfg.nombre_taller if cfg else "Taller Mecánico",
         "direccion": cfg.direccion if cfg else "",

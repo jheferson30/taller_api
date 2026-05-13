@@ -36,9 +36,8 @@ DO $$
 DECLARE
     v_role_id   INTEGER;
     v_user_id   INTEGER;
-    -- ⚠️  Hash bcrypt generado para la contraseña: SuperAdmin2024!
-    -- Cambiar esta contraseña en producción usando: python scripts/generar_hash_bcrypt.py
-    v_password_hash TEXT := '$2b$12$pGporIi9SAKvf59e4sSxtOV5GqPxEv/l50JaRt6BQ14CflHpNaS8e';
+    -- Hash bcrypt generado para el usuario superadmin
+    v_password_hash TEXT := '$2b$12$tIdhEr0vUr7vfFRH73FQqOfiQTRW0awbrSUAu1Tdj0WKuOEIO2SXC';
 BEGIN
     -- Verificar que la tabla users existe
     IF NOT EXISTS (

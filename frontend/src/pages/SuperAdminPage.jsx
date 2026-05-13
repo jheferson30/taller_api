@@ -1270,6 +1270,106 @@ function SeccionAuditoria({ talleres }) {
   );
 }
 
+// ── Modal: Cambiar contraseña SUPER_ADMIN ─────────────────────────────────────
+
+function ModalCambiarPassword({ onClose }) {
+  const [form, setForm] = useState({ current_password: "", new_password: "", confirmar: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [exito, setExito] = useState(false);
+
+  async function handleCambiar() {
+    if (!form.current_password || !form.new_password || !form.confirmar) {
+      setError("Todos los campos son obligatorios");
+      return;
+    }
+    if (form.new_password !== form.confirmar) {
+      setError("Las contraseñas nuevas no coinciden");
+      return;
+    }
+    if (form.new_password.length < 8) {
+      setError("La nueva contraseña debe tener al menos 8 caracteres");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await apiSuperAdmin.cambiarPasswordSuperAdmin({
+        current_password: form.current_password,
+        new_password: form.new_password,
+      });
+      setExito(true);
+    } catch (e) {
+      setError(e.message || "Error al cambiar la contraseña");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inputStyle = {
+    width: "100%", marginTop: 4, marginBottom: 12, background: "#1e293b",
+    border: "1px solid #334155", borderRadius: 6, color: "#f1f5f9",
+    padding: "0.6rem", boxSizing: "border-box",
+  };
+
+  if (exito) {
+    return (
+      <Modal title="Contraseña actualizada" onClose={onClose}>
+        <div style={{ textAlign: "center", padding: "1rem" }}>
+          <div style={{ color: "#10b981", fontSize: "2.5rem", marginBottom: "0.5rem" }}>✅</div>
+          <p style={{ color: "#f1f5f9", fontWeight: 700 }}>Contraseña cambiada correctamente</p>
+          <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>La próxima vez que inicies sesión usa la nueva contraseña.</p>
+          <button
+            onClick={onClose}
+            style={{ marginTop: "1rem", background: "#334155", color: "#f1f5f9", border: "none", borderRadius: 6, padding: "0.6rem 1.5rem", cursor: "pointer" }}
+          >
+            Cerrar
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="Cambiar contraseña" onClose={onClose}>
+      <div>
+        <label style={{ color: "#94a3b8", fontSize: "0.8rem" }}>Contraseña actual</label>
+        <input
+          type="password"
+          value={form.current_password}
+          onChange={e => setForm(f => ({ ...f, current_password: e.target.value }))}
+          style={inputStyle}
+          autoComplete="current-password"
+        />
+        <label style={{ color: "#94a3b8", fontSize: "0.8rem" }}>Nueva contraseña</label>
+        <input
+          type="password"
+          value={form.new_password}
+          onChange={e => setForm(f => ({ ...f, new_password: e.target.value }))}
+          style={inputStyle}
+          autoComplete="new-password"
+        />
+        <label style={{ color: "#94a3b8", fontSize: "0.8rem" }}>Confirmar nueva contraseña</label>
+        <input
+          type="password"
+          value={form.confirmar}
+          onChange={e => setForm(f => ({ ...f, confirmar: e.target.value }))}
+          style={inputStyle}
+          autoComplete="new-password"
+        />
+        {error && <p style={{ color: "#ef4444", fontSize: "0.85rem", marginBottom: 8 }}>{error}</p>}
+        <button
+          onClick={handleCambiar}
+          disabled={loading}
+          style={{ width: "100%", background: "#f59e0b", color: "#000", border: "none", borderRadius: 6, padding: "0.7rem", cursor: "pointer", fontWeight: 700 }}
+        >
+          {loading ? "Cambiando..." : "Cambiar contraseña"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function SuperAdminPage() {
@@ -1356,6 +1456,26 @@ export default function SuperAdminPage() {
           >
             <FiSend size={16} />
             Notificación Masiva
+          </button>
+          <button
+            onClick={() => setModal({ tipo: "cambiarPassword" })}
+            style={{
+              background: "transparent",
+              color: "#94a3b8",
+              border: "1px solid #334155",
+              borderRadius: 8,
+              padding: "0.6rem 1.2rem",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: "0.9rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+            title="Cambiar mi contraseña"
+          >
+            <FiKey size={16} />
+            Mi contraseña
           </button>
           {tab === "talleres" && (
             <button
@@ -1474,6 +1594,9 @@ export default function SuperAdminPage() {
       )}
       {modal?.tipo === "importarBD" && (
         <ModalImportarBD taller={modal.taller} onClose={() => setModal(null)} onSuccess={cargarTalleres} />
+      )}
+      {modal?.tipo === "cambiarPassword" && (
+        <ModalCambiarPassword onClose={() => setModal(null)} />
       )}
     </div>
   );

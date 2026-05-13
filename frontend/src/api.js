@@ -371,6 +371,9 @@ export const apiSuperAdmin = {
     const qs = q.toString();
     return request(`/super-admin/auditoria${qs ? `?${qs}` : ""}`);
   },
+  // Mi cuenta
+  cambiarPasswordSuperAdmin: (body) => request("/super-admin/mi-cuenta/password", { method: "PATCH", data: body }),
+
   // Alias legacy — mantener por compatibilidad
   obtenerAuditoria: (params = {}) => {
     const q = new URLSearchParams();

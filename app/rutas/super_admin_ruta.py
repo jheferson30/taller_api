@@ -25,9 +25,16 @@ from app.esquemas.taller_schema import (
     TallerResponse,
     TallerUpdate,
 )
+from app.repositorios.audit_log_repository import AuditLogRepository
+from app.repositorios.role_repository import RoleRepository
 from app.repositorios.taller_repository import TallerRepository
+from app.repositorios.token_blacklist_repository import TokenBlacklistRepository
+from app.repositorios.user_repository import UserRepository
+from app.esquemas.user_schema import ChangePasswordRequest
 from app.seguridad.auth_middleware import require_role
+from app.seguridad.password_hasher import PasswordHasher
 from app.servicios.audit_service import AuditService
+from app.servicios.user_service import UserService, ValidationError
 from app.servicios.taller_service import TallerService
 from app.modelos.user import User
 from app.utils.upload_utils import get_upload_path
@@ -724,3 +731,50 @@ async def importar_bd_taller(
                 logger.info(f"[IMPORTAR] Directorio temporal eliminado: {temp_dir}")
         except Exception as cleanup_error:
             logger.warning(f"[IMPORTAR] Error al limpiar archivos temporales: {cleanup_error}")
+
+
+# ============================================================================
+# Mi cuenta — SUPER_ADMIN
+# ============================================================================
+
+
+def _get_user_service(db: Session) -> UserService:
+    """Factory para UserService con dependencias."""
+    return UserService(
+        user_repo=UserRepository(db),
+        role_repo=RoleRepository(db),
+        token_blacklist_repo=TokenBlacklistRepository(db),
+        password_hasher=PasswordHasher(),
+        audit_service=AuditService(AuditLogRepository(db)),
+        db=db,
+    )
+
+
+@router.patch("/mi-cuenta/password", status_code=200)
+@require_role("SUPER_ADMIN")
+async def cambiar_password_super_admin(
+    request: Request,
+    datos: ChangePasswordRequest,
+    db: Session = Depends(obtener_db),
+):
+    """
+    Cambia la contraseña del SUPER_ADMIN autenticado.
+
+    Requiere la contraseña actual para confirmar la identidad antes de
+    permitir el cambio. Registra el evento en el audit log.
+
+    - **current_password**: Contraseña actual
+    - **new_password**: Nueva contraseña (mínimo 8 caracteres, mayúscula, minúscula y número)
+    """
+    user_service = _get_user_service(db)
+    try:
+        user_service.change_password(
+            user_id=request.state.user.id,
+            current_password=datos.current_password,
+            new_password=datos.new_password,
+            ip_address=_get_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+        )
+        return {"mensaje": "Contraseña actualizada correctamente"}
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))

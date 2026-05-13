@@ -118,3 +118,6 @@ VERIFICACION_*.md
 
 # Scripts temporales de diagnóstico
 drop_enum.py
+
+# Archivos de producción (contienen secretos)
+docker-compose.production.yml
