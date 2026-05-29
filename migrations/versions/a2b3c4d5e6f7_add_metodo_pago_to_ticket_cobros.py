@@ -20,10 +20,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'ticket_cobros',
-        sa.Column('metodo_pago', sa.String(50), nullable=True)
-    )
+    conn = op.get_bind()
+    # La columna puede ya existir si fue agregada manualmente o por otra migración
+    exists = conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='ticket_cobros' AND column_name='metodo_pago'"
+    )).fetchone()
+    if not exists:
+        op.add_column(
+            'ticket_cobros',
+            sa.Column('metodo_pago', sa.String(50), nullable=True)
+        )
 
 
 def downgrade() -> None:
