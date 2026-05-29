@@ -251,6 +251,7 @@ class TicketEntregarPayload(BaseModel):
 class TicketCobroCrear(BaseModel):
     concepto: str = Field(..., min_length=2, max_length=200)
     valor: int = Field(..., gt=0)
+    metodo_pago: str | None = None
 
 
 class TicketCobroRespuesta(BaseModel):

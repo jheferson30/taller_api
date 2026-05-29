@@ -686,12 +686,32 @@ async def agregar_cobro(
     datos: TicketCobroCrear,
     db: Session = Depends(obtener_db),
 ):
+    from app.modelos.movimiento_caja import EstadoTicket, MovimientoCaja, TipoMovimiento
+
     ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
 
     cobro = TicketCobro(ticket_id=ticket_id, taller_id=request.state.taller_id, **datos.model_dump())
     db.add(cobro)
+    db.flush()  # obtener cobro.id sin commit aún
+
+    # Registrar el cobro parcial como MovimientoCaja para que aparezca en Economía
+    movimiento = MovimientoCaja(
+        taller_id=ticket.taller_id,
+        tipo=TipoMovimiento.INGRESO_FINAL,
+        ticket_id=ticket.id,
+        ticket_codigo=ticket.ticket_codigo,
+        placa=ticket.placa,
+        estado_ticket=EstadoTicket.EN_PROCESO,
+        valor=cobro.valor,
+        metodo_pago=getattr(datos, "metodo_pago", None),
+        responsable=ticket.recepcionado_por,
+        concepto=cobro.concepto or f"Cobro parcial ticket {ticket.ticket_codigo}",
+        creado_por=ticket.recepcionado_por,
+    )
+    db.add(movimiento)
+
     db.commit()
     db.refresh(cobro)
     return cobro
