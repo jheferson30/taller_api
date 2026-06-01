@@ -77,6 +77,10 @@ echo "✅ Configuración validada"
 mkdir -p uploads/fotos uploads/compras uploads/firmas uploads/logo
 echo "✅ Directorios de uploads creados"
 
+# ── 5b. Crear directorio ssl (requerido por nginx aunque no se use) ──
+mkdir -p ssl
+echo "✅ Directorio ssl creado"
+
 # ── 6. Detener servicios anteriores si existen ──────────────
 if docker compose -f docker-compose.prod.yml ps -q 2>/dev/null | grep -q .; then
     echo "🛑 Deteniendo servicios anteriores..."
