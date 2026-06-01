@@ -32,6 +32,7 @@ class MovimientoCaja(Base):
     __tablename__ = "movimientos_caja"
 
     id = Column(Integer, primary_key=True, index=True)
+    taller_id = Column(Integer, nullable=False, index=True)  # Multi-tenant isolation
     tipo = Column(Enum(TipoMovimiento), nullable=False)
     ticket_id = Column(Integer, nullable=True, index=True)
     ticket_codigo = Column(String(40), nullable=True, index=True)

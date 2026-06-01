@@ -64,22 +64,25 @@ class UserRepository:
         return self.db.query(User).filter(User.email == email).first()
 
     def get_all(
-        self, skip: int = 0, limit: int = 100, include_inactive: bool = False
+        self, skip: int = 0, limit: int = 100, include_inactive: bool = False,
+        taller_id: int | None = None,
     ) -> list[User]:
         """
-        Lista usuarios con paginación.
-
-        Por defecto solo retorna usuarios activos.
+        Lista usuarios con paginación, filtrados por taller_id.
 
         Args:
             skip: Número de registros a saltar (para paginación)
             limit: Número máximo de registros a retornar
             include_inactive: Si True, incluye usuarios inactivos
+            taller_id: ID del taller — filtra usuarios del tenant. Obligatorio para aislamiento multi-tenant.
 
         Returns:
-            Lista de usuarios
+            Lista de usuarios del taller indicado
         """
         query = self.db.query(User)
+
+        if taller_id is not None:
+            query = query.filter(User.taller_id == taller_id)
 
         if not include_inactive:
             query = query.filter(User.is_active == True)

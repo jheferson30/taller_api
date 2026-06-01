@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Agregar hallazgos de auditoría",
+  "description": "Cuando se guarda un nuevo reporte de auditoría en .kiro/specs/limpieza-codigo-completo/, extrae los hallazgos y los agrega a hallazgos-a-resolver.md",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      ".kiro/specs/limpieza-codigo-completo/*-report.txt",
+      ".kiro/specs/limpieza-codigo-completo/*-report.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se acaba de crear un nuevo reporte de auditoría en .kiro/specs/limpieza-codigo-completo/. Lee el archivo recién creado, extrae todos los hallazgos que NO sean falsos positivos y que requieran acción, y agrégalos al archivo .kiro/specs/limpieza-codigo-completo/hallazgos-a-resolver.md siguiendo el formato existente:\n\n- Asigna un ID correlativo al último existente (C-XX para críticos, A-XX para altos, M-XX para medios, B-XX para bajos)\n- Incluye: archivo, línea, endpoint si aplica, descripción del problema, fix concreto, fuente\n- Actualiza la tabla de resumen (contadores de Crítico/Alto/Medio/Bajo) al inicio del archivo\n- No dupliques hallazgos que ya estén registrados — verifica por archivo+línea antes de agregar\n- Si el reporte no contiene hallazgos nuevos accionables, no modifiques el archivo"
+  },
+  "workspaceFolderName": "taller_api_v3",
+  "shortName": "append-audit-findings"
+}

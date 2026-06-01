@@ -1,0 +1,29 @@
+# requirements-dev.txt — Solo para desarrollo y CI/CD
+# Estas dependencias NO deben estar en la imagen Docker de producción
+
+# Testing
+pytest
+pytest-asyncio
+httpx  # Para tests de endpoints HTTP
+
+# Type checking y linting
+mypy
+ruff
+
+# Git hooks
+pre-commit
+
+# Seguridad y auditoría
+safety
+bandit
+
+# Análisis de código
+pylint
+radon
+vulture
+
+# Property-based testing
+hypothesis
+
+# Herramientas de limpieza
+autoflake

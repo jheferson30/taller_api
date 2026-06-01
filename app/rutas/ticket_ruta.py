@@ -33,6 +33,7 @@ from app.modelos.ticket_foto import TicketFoto
 from app.modelos.ticket_proceso import TicketProceso
 from app.modelos.ticket_repuesto import TicketRepuesto
 from app.modelos.vehiculo import Vehiculo
+from app.seguridad.auth_middleware import require_auth
 from app.seguridad.dependencias import requerir_password_admin
 from app.servicios.ticket_service import TicketService
 from app.servicios.twilio_whatsapp_service import TwilioWhatsAppService
@@ -60,8 +61,11 @@ PROCESOS_RAPIDOS = [
 ]
 
 
-def _obtener_ticket_o_404(db: Session, ticket_id: int) -> Ticket:
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def _obtener_ticket_o_404(db: Session, ticket_id: int, taller_id: int | None = None) -> Ticket:
+    query = db.query(Ticket).filter(Ticket.id == ticket_id)
+    if taller_id is not None:
+        query = query.filter(Ticket.taller_id == taller_id)
+    ticket = query.first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     return ticket
@@ -78,7 +82,8 @@ def _actualizar_estado_ticket(ticket: Ticket):
 
 
 @router.get("/procesos-rapidos")
-def listar_procesos_rapidos():
+@require_auth
+async def listar_procesos_rapidos(request: Request):
     return {"items": PROCESOS_RAPIDOS}
 
 
@@ -146,7 +151,10 @@ def listar_procesos_rapidos():
         },
     },
 )
-def listar_tickets_abiertos(
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_TICKETS_PER_MINUTE", "30") + "/minute")
+async def listar_tickets_abiertos(
+    request: Request,
     db: Session = Depends(obtener_db),
     placa: str | None = Query(None),
     page: int = Query(1, ge=1),
@@ -156,7 +164,10 @@ def listar_tickets_abiertos(
     Lista tickets abiertos/en proceso con paginación.
     Requirements: 2.13
     """
-    query = db.query(Ticket).filter(Ticket.estado.in_(["ABIERTO", "EN_PROCESO"]))
+    query = db.query(Ticket).filter(
+        Ticket.taller_id == request.state.taller_id,
+        Ticket.estado.in_(["ABIERTO", "EN_PROCESO"]),
+    )
     if placa:
         query = query.filter(Ticket.placa == placa.strip().upper())
 
@@ -181,7 +192,10 @@ def listar_tickets_abiertos(
 
 
 @router.get("/buscar", response_model=dict)
-def buscar_tickets(
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_TICKETS_PER_MINUTE", "30") + "/minute")
+async def buscar_tickets(
+    request: Request,
     db: Session = Depends(obtener_db),
     ticket_codigo: str | None = Query(None),
     placa: str | None = Query(None),
@@ -199,7 +213,7 @@ def buscar_tickets(
 
     # Si hay filtros específicos, usar find_by_criteria (legacy)
     if ticket_codigo or fecha_desde or fecha_hasta:
-        query = db.query(Ticket)
+        query = db.query(Ticket).filter(Ticket.taller_id == request.state.taller_id)
         if ticket_codigo:
             query = query.filter(Ticket.ticket_codigo == ticket_codigo.strip().upper())
         if placa:
@@ -235,8 +249,9 @@ def buscar_tickets(
 
 
 @router.get("/{ticket_id}", response_model=TicketRespuesta)
-def obtener_ticket(ticket_id: int, db: Session = Depends(obtener_db)):
-    return _obtener_ticket_o_404(db, ticket_id)
+@require_auth
+async def obtener_ticket(request: Request, ticket_id: int, db: Session = Depends(obtener_db)):
+    return _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
 
 
 @router.get(
@@ -314,8 +329,9 @@ def obtener_ticket(ticket_id: int, db: Session = Depends(obtener_db)):
         },
     },
 )
-def obtener_resumen_ticket(ticket_id: int, db: Session = Depends(obtener_db)):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+@require_auth
+async def obtener_resumen_ticket(request: Request, ticket_id: int, db: Session = Depends(obtener_db)):
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     procesos = (
         db.query(TicketProceso)
         .filter(TicketProceso.ticket_id == ticket_id)
@@ -418,16 +434,33 @@ def obtener_resumen_ticket(ticket_id: int, db: Session = Depends(obtener_db)):
         },
     },
 )
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_TICKETS_PER_MINUTE", "30") + "/minute")
 async def agregar_proceso(
     request: Request,
     ticket_id: int,
     datos: TicketProcesoCrear,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
-    proceso = TicketProceso(ticket_id=ticket_id, **datos.model_dump())
+
+    datos_dict = datos.model_dump()
+
+    # Si viene mecanico_user_id, resolver el nombre y guardarlo en el campo string
+    # para compatibilidad con el PDF y la app mobile
+    if datos_dict.get("mecanico_user_id") and not datos_dict.get("mecanico"):
+        from app.modelos.user import User as _User
+        usuario = db.query(_User).filter(_User.id == datos_dict["mecanico_user_id"]).first()
+        if usuario:
+            datos_dict["mecanico"] = usuario.nombre_completo or usuario.username
+
+    proceso = TicketProceso(
+        ticket_id=ticket_id,
+        taller_id=request.state.taller_id,
+        **datos_dict,
+    )
     db.add(proceso)
     db.commit()
     db.refresh(proceso)
@@ -435,13 +468,14 @@ async def agregar_proceso(
 
 
 @router.delete("/{ticket_id}/procesos/{proceso_id}")
+@require_auth
 async def eliminar_proceso(
     request: Request,
     ticket_id: int,
     proceso_id: int,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     proceso = (
         db.query(TicketProceso)
@@ -512,16 +546,18 @@ async def eliminar_proceso(
         },
     },
 )
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_TICKETS_PER_MINUTE", "30") + "/minute")
 async def agregar_repuesto(
     request: Request,
     ticket_id: int,
     datos: TicketRepuestoCrear,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
-    repuesto = TicketRepuesto(ticket_id=ticket_id, **datos.model_dump())
+    repuesto = TicketRepuesto(ticket_id=ticket_id, taller_id=request.state.taller_id, **datos.model_dump())
     db.add(repuesto)
     db.commit()
     db.refresh(repuesto)
@@ -529,13 +565,14 @@ async def agregar_repuesto(
 
 
 @router.delete("/{ticket_id}/repuestos/{repuesto_id}")
+@require_auth
 async def eliminar_repuesto(
     request: Request,
     ticket_id: int,
     repuesto_id: int,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     repuesto = (
         db.query(TicketRepuesto)
         .filter(TicketRepuesto.id == repuesto_id, TicketRepuesto.ticket_id == ticket_id)
@@ -552,13 +589,14 @@ async def eliminar_repuesto(
 
 
 @router.delete("/{ticket_id}/compras/{compra_id}")
+@require_auth
 async def eliminar_compra(
     request: Request,
     ticket_id: int,
     compra_id: int,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     compra = (
         db.query(TicketCompra)
@@ -573,16 +611,17 @@ async def eliminar_compra(
 
 
 @router.post("/{ticket_id}/fotos", response_model=TicketFotoRespuesta)
+@require_auth
 async def agregar_foto(
     request: Request,
     ticket_id: int,
     datos: TicketFotoCrear,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
-    foto = TicketFoto(ticket_id=ticket_id, **datos.model_dump())
+    foto = TicketFoto(ticket_id=ticket_id, taller_id=request.state.taller_id, **datos.model_dump())
     db.add(foto)
     db.commit()
     db.refresh(foto)
@@ -590,13 +629,14 @@ async def agregar_foto(
 
 
 @router.delete("/{ticket_id}/fotos/{foto_id}")
+@require_auth
 async def eliminar_foto(
     request: Request,
     ticket_id: int,
     foto_id: int,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     foto = (
         db.query(TicketFoto)
@@ -611,13 +651,15 @@ async def eliminar_foto(
 
 
 @router.post("/{ticket_id}/compras", response_model=TicketCompraRespuesta)
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_TICKETS_PER_MINUTE", "30") + "/minute")
 async def agregar_compra(
     request: Request,
     ticket_id: int,
     datos: TicketCompraCrear,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
 
     # Usar servicio para crear compra con movimiento
     ticket_service = TicketService(db)
@@ -628,6 +670,7 @@ async def agregar_compra(
         responsable=datos.responsable,
         nota=datos.nota,
         soporte_url=datos.soporte_url,
+        responsable_user_id=datos.responsable_user_id,
     )
     db.commit()
     db.refresh(compra)
@@ -635,31 +678,54 @@ async def agregar_compra(
 
 
 @router.post("/{ticket_id}/cobros", response_model=TicketCobroRespuesta)
+@require_auth
+@limiter.limit(os.getenv("RATE_LIMIT_TICKETS_PER_MINUTE", "30") + "/minute")
 async def agregar_cobro(
     request: Request,
     ticket_id: int,
     datos: TicketCobroCrear,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    from app.modelos.movimiento_caja import EstadoTicket, MovimientoCaja, TipoMovimiento
+
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     _actualizar_estado_ticket(ticket)
 
-    cobro = TicketCobro(ticket_id=ticket_id, **datos.model_dump())
+    cobro = TicketCobro(ticket_id=ticket_id, taller_id=request.state.taller_id, **datos.model_dump())
     db.add(cobro)
+    db.flush()  # obtener cobro.id sin commit aún
+
+    # Registrar el cobro parcial como MovimientoCaja para que aparezca en Economía
+    movimiento = MovimientoCaja(
+        taller_id=ticket.taller_id,
+        tipo=TipoMovimiento.INGRESO_FINAL,
+        ticket_id=ticket.id,
+        ticket_codigo=ticket.ticket_codigo,
+        placa=ticket.placa,
+        estado_ticket=EstadoTicket.EN_PROCESO,
+        valor=cobro.valor,
+        metodo_pago=getattr(datos, "metodo_pago", None),
+        responsable=ticket.recepcionado_por,
+        concepto=cobro.concepto or f"Cobro parcial ticket {ticket.ticket_codigo}",
+        creado_por=ticket.recepcionado_por,
+    )
+    db.add(movimiento)
+
     db.commit()
     db.refresh(cobro)
     return cobro
 
 
 @router.delete("/{ticket_id}/cobros/{cobro_id}")
+@require_auth
 async def eliminar_cobro(
     request: Request,
     ticket_id: int,
     cobro_id: int,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     cobro = (
         db.query(TicketCobro)
@@ -723,13 +789,14 @@ async def eliminar_cobro(
         404: {"description": "Ticket not found"},
     },
 )
+@require_auth
 async def actualizar_finanzas_ticket(
     request: Request,
     ticket_id: int,
     datos: TicketFinanzasActualizar,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
 
     # Usar servicio para actualizar finanzas
     ticket_service = TicketService(db)
@@ -753,13 +820,14 @@ async def actualizar_finanzas_ticket(
 
 
 @router.put("/{ticket_id}/observaciones-finales", response_model=TicketRespuesta)
+@require_auth
 async def actualizar_observaciones_finales(
     request: Request,
     ticket_id: int,
     datos: TicketObservacionesFinalesActualizar,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     _asegurar_editable(ticket)
     payload = datos.model_dump(exclude_unset=True)
     for campo, valor in payload.items():
@@ -828,12 +896,13 @@ async def actualizar_observaciones_finales(
         },
     },
 )
+@require_auth
 async def finalizar_ticket(
     request: Request,
     ticket_id: int,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     if ticket.estado in ("FINALIZADO", "ENTREGADO"):
         return ticket
 
@@ -860,8 +929,9 @@ async def finalizar_ticket(
 
 
 @router_pdf.get("/{ticket_id}/pdf")
+@require_auth
 @limiter.limit("20/minute")
-def generar_pdf_cliente(
+async def generar_pdf_cliente(
     request: Request,
     ticket_id: int,
     token: str | None = Query(None),
@@ -892,7 +962,7 @@ def generar_pdf_cliente(
                 admin_token.encode("utf-8"), password_esperada.encode("utf-8")
             ):
                 raise HTTPException(status_code=401, detail="Autenticacion requerida")
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
     vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
     procesos = (
         db.query(TicketProceso)
@@ -978,8 +1048,10 @@ def generar_pdf_cliente(
         for c in compras
     ]
 
-    # Datos del taller
-    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+    # Datos del taller — filtrar por taller_id del JWT (nunca hardcodear id=1)
+    cfg = db.query(ConfiguracionTaller).filter(
+        ConfiguracionTaller.taller_id == request.state.taller_id
+    ).first()
     taller_data = {
         "nombre_taller": cfg.nombre_taller if cfg else "Taller Mecánico",
         "direccion": cfg.direccion if cfg else "",
@@ -1068,13 +1140,14 @@ def generar_pdf_cliente(
         404: {"description": "Ticket not found"},
     },
 )
+@require_auth
 async def marcar_entregado(
     request: Request,
     ticket_id: int,
     datos: TicketEntregarPayload,
     db: Session = Depends(obtener_db),
 ):
-    ticket = _obtener_ticket_o_404(db, ticket_id)
+    ticket = _obtener_ticket_o_404(db, ticket_id, request.state.taller_id)
 
     # Usar servicio para entregar ticket
     ticket_service = TicketService(db)

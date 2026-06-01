@@ -7,6 +7,7 @@ const API_BASE = import.meta.env.VITE_API_URL !== undefined
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user';
+const CSRF_TOKEN_KEY = 'csrf_token';
 
 class AuthService {
   constructor() {
@@ -76,6 +77,20 @@ class AuthService {
           }
         }
 
+        // Si es 403 por taller suspendido/cancelado, limpiar sesión y redirigir al login con mensaje
+        if (error.response?.status === 403) {
+          const detail = error.response?.data?.detail || '';
+          const esTallerSuspendido =
+            detail.includes('suspendido') || detail.includes('cancelado');
+          if (esTallerSuspendido) {
+            this.clearTokens();
+            // Guardar el mensaje para mostrarlo en la pantalla de login
+            sessionStorage.setItem('session_error', detail);
+            window.location.href = '/login';
+            return Promise.reject(error);
+          }
+        }
+
         return Promise.reject(error);
       }
     );
@@ -101,12 +116,15 @@ class AuthService {
         password,
       });
 
-      const { access_token, refresh_token, user } = response.data;
+      const { access_token, refresh_token, csrf_token, user } = response.data;
 
       // Almacenar tokens en localStorage
       localStorage.setItem(ACCESS_TOKEN_KEY, access_token);
       localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
       localStorage.setItem(USER_KEY, JSON.stringify(user));
+      if (csrf_token) {
+        localStorage.setItem(CSRF_TOKEN_KEY, csrf_token);
+      }
 
       return response.data;
     } catch (error) {
@@ -242,6 +260,11 @@ class AuthService {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(CSRF_TOKEN_KEY);
+  }
+
+  getCsrfToken() {
+    return localStorage.getItem(CSRF_TOKEN_KEY);
   }
 
   /**

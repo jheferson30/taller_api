@@ -22,6 +22,14 @@ export default function TicketPage() {
   const API_BASE = import.meta.env.VITE_API_URL !== undefined 
     ? import.meta.env.VITE_API_URL 
     : (import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000');
+
+  // Normaliza una URL de archivo: si ya es absoluta la usa tal cual,
+  // si es relativa le antepone API_BASE
+  const resolverUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${API_BASE}${url}`;
+  };
   
   const [tickets, setTickets] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -34,15 +42,15 @@ export default function TicketPage() {
   const [cobrosRapidos, setCobrosRapidos] = useState([]);
 
   // Forms
-  const [proceso, setProceso] = useState({ nombre: "", descripcion: "", mecanico: "" });
+  const [proceso, setProceso] = useState({ nombre: "", descripcion: "", mecanico_user_id: null });
   const [repuesto, setRepuesto] = useState({ nombre: "", cantidad: 1, marca_referencia: "" });
   const [fueComprado, setFueComprado] = useState(false);
-  const [compraRepuesto, setCompraRepuesto] = useState({ valor: 0, responsable: "", nota: "" });
+  const [compraRepuesto, setCompraRepuesto] = useState({ valor: 0, responsable_user_id: null, nota: "" });
   const [compraRepuestoFile, setCompraRepuestoFile] = useState(null);
   const [foto, setFoto] = useState({ tipo: "OTRA", archivo_url: "", descripcion: "" });
   const [fotoFile, setFotoFile] = useState(null);
   const [fotoPreview, setFotoPreview] = useState("");
-  const [compra, setCompra] = useState({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable: "" });
+  const [compra, setCompra] = useState({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable_user_id: null });
   const [compraFile, setCompraFile] = useState(null);
   const [cobro, setCobro] = useState({ concepto: "", valor: 0 });
   const [finanzas, setFinanzas] = useState({ total_servicio: 0, metodo_pago_final: "EFECTIVO" });
@@ -104,7 +112,7 @@ export default function TicketPage() {
         setFotoPreview("");
       }
       await api.agregarProceso(selectedId, { ...proceso, foto_url });
-      setProceso({ nombre: "", descripcion: "", mecanico: "" });
+      setProceso({ nombre: "", descripcion: "", mecanico_user_id: null });
       await loadResumen(selectedId);
       setMsg("✓ Proceso agregado");
       setTimeout(() => setMsg(""), 2000);
@@ -134,15 +142,15 @@ export default function TicketPage() {
         await api.agregarCompra(selectedId, {
           descripcion: repuesto.nombre,
           valor: Number(compraRepuesto.valor),
-          responsable: compraRepuesto.responsable || null,
+          responsable_user_id: compraRepuesto.responsable_user_id || null,
           nota: compraRepuesto.nota || null,
-          soporte_url: foto_url ? `${API_BASE}${foto_url}` : null,
+          soporte_url: foto_url ? foto_url : null,
         });
       }
 
       setRepuesto({ nombre: "", cantidad: 1, marca_referencia: "" });
       setFueComprado(false);
-      setCompraRepuesto({ valor: 0, responsable: "", nota: "" });
+      setCompraRepuesto({ valor: 0, responsable_user_id: null, nota: "" });
       setCompraRepuestoFile(null);
       await loadResumen(selectedId);
       setMsg("✓ Repuesto agregado");
@@ -164,7 +172,7 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (fotoFile) {
         const uploadResult = await api.subirFoto(fotoFile);
-        fotoUrl = `${API_BASE}${uploadResult.url}`;
+        fotoUrl = uploadResult.url; // URL relativa: /uploads/talleres/{id}/fotos/...
       }
       
       await api.agregarFoto(selectedId, { ...foto, archivo_url: fotoUrl });
@@ -203,11 +211,11 @@ export default function TicketPage() {
       // Si hay un archivo, subirlo primero
       if (compraFile) {
         const uploadResult = await api.subirSoporteCompra(compraFile);
-        soporteUrl = `${API_BASE}${uploadResult.url}`;
+        soporteUrl = uploadResult.url; // URL relativa
       }
       
       await api.agregarCompra(selectedId, { ...compra, valor: Number(compra.valor), soporte_url: soporteUrl });
-      setCompra({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable: "" });
+      setCompra({ descripcion: "", valor: 0, soporte_url: "", nota: "", responsable_user_id: null });
       setCompraFile(null);
       await loadResumen(selectedId);
       setMsg("✓ Compra registrada");
@@ -580,8 +588,8 @@ export default function TicketPage() {
                           <label>
                             <span className="label-text">Mecánico</span>
                             <SelectMecanico
-                              value={proceso.mecanico}
-                              onChange={(v) => setProceso({ ...proceso, mecanico: v })}
+                              value={proceso.mecanico_user_id}
+                              onChange={(v) => setProceso({ ...proceso, mecanico_user_id: v })}
                               placeholder="— Sin asignar —"
                             />
                           </label>
@@ -616,7 +624,7 @@ export default function TicketPage() {
                             )}
                             {p.foto_url && (
                               <img
-                                src={`${API_BASE}${p.foto_url}`}
+                                src={resolverUrl(p.foto_url)}
                                 alt={p.nombre}
                                 style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: "8px 8px 0 0", marginBottom: 8 }}
                               />
@@ -712,8 +720,8 @@ export default function TicketPage() {
                             <label>
                               <span className="label-text">Responsable</span>
                               <SelectMecanico
-                                value={compraRepuesto.responsable}
-                                onChange={(v) => setCompraRepuesto({ ...compraRepuesto, responsable: v })}
+                                value={compraRepuesto.responsable_user_id}
+                                onChange={(v) => setCompraRepuesto({ ...compraRepuesto, responsable_user_id: v })}
                                 placeholder="— Sin asignar —"
                               />
                             </label>
@@ -758,8 +766,8 @@ export default function TicketPage() {
                             const compra = cola[idx] || null;
                             comprasUsadas[r.nombre] = idx + 1;
                             const fotoSrc = r.foto_url
-                              ? `${API_BASE}${r.foto_url}`
-                              : compra?.soporte_url || null;
+                              ? resolverUrl(r.foto_url)
+                              : compra?.soporte_url ? resolverUrl(compra.soporte_url) : null;
                             return (
                               <div key={r.id} className="item-card" style={{ position: "relative" }}>
                                 {isEditable && (
@@ -884,7 +892,7 @@ export default function TicketPage() {
                                   ✕
                                 </button>
                               )}
-                              <img src={`${API_BASE}${f.archivo_url}`} alt={f.descripcion} className="foto-img" />
+                              <img src={resolverUrl(f.archivo_url)} alt={f.descripcion} className="foto-img" />
                               {f.descripcion && <p className="foto-desc">{f.descripcion}</p>}
                             </div>
                           ))}

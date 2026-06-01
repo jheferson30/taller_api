@@ -32,12 +32,16 @@ export default function AddRepuestoScreen({ route, navigation }) {
   const [nota, setNota] = useState('');
   const [fotoRepuesto, setFotoRepuesto] = useState(null); // foto del repuesto
   const [uriSoporte, setUriSoporte] = useState(null);    // soporte/factura de compra
-  const [mecanicos, setMecanicos] = useState([]);
 
   const [loading, setLoading] = useState(false);
+  const [personal, setPersonal] = useState([]);
 
   React.useEffect(() => {
-    api.getMecanicos().then(setMecanicos).catch(() => {});
+    api.getPersonal().then(setPersonal).catch(() => {
+      api.getMecanicos().then((data) =>
+        setPersonal(data.map((m) => ({ id: m.id, nombre: m.nombre })))
+      ).catch(() => {});
+    });
   }, []);
 
   // Foto del repuesto
@@ -267,29 +271,19 @@ export default function AddRepuestoScreen({ route, navigation }) {
             />
 
             <Text style={styles.label}>Responsable</Text>
-            {mecanicos.length > 0 ? (
-              <View style={styles.pickerWrapper}>
-                <Picker
-                  selectedValue={responsable}
-                  onValueChange={setResponsable}
-                  style={styles.picker}
-                  dropdownIconColor={colors.textMuted}
-                >
-                  <Picker.Item label="— Sin asignar —" value="" />
-                  {mecanicos.filter(m => m.activo).map((m) => (
-                    <Picker.Item key={m.id} label={m.nombre} value={m.nombre} />
-                  ))}
-                </Picker>
-              </View>
-            ) : (
-              <TextInput
-                style={styles.input}
-                placeholder="Nombre del responsable"
-                placeholderTextColor={colors.textMuted}
-                value={responsable}
-                onChangeText={setResponsable}
-              />
-            )}
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={responsable}
+                onValueChange={(v) => setResponsable(v)}
+                style={styles.picker}
+                dropdownIconColor={colors.textMuted}
+              >
+                <Picker.Item label="— Sin asignar —" value="" />
+                {personal.map((p) => (
+                  <Picker.Item key={p.id} label={p.nombre} value={p.nombre} />
+                ))}
+              </Picker>
+            </View>
 
             <Text style={styles.label}>Nota</Text>
             <TextInput
@@ -378,4 +372,26 @@ const styles = StyleSheet.create({
   btnText: { color: '#0A1017', fontWeight: '700', fontSize: 16 },
   cancelBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   cancelText: { color: '#94a3b8', fontSize: 15 },
+
+  // Chips de selección de responsable
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#1C2B3A',
+  },
+  chipActive: {
+    borderColor: '#D4920A',
+    backgroundColor: '#D4920A',
+  },
+  chipText: { fontSize: 13, color: '#fff', fontWeight: '500' },
+  chipTextActive: { color: '#0A1017', fontWeight: '700' },
 });

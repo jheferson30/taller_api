@@ -1,0 +1,157 @@
+================================================================================
+SECURITY AUTH REPORT — Endpoints sin @require_auth
+Fecha: 2026-04-25
+Método: Análisis estático de app/rutas/*.py
+Endpoints públicos permitidos: login, /health, /docs, /openapi.json, /redoc
+================================================================================
+
+METODOLOGÍA:
+Se analizaron todos los archivos en app/rutas/ buscando decoradores de ruta
+(@router.get, @router.post, etc.) que no estén seguidos de @require_auth o
+@require_role, y que no sean endpoints públicos conocidos.
+
+================================================================================
+HALLAZGOS — ENDPOINTS SIN PROTECCIÓN EXPLÍCITA:
+
+GRUPO 1: app/rutas/mobile_ruta.py — CRÍTICO
+  Archivo: app/rutas/mobile_ruta.py
+  Endpoints:
+    - GET /mobile/v1/health (línea 13) — PÚBLICO ACEPTABLE (health check)
+    - GET /mobile/v1/tickets/activos (línea 18) — SIN AUTH ⚠️
+    - GET /mobile/v1/tickets/{ticket_id}/timeline (línea 42) — SIN AUTH ⚠️
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: Los endpoints /tickets/activos y /tickets/{ticket_id}/timeline
+  exponen datos operativos (tickets, procesos, fotos) sin ninguna autenticación.
+  Cualquier persona con acceso a la red puede consultar todos los tickets activos
+  y el timeline de cualquier ticket sin autenticarse.
+  Adicionalmente, las queries NO filtran por taller_id — devuelven datos de TODOS
+  los talleres mezclados.
+  RECOMENDACIÓN: Agregar @require_auth o Depends(requerir_password_admin) y
+  filtrar por taller_id del JWT.
+
+GRUPO 2: app/rutas/whatsapp_ruta.py — CRÍTICO
+  Archivo: app/rutas/whatsapp_ruta.py
+  Endpoints:
+    - GET /whatsapp/webhook (línea 19) — PÚBLICO ACEPTABLE (verificación de webhook)
+    - POST /whatsapp/webhook (línea 31) — PÚBLICO ACEPTABLE (webhook entrante)
+    - POST /api/mobile/tickets/{ticket_id}/whatsapp (línea 70) — SIN AUTH ⚠️
+    - POST /api/whatsapp/tickets/{ticket_id}/mensaje (línea 88) — SIN AUTH ⚠️
+    - GET /api/mobile/whatsapp/logs (línea 109) — SIN AUTH ⚠️
+
+  SEVERIDAD: CRÍTICO
+  DESCRIPCIÓN: Los endpoints de envío de WhatsApp y consulta de logs no tienen
+  ninguna autenticación. Cualquier persona puede:
+    1. Enviar mensajes de WhatsApp en nombre de cualquier taller
+    2. Consultar todos los logs de notificaciones de todos los talleres
+  El endpoint de logs además no filtra por taller_id.
+  RECOMENDACIÓN: Agregar @require_auth y filtrar por request.state.taller_id.
+
+GRUPO 3: app/rutas/upload_ruta.py — ALTO
+  Archivo: app/rutas/upload_ruta.py
+  Endpoints:
+    - POST /upload/foto (línea 32) — SIN @require_auth explícito ⚠️
+    - POST /upload/compra (línea 61) — SIN @require_auth explícito ⚠️
+    - POST /upload/firma (línea 89) — SIN @require_auth explícito ⚠️
+    - GET /upload/fotos/{taller_id}/{filename} (línea 117) — SIN AUTH ⚠️
+    - GET /upload/compras/{taller_id}/{filename} (línea 127) — SIN AUTH ⚠️
+    - GET /upload/firmas/{taller_id}/{filename} (línea 137) — SIN AUTH ⚠️
+
+  SEVERIDAD: ALTO
+  DESCRIPCIÓN: Los endpoints POST usan request.state.taller_id (lo que implica
+  que el middleware de auth ya procesó el token), pero no tienen @require_auth
+  explícito como decorador. Los endpoints GET sirven archivos sin autenticación
+  usando taller_id del path (no del JWT), lo que permite acceder a archivos de
+  cualquier taller si se conoce el taller_id y el nombre del archivo.
+  RECOMENDACIÓN: Agregar @require_auth a los POST. Para los GET, evaluar si
+  deben ser públicos (para mostrar fotos en la app) o protegidos.
+
+GRUPO 4: app/rutas/seguridad_ruta.py — MEDIO
+  Archivo: app/rutas/seguridad_ruta.py
+  Endpoints:
+    - GET /seguridad/economia/tiene-password (línea 56) — SIN AUTH
+    - POST /seguridad/economia/crear-password (línea 62) — SIN AUTH
+    - POST /seguridad/economia/validar-password (línea 93) — SIN AUTH
+    - POST /seguridad/economia/recuperar-password (línea 115) — SIN AUTH
+    - GET /seguridad/admin/tiene-password-bd (línea 153) — SIN AUTH
+    - POST /seguridad/admin/cambiar-password (línea 161) — SIN @require_auth
+
+  SEVERIDAD: MEDIO
+  DESCRIPCIÓN: Los endpoints de economía son un sistema de contraseña local
+  (no JWT) — tienen su propia validación interna. El endpoint cambiar-password
+  verifica manualmente el rol ADMIN en el cuerpo de la función pero sin
+  @require_auth decorador. Esto es un antipatrón — si el middleware falla,
+  la verificación manual podría no ejecutarse.
+  RECOMENDACIÓN: Agregar @require_auth a cambiar_password_admin. Los endpoints
+  de economía son un caso especial (contraseña local) — documentar explícitamente
+  que son intencionalmente públicos.
+
+GRUPO 5: app/rutas/pdf_ruta.py — ALTO
+  Archivo: app/rutas/pdf_ruta.py
+  Endpoints:
+    - POST /pdf/tickets/{ticket_id}/generate (línea 20) — SIN AUTH ⚠️
+    - GET /pdf/tasks/{task_id}/status (línea ~61) — SIN AUTH ⚠️
+    - GET /pdf/download/{filename} (línea ~109) — SIN AUTH ⚠️
+
+  SEVERIDAD: ALTO
+  DESCRIPCIÓN: Los endpoints de generación y descarga de PDF no tienen
+  autenticación. Cualquier persona puede generar PDFs de cualquier ticket
+  y descargar PDFs generados.
+  RECOMENDACIÓN: Agregar @require_auth o Depends(requerir_password_admin).
+
+GRUPO 6: app/rutas/configuracion_ruta.py — MEDIO
+  Archivo: app/rutas/configuracion_ruta.py
+  Endpoints:
+    - GET /configuracion/mecanicos (línea ~54) — SIN @require_auth explícito
+    - Otros endpoints usan Depends(verificar_admin) — CORRECTO
+
+  SEVERIDAD: MEDIO
+  DESCRIPCIÓN: listar_mecanicos usa request.state.taller_id (implica auth del
+  middleware) pero no tiene @require_auth explícito como decorador.
+  RECOMENDACIÓN: Agregar @require_auth explícito para consistencia.
+
+GRUPO 7: app/rutas/ticket_ruta.py — MEDIO
+  Archivo: app/rutas/ticket_ruta.py
+  Endpoints:
+    - GET /tickets/procesos-rapidos (línea 89) — SIN AUTH
+    - GET /tickets/abiertos (línea 94) — SIN @require_auth explícito
+    - GET /tickets/buscar (línea 197) — SIN @require_auth explícito
+    - GET /tickets/{ticket_id} (línea 253) — SIN @require_auth explícito
+    - (y muchos más endpoints que usan request.state.taller_id sin @require_auth)
+
+  SEVERIDAD: MEDIO
+  DESCRIPCIÓN: Los endpoints usan request.state.taller_id (implica que el
+  middleware de auth procesó el token), pero no tienen @require_auth explícito.
+  El endpoint /procesos-rapidos devuelve una lista hardcodeada sin auth.
+  RECOMENDACIÓN: Agregar @require_auth explícito a todos los endpoints que
+  acceden a datos del taller.
+
+================================================================================
+RESUMEN DE SEVERIDADES:
+
+  CRÍTICO (2 archivos, 5 endpoints):
+    - app/rutas/mobile_ruta.py: /tickets/activos, /tickets/{id}/timeline
+    - app/rutas/whatsapp_ruta.py: /api/mobile/tickets/{id}/whatsapp,
+      /api/whatsapp/tickets/{id}/mensaje, /api/mobile/whatsapp/logs
+
+  ALTO (2 archivos, 9 endpoints):
+    - app/rutas/upload_ruta.py: todos los endpoints
+    - app/rutas/pdf_ruta.py: todos los endpoints
+
+  MEDIO (3 archivos, múltiples endpoints):
+    - app/rutas/seguridad_ruta.py
+    - app/rutas/configuracion_ruta.py
+    - app/rutas/ticket_ruta.py
+
+  BIEN PROTEGIDOS (sin hallazgos):
+    - app/rutas/auth_ruta.py (login es público por diseño)
+    - app/rutas/health.py (health check es público por diseño)
+    - app/rutas/super_admin_ruta.py (todos con @require_role("SUPER_ADMIN"))
+    - app/rutas/taller_ruta.py (todos con @require_auth + @require_role)
+    - app/rutas/users_ruta.py (todos con @require_auth o @require_role)
+    - app/rutas/notificacion_ruta.py (todos con @require_auth + @require_role)
+    - app/rutas/citas_ruta.py (router con Depends(require_jwt_auth) global)
+    - app/rutas/audit_ruta.py (con Depends(require_role("ADMIN")))
+    - app/rutas/mobile_api_ruta.py (router con Depends(requerir_password_admin) global)
+
+================================================================================

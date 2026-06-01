@@ -24,10 +24,12 @@ from app.esquemas.mobile_schema import (
     TicketListResponse,
 )
 from app.modelos.configuracion_taller import ConfiguracionTaller
-from app.modelos.mecanico import Mecanico
 from app.modelos.movimiento_caja import MovimientoCaja, TipoMovimiento
+from app.modelos.role import Role
 from app.modelos.ticket import Ticket
 from app.modelos.ticket_cobro import TicketCobro
+from app.modelos.user import User
+from app.modelos.user_role import UserRole
 from app.modelos.ticket_compra import TicketCompra
 from app.modelos.ticket_foto import TicketFoto
 from app.modelos.ticket_proceso import TicketProceso
@@ -49,19 +51,32 @@ router = APIRouter(
 _whatsapp_service = TwilioWhatsAppService()
 
 
+def _get_taller_id(request: Request) -> int:
+    """Obtiene taller_id del JWT. Lanza 403 si no hay contexto de taller."""
+    taller_id = getattr(request.state, "taller_id", None)
+    if taller_id is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Contexto de taller requerido")
+    return taller_id
+
+
 # ===== ENDPOINTS =====
 
 
 @router.get("/tickets", response_model=list[TicketListResponse])
-def listar_tickets_mobile(estado: str | None = None, db: Session = Depends(get_db)):
-    query = db.query(Ticket)
+def listar_tickets_mobile(request: Request, estado: str | None = None, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    query = db.query(Ticket).filter(Ticket.taller_id == taller_id)
     if estado:
         query = query.filter(Ticket.estado == estado)
     tickets = query.order_by(Ticket.fecha_ingreso.desc()).all()
 
     result = []
     for ticket in tickets:
-        vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+        vehiculo = db.query(Vehiculo).filter(
+            Vehiculo.id == ticket.vehiculo_id,
+            Vehiculo.taller_id == taller_id,
+        ).first()
         result.append(
             TicketListResponse(
                 id=ticket.id,
@@ -78,12 +93,19 @@ def listar_tickets_mobile(estado: str | None = None, db: Session = Depends(get_d
 
 
 @router.get("/tickets/{ticket_id}", response_model=TicketDetailResponse)
-def obtener_ticket_mobile(ticket_id: int, db: Session = Depends(get_db)):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def obtener_ticket_mobile(request: Request, ticket_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.taller_id == taller_id,
+    ).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.id == ticket.vehiculo_id).first()
+    vehiculo = db.query(Vehiculo).filter(
+        Vehiculo.id == ticket.vehiculo_id,
+        Vehiculo.taller_id == taller_id,
+    ).first()
 
     return TicketDetailResponse(
         id=ticket.id,
@@ -104,20 +126,21 @@ def obtener_ticket_mobile(ticket_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/tickets/{ticket_id}/procesos", response_model=list[ProcesoResponse])
-def listar_procesos_mobile(ticket_id: int, db: Session = Depends(get_db)):
-    """
-    Lista todos los procesos de un ticket
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def listar_procesos_mobile(request: Request, ticket_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-
-    procesos = db.query(TicketProceso).filter(TicketProceso.ticket_id == ticket_id).all()
+    procesos = db.query(TicketProceso).filter(
+        TicketProceso.ticket_id == ticket_id,
+        TicketProceso.taller_id == taller_id,
+    ).all()
     return procesos
 
 
 @router.post("/tickets/{ticket_id}/procesos", response_model=ProcesoResponse)
 async def crear_proceso_mobile(
+    request: Request,
     ticket_id: int,
     nombre: str = Form(...),
     descripcion: str | None = Form(None),
@@ -125,23 +148,18 @@ async def crear_proceso_mobile(
     foto_url: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    """
-    Crea un nuevo proceso sin foto (usando Form data).
-    Para subir con foto, usar el endpoint /tickets/{ticket_id}/procesos/con-foto
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
-        raise HTTPException(
-            status_code=400, detail="No se pueden agregar procesos a un ticket finalizado"
-        )
-
+        raise HTTPException(status_code=400, detail="No se pueden agregar procesos a un ticket finalizado")
     if not nombre or not str(nombre).strip():
         raise HTTPException(status_code=422, detail="El nombre del proceso es obligatorio")
 
     nuevo_proceso = TicketProceso(
         ticket_id=ticket_id,
+        taller_id=taller_id,
         nombre=str(nombre).strip(),
         descripcion=descripcion,
         mecanico=mecanico,
@@ -155,6 +173,7 @@ async def crear_proceso_mobile(
 
 @router.post("/tickets/{ticket_id}/procesos/con-foto", response_model=ProcesoResponse)
 async def crear_proceso_con_foto_mobile(
+    request: Request,
     ticket_id: int,
     nombre: str = Form(...),
     descripcion: str | None = Form(None),
@@ -162,17 +181,12 @@ async def crear_proceso_con_foto_mobile(
     file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
-    """
-    Crea un nuevo proceso con foto adjunta (usando multipart/form-data).
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
-        raise HTTPException(
-            status_code=400, detail="No se pueden agregar procesos a un ticket finalizado"
-        )
-
+        raise HTTPException(status_code=400, detail="No se pueden agregar procesos a un ticket finalizado")
     if not nombre or not str(nombre).strip():
         raise HTTPException(status_code=422, detail="El nombre del proceso es obligatorio")
 
@@ -191,6 +205,7 @@ async def crear_proceso_con_foto_mobile(
 
     nuevo_proceso = TicketProceso(
         ticket_id=ticket_id,
+        taller_id=taller_id,
         nombre=str(nombre).strip(),
         descripcion=descripcion,
         mecanico=mecanico,
@@ -203,58 +218,52 @@ async def crear_proceso_con_foto_mobile(
 
 
 @router.get("/tickets/{ticket_id}/repuestos", response_model=list[RepuestoResponse])
-def listar_repuestos_mobile(ticket_id: int, db: Session = Depends(get_db)):
-    """
-    Lista todos los repuestos de un ticket
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def listar_repuestos_mobile(request: Request, ticket_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-
-    repuestos = db.query(TicketRepuesto).filter(TicketRepuesto.ticket_id == ticket_id).all()
+    repuestos = db.query(TicketRepuesto).filter(
+        TicketRepuesto.ticket_id == ticket_id,
+        TicketRepuesto.taller_id == taller_id,
+    ).all()
     return repuestos
 
 
 @router.post("/tickets/{ticket_id}/repuestos", response_model=RepuestoResponse)
-def crear_repuesto_mobile(ticket_id: int, repuesto: RepuestoCreate, db: Session = Depends(get_db)):
-    """
-    Agrega un repuesto a un ticket
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def crear_repuesto_mobile(request: Request, ticket_id: int, repuesto: RepuestoCreate, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-
     if ticket.estado not in ["ABIERTO", "EN_PROCESO"]:
-        raise HTTPException(
-            status_code=400, detail="No se pueden agregar repuestos a un ticket finalizado"
-        )
+        raise HTTPException(status_code=400, detail="No se pueden agregar repuestos a un ticket finalizado")
 
     nuevo_repuesto = TicketRepuesto(
         ticket_id=ticket_id,
+        taller_id=taller_id,
         nombre=repuesto.nombre,
         cantidad=repuesto.cantidad,
         marca_referencia=repuesto.marca_referencia,
         proceso_id=repuesto.proceso_id,
         foto_url=repuesto.foto_url,
     )
-
     db.add(nuevo_repuesto)
     db.commit()
     db.refresh(nuevo_repuesto)
-
     return nuevo_repuesto
 
 
 @router.get("/tickets/{ticket_id}/fotos", response_model=list[FotoResponse])
-def listar_fotos_mobile(ticket_id: int, db: Session = Depends(get_db)):
-    """
-    Lista todas las fotos de un ticket
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def listar_fotos_mobile(request: Request, ticket_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-
-    fotos = db.query(TicketFoto).filter(TicketFoto.ticket_id == ticket_id).all()
+    fotos = db.query(TicketFoto).filter(
+        TicketFoto.ticket_id == ticket_id,
+        TicketFoto.taller_id == taller_id,
+    ).all()
     return fotos
 
 
@@ -271,14 +280,8 @@ TRANSICIONES_VALIDAS = {
 def actualizar_estado_mobile(
     request: Request, ticket_id: int, data: ActualizarEstadoTicket, db: Session = Depends(get_db)
 ):
-    """
-    Actualiza el estado de un ticket.
-    Transiciones permitidas:
-      ABIERTO → EN_PROCESO
-      EN_PROCESO → FINALIZADO
-      FINALIZADO → ENTREGADO
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
@@ -310,11 +313,9 @@ def actualizar_estado_mobile(
 
 
 @router.get("/tickets/{ticket_id}/resumen")
-def obtener_resumen_ticket(ticket_id: int, db: Session = Depends(get_db)):
-    """
-    Obtiene un resumen completo del ticket con contadores
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def obtener_resumen_ticket(request: Request, ticket_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
@@ -367,15 +368,13 @@ def obtener_resumen_ticket(ticket_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/estadisticas")
-def obtener_estadisticas_mobile(db: Session = Depends(get_db)):
-    """
-    Obtiene estadísticas generales para el dashboard móvil
-    """
-    total_tickets = db.query(Ticket).count()
-    tickets_abiertos = db.query(Ticket).filter(Ticket.estado == "ABIERTO").count()
-    tickets_en_proceso = db.query(Ticket).filter(Ticket.estado == "EN_PROCESO").count()
-    tickets_finalizados = db.query(Ticket).filter(Ticket.estado == "FINALIZADO").count()
-    tickets_entregados = db.query(Ticket).filter(Ticket.estado == "ENTREGADO").count()
+def obtener_estadisticas_mobile(request: Request, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    total_tickets = db.query(Ticket).filter(Ticket.taller_id == taller_id).count()
+    tickets_abiertos = db.query(Ticket).filter(Ticket.taller_id == taller_id, Ticket.estado == "ABIERTO").count()
+    tickets_en_proceso = db.query(Ticket).filter(Ticket.taller_id == taller_id, Ticket.estado == "EN_PROCESO").count()
+    tickets_finalizados = db.query(Ticket).filter(Ticket.taller_id == taller_id, Ticket.estado == "FINALIZADO").count()
+    tickets_entregados = db.query(Ticket).filter(Ticket.taller_id == taller_id, Ticket.estado == "ENTREGADO").count()
 
     return {
         "total_tickets": total_tickets,
@@ -390,14 +389,15 @@ def obtener_estadisticas_mobile(db: Session = Depends(get_db)):
 
 @router.post("/tickets/{ticket_id}/fotos")
 async def subir_foto_mobile(
+    request: Request,
     ticket_id: int,
     file: UploadFile = File(...),
     tipo: str = Form(default="OTRA"),
     descripcion: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    """Sube una foto asociada a un ticket desde la app móvil"""
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
@@ -417,6 +417,7 @@ async def subir_foto_mobile(
 
     foto = TicketFoto(
         ticket_id=ticket_id,
+        taller_id=taller_id,
         tipo=tipo_final,
         archivo_url=f"/uploads/fotos/{filename}",
         descripcion=descripcion,
@@ -429,9 +430,9 @@ async def subir_foto_mobile(
 
 
 @router.post("/tickets/{ticket_id}/entregar")
-def entregar_ticket_mobile(ticket_id: int, data: EntregarTicketData, db: Session = Depends(get_db)):
-    """Marca un ticket como entregado desde la app móvil"""
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def entregar_ticket_mobile(request: Request, ticket_id: int, data: EntregarTicketData, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
@@ -466,8 +467,14 @@ def entregar_ticket_mobile(ticket_id: int, data: EntregarTicketData, db: Session
 
 
 @router.delete("/tickets/{ticket_id}/fotos/{foto_id}")
-def eliminar_foto_mobile(ticket_id: int, foto_id: int, db: Session = Depends(get_db)):
-    """Elimina una foto de un ticket"""
+def eliminar_foto_mobile(request: Request, ticket_id: int, foto_id: int, db: Session = Depends(get_db)):
+    """Elimina una foto de un ticket — verifica aislamiento por taller_id del JWT."""
+    taller_id = _get_taller_id(request)
+    # Verificar que el ticket pertenece al taller del JWT antes de eliminar la foto
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+
     foto = (
         db.query(TicketFoto)
         .filter(TicketFoto.id == foto_id, TicketFoto.ticket_id == ticket_id)
@@ -490,15 +497,20 @@ def eliminar_foto_mobile(ticket_id: int, foto_id: int, db: Session = Depends(get
 
 
 @router.get("/tickets/{ticket_id}/compras", response_model=list[CompraResponse])
-def listar_compras_mobile(ticket_id: int, db: Session = Depends(get_db)):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def listar_compras_mobile(request: Request, ticket_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    return db.query(TicketCompra).filter(TicketCompra.ticket_id == ticket_id).all()
+    return db.query(TicketCompra).filter(
+        TicketCompra.ticket_id == ticket_id,
+        TicketCompra.taller_id == taller_id,
+    ).all()
 
 
 @router.post("/tickets/{ticket_id}/compras", response_model=CompraResponse)
 async def crear_compra_mobile(
+    request: Request,
     ticket_id: int,
     descripcion: str = Form(...),
     valor: int = Form(...),
@@ -507,7 +519,8 @@ async def crear_compra_mobile(
     file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
 ):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     if valor <= 0:
@@ -543,7 +556,12 @@ async def crear_compra_mobile(
 
 
 @router.delete("/tickets/{ticket_id}/compras/{compra_id}")
-def eliminar_compra_mobile(ticket_id: int, compra_id: int, db: Session = Depends(get_db)):
+def eliminar_compra_mobile(request: Request, ticket_id: int, compra_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    # Verificar que el ticket pertenece al taller del JWT
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
     compra = (
         db.query(TicketCompra)
         .filter(TicketCompra.id == compra_id, TicketCompra.ticket_id == ticket_id)
@@ -564,16 +582,24 @@ def eliminar_compra_mobile(ticket_id: int, compra_id: int, db: Session = Depends
 
 
 @router.get("/tickets/{ticket_id}/cobros", response_model=list[CobroResponse])
-def listar_cobros_mobile(ticket_id: int, db: Session = Depends(get_db)):
-    return db.query(TicketCobro).filter(TicketCobro.ticket_id == ticket_id).all()
+def listar_cobros_mobile(request: Request, ticket_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    return db.query(TicketCobro).filter(
+        TicketCobro.ticket_id == ticket_id,
+        TicketCobro.taller_id == taller_id,
+    ).all()
 
 
 @router.post("/tickets/{ticket_id}/cobros", response_model=CobroResponse)
-def crear_cobro_mobile(ticket_id: int, data: CobroCreate, db: Session = Depends(get_db)):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+def crear_cobro_mobile(request: Request, ticket_id: int, data: CobroCreate, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    cobro = TicketCobro(ticket_id=ticket_id, concepto=data.concepto, valor=data.valor)
+    cobro = TicketCobro(ticket_id=ticket_id, taller_id=taller_id, concepto=data.concepto, valor=data.valor)
     db.add(cobro)
     db.commit()
     db.refresh(cobro)
@@ -581,7 +607,12 @@ def crear_cobro_mobile(ticket_id: int, data: CobroCreate, db: Session = Depends(
 
 
 @router.delete("/tickets/{ticket_id}/cobros/{cobro_id}")
-def eliminar_cobro_mobile(ticket_id: int, cobro_id: int, db: Session = Depends(get_db)):
+def eliminar_cobro_mobile(request: Request, ticket_id: int, cobro_id: int, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    # Verificar que el ticket pertenece al taller del JWT
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
     cobro = (
         db.query(TicketCobro)
         .filter(TicketCobro.id == cobro_id, TicketCobro.ticket_id == ticket_id)
@@ -598,9 +629,10 @@ def eliminar_cobro_mobile(ticket_id: int, cobro_id: int, db: Session = Depends(g
 
 @router.patch("/tickets/{ticket_id}/finanzas")
 def actualizar_finanzas_mobile(
-    ticket_id: int, data: ActualizarFinanzasData, db: Session = Depends(get_db)
+    request: Request, ticket_id: int, data: ActualizarFinanzasData, db: Session = Depends(get_db)
 ):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    taller_id = _get_taller_id(request)
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.taller_id == taller_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
@@ -628,13 +660,35 @@ def actualizar_finanzas_mobile(
 
 
 @router.get("/mecanicos")
-def listar_mecanicos_mobile(db: Session = Depends(get_db)):
-    return db.query(Mecanico).filter(Mecanico.activo == True).order_by(Mecanico.nombre).all()
+def listar_mecanicos_mobile(request: Request, db: Session = Depends(get_db)):
+    """Devuelve los usuarios activos con rol MECANICO del taller."""
+    taller_id = _get_taller_id(request)
+    mecanicos = (
+        db.query(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .filter(
+            User.taller_id == taller_id,
+            User.is_active == True,
+            Role.name == "MECANICO",
+        )
+        .order_by(User.nombre_completo, User.username)
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "nombre": u.nombre_completo or u.username,
+            "activo": u.is_active,
+        }
+        for u in mecanicos
+    ]
 
 
 @router.get("/procesos-rapidos")
-def listar_procesos_rapidos_mobile(db: Session = Depends(get_db)):
-    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+def listar_procesos_rapidos_mobile(request: Request, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.taller_id == taller_id).first()
     if not cfg:
         return {"procesos": []}
     try:
@@ -645,8 +699,9 @@ def listar_procesos_rapidos_mobile(db: Session = Depends(get_db)):
 
 
 @router.get("/cobros-rapidos")
-def listar_cobros_rapidos_mobile(db: Session = Depends(get_db)):
-    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.id == 1).first()
+def listar_cobros_rapidos_mobile(request: Request, db: Session = Depends(get_db)):
+    taller_id = _get_taller_id(request)
+    cfg = db.query(ConfiguracionTaller).filter(ConfiguracionTaller.taller_id == taller_id).first()
     if not cfg:
         return {"cobros": []}
     try:
@@ -654,6 +709,32 @@ def listar_cobros_rapidos_mobile(db: Session = Depends(get_db)):
     except Exception:
         cobros = []
     return {"cobros": cobros}
+
+
+@router.get("/personal")
+def listar_personal_mobile(request: Request, db: Session = Depends(get_db)):
+    """
+    Devuelve todos los usuarios activos del taller para los selectores
+    de 'Recepcionado por' y 'Mecánico responsable'.
+    Combina usuarios con cualquier rol activo, sin duplicados, ordenados por nombre.
+    """
+    taller_id = _get_taller_id(request)
+    usuarios = (
+        db.query(User)
+        .filter(
+            User.taller_id == taller_id,
+            User.is_active == True,
+        )
+        .order_by(User.nombre_completo, User.username)
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "nombre": u.nombre_completo or u.username,
+        }
+        for u in usuarios
+    ]
 
 
 # ── Sincronización por lotes (Modo Offline) ──────────────────────────────────
@@ -728,6 +809,8 @@ def sincronizar_operaciones_batch(
 
     from app.utils.exceptions import ValidationError
 
+    taller_id = _get_taller_id(request)
+
     # Validar que no haya demasiadas operaciones
     if len(sync_request.operaciones) > 100:
         raise HTTPException(status_code=400, detail="Máximo 100 operaciones por batch")
@@ -753,8 +836,11 @@ def sincronizar_operaciones_batch(
 
     for op in operaciones_ordenadas:
         try:
-            # Verificar que el ticket existe
-            ticket = db.query(Ticket).filter(Ticket.id == op.ticket_id).first()
+            # Verificar que el ticket existe Y pertenece al taller del JWT (aislamiento multi-tenant)
+            ticket = db.query(Ticket).filter(
+                Ticket.id == op.ticket_id,
+                Ticket.taller_id == taller_id,
+            ).first()
             if not ticket:
                 resultados.append(
                     ResultadoOperacion(
@@ -791,6 +877,7 @@ def sincronizar_operaciones_batch(
 
                 nuevo_proceso = TicketProceso(
                     ticket_id=op.ticket_id,
+                    taller_id=taller_id,
                     nombre=op.datos["nombre"],
                     descripcion=op.datos.get("descripcion"),
                     mecanico=op.datos.get("mecanico"),
@@ -818,6 +905,7 @@ def sincronizar_operaciones_batch(
 
                 nuevo_repuesto = TicketRepuesto(
                     ticket_id=op.ticket_id,
+                    taller_id=taller_id,
                     nombre=op.datos["nombre"],
                     cantidad=op.datos["cantidad"],
                     marca_referencia=op.datos.get("marca_referencia"),
@@ -843,6 +931,7 @@ def sincronizar_operaciones_batch(
 
                 nueva_foto = TicketFoto(
                     ticket_id=op.ticket_id,
+                    taller_id=taller_id,
                     tipo=op.datos.get("tipo", "OTRA"),
                     archivo_url=op.datos["archivo_url"],
                     descripcion=op.datos.get("descripcion"),
@@ -978,9 +1067,11 @@ def sincronizar_operaciones_batch(
 
 
 @router.get("/economia-hoy")
-def economia_hoy_mobile(fecha: str | None = None, db: Session = Depends(get_db)):
+def economia_hoy_mobile(request: Request, fecha: str | None = None, db: Session = Depends(get_db)):
     """Resumen económico del día para el panel admin móvil."""
     from datetime import date
+
+    taller_id = _get_taller_id(request)
 
     if fecha:
         try:
@@ -991,7 +1082,10 @@ def economia_hoy_mobile(fecha: str | None = None, db: Session = Depends(get_db))
         hoy = date.today()
 
     movimientos = (
-        db.query(MovimientoCaja).filter(func.date(MovimientoCaja.fecha_creacion) == hoy).all()
+        db.query(MovimientoCaja).filter(
+            MovimientoCaja.taller_id == taller_id,
+            func.date(MovimientoCaja.fecha_creacion) == hoy,
+        ).all()
     )
 
     anticipos = sum(m.valor for m in movimientos if m.tipo == TipoMovimiento.INGRESO_ANTICIPO)
@@ -1003,7 +1097,9 @@ def economia_hoy_mobile(fecha: str | None = None, db: Session = Depends(get_db))
     tickets_hoy = (
         db.query(Ticket)
         .filter(
-            func.date(Ticket.fecha_ingreso) == hoy, Ticket.estado.in_(["FINALIZADO", "ENTREGADO"])
+            Ticket.taller_id == taller_id,
+            func.date(Ticket.fecha_ingreso) == hoy,
+            Ticket.estado.in_(["FINALIZADO", "ENTREGADO"]),
         )
         .count()
     )

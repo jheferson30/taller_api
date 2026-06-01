@@ -43,6 +43,8 @@ export default function TicketDetailScreen({ route, navigation }) {
   const [tab, setTab] = useState('info');
   const [updatingEstado, setUpdatingEstado] = useState(false);
   const scrollRef = useRef(null);
+  // Contador que se incrementa con cada loadData para forzar re-fetch en sub-tabs
+  const [dataVersion, setDataVersion] = useState(0);
 
   const loadData = async () => {
     try {
@@ -59,7 +61,8 @@ export default function TicketDetailScreen({ route, navigation }) {
       setProcesos(p);
       setRepuestos(rep);
       setFotos(f);
-      setCompras(c);} catch (e) {
+      setCompras(c);
+      setDataVersion(v => v + 1);} catch (e) {
       toast(e.message, 'error');
     } finally {
       setLoading(false);
@@ -210,7 +213,7 @@ export default function TicketDetailScreen({ route, navigation }) {
         {tab === 'fotos' && (
           <FotosTab fotos={fotos} ticketId={ticketId} editable={editable} navigation={navigation} onRefresh={loadData} isOnline={isOnline} />
         )}
-        {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} isOnline={isOnline} />}
+        {tab === 'finanzas' && <FinanzasTab resumen={resumen} ticketId={ticketId} editable={editable} onRefresh={loadData} compras={compras} scrollRef={scrollRef} isOnline={isOnline} cobrosExternos={null} refreshKey={dataVersion} />}
         {tab === 'entrega' && (
           <EntregaTab ticketId={ticketId} resumen={resumen} ticket={ticket} isEntregado={isEntregado} onSuccess={() => { loadData(); setTab('info'); }} scrollRef={scrollRef} />
         )}
@@ -480,7 +483,7 @@ function FotosTab({ fotos, ticketId, editable, navigation, onRefresh, isOnline }
 }
 
 
-function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scrollRef, isOnline }) {
+function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scrollRef, isOnline, refreshKey }) {
   const toast = useToast();
   const [cobros, setCobros] = useState([]);
   const [concepto, setConcepto] = useState('');
@@ -506,7 +509,7 @@ function FinanzasTab({ resumen, ticketId, editable, onRefresh, compras = [], scr
     if (resumen?.finanzas?.metodo_pago_final) {
       setMetodoPago(resumen.finanzas.metodo_pago_final.toUpperCase());
     }
-  }, [ticketId, resumen]);
+  }, [ticketId, resumen, refreshKey]);
 
   useEffect(() => {
     api.getCobrosRapidos().then((r) => { if (r?.cobros) setCobrosRapidos(r.cobros); }).catch(() => {});

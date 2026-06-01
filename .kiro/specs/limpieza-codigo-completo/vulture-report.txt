@@ -1,0 +1,27 @@
+================================================================================
+VULTURE REPORT — Código Muerto en app/
+Herramienta: vulture 2.16
+Fecha: 2026-04-25
+Comando: vulture app/ --min-confidence 80
+================================================================================
+
+HALLAZGOS (confianza >= 80%):
+
+app\esquemas\auth_schema.py:100: unused variable 'cls' (100% confidence)
+app\esquemas\auth_schema.py:120: unused variable 'cls' (100% confidence)
+app\esquemas\user_schema.py:26: unused variable 'cls' (100% confidence)
+app\esquemas\whatsapp_schema.py:17: unused variable 'cls' (100% confidence)
+
+================================================================================
+RESUMEN:
+  Total hallazgos: 4
+  Archivos afectados: 3
+  Tipo: variables 'cls' no usadas en validadores Pydantic (@validator)
+
+NOTA: Las variables 'cls' en métodos @validator de Pydantic son parámetros
+requeridos por la firma del decorador aunque no se usen explícitamente en el
+cuerpo del método. Vulture las marca como no usadas pero son necesarias.
+Estos hallazgos son FALSOS POSITIVOS en el contexto de Pydantic v2.
+
+Código de salida vulture: 3 (hallazgos encontrados)
+================================================================================

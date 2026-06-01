@@ -6,6 +6,7 @@ import { TouchableOpacity, Text } from 'react-native';
 
 import { ToastProvider } from './src/components/Toast';
 import { ConnectionIndicator } from './src/components/ConnectionIndicator';
+import NotificationBell from './src/components/NotificationBell';
 import HomeScreen from './src/screens/HomeScreen';
 import HomeAdminScreen from './src/screens/HomeAdminScreen';
 import AdminEconomiaScreen from './src/screens/AdminEconomiaScreen';
@@ -13,13 +14,14 @@ import TicketListScreen from './src/screens/TicketListScreen';
 import TicketDetailScreen from './src/screens/TicketDetailScreen';
 import AddProcesoScreen from './src/screens/AddProcesoScreen';
 import AddRepuestoScreen from './src/screens/AddRepuestoScreen';
+import AddCompraScreen from './src/screens/AddCompraScreen';
 import AddFotoScreen from './src/screens/AddFotoScreen';
 import CobroRapidoScreen from './src/screens/CobroRapidoScreen';
 import ConfiguracionScreen from './src/screens/ConfiguracionScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RecepcionScreen from './src/screens/RecepcionScreen';
 
-import { detectarIpActiva, getServerIp } from './src/config';
+import { getServerIp } from './src/config';
 import authService from './src/services/authService';
 import offlineService from './src/services/offlineService';
 import { sessionEvents } from './src/services/sessionEvents';
@@ -115,9 +117,12 @@ export default function App() {
               headerBackVisible: false,
               gestureEnabled: false,
               headerRight: () => (
-                <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
-                  <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <NotificationBell />
+                  <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
+                    <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
+                  </TouchableOpacity>
+                </View>
               ),
             })}
           />
@@ -126,9 +131,12 @@ export default function App() {
             headerBackVisible: false,
             gestureEnabled: false,
             headerRight: () => (
-              <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
-                <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <NotificationBell />
+                <TouchableOpacity onPress={() => navigation.navigate('Configuracion')} style={{ marginRight: 4, padding: 6 }}>
+                  <Text style={{ color: '#fff', fontSize: 20 }}>⚙</Text>
+                </TouchableOpacity>
+              </View>
             ),
           })} />
           <Stack.Screen name="AdminEconomia" component={AdminEconomiaScreen} options={{ title: 'Economia del Dia' }} />
@@ -142,6 +150,7 @@ export default function App() {
           <Stack.Screen name="TicketDetail" component={TicketDetailScreen} options={{ title: 'Detalle del Ticket' }} />
           <Stack.Screen name="AddProceso" component={AddProcesoScreen} options={{ title: 'Agregar Proceso' }} />
           <Stack.Screen name="AddRepuesto" component={AddRepuestoScreen} options={{ title: 'Agregar Repuesto' }} />
+          <Stack.Screen name="AddCompra" component={AddCompraScreen} options={{ title: 'Agregar Compra' }} />
           <Stack.Screen name="AddFoto" component={AddFotoScreen} options={{ title: 'Agregar Foto' }} />
           <Stack.Screen name="CobroRapido" component={CobroRapidoScreen} options={{ title: 'Cobro Rápido' }} />
           <Stack.Screen name="Recepcion" component={RecepcionScreen} options={{ title: 'Recepción de Vehículos' }} />

@@ -9,6 +9,7 @@ class TicketRepuesto(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False, index=True)
+    taller_id = Column(Integer, ForeignKey("talleres.id"), nullable=False, index=True)
     proceso_id = Column(Integer, ForeignKey("ticket_procesos.id"), nullable=True, index=True)
     nombre = Column(String(150), nullable=False)
     cantidad = Column(Integer, nullable=False, default=1)

@@ -55,15 +55,12 @@ export async function eliminarIp(ip) {
   }
 }
 
-async function probarHost(ip, pwd, timeout) {
+async function probarHost(ip, timeout) {
   const t = timeout || 1500;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), t);
   try {
-    // En producción (IP específica), usar puerto 80. En desarrollo, puerto 8000
-    const puerto = ip === '68.155.145.217' ? '' : ':8000';
-    const res = await fetch(`http://${ip}${puerto}/api/mobile/estadisticas`, {
-      headers: { 'X-Admin-Password': pwd },
+    const res = await fetch(`http://${ip}:8000/info`, {
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -79,13 +76,11 @@ async function probarHost(ip, pwd, timeout) {
  * 1. Prueba IPs guardadas
  * 2. Escanea rangos comunes de red WiFi
  */
-export async function detectarIpActiva(password) {
-  const pwd = password || await getAdminPassword();
-
+export async function detectarIpActiva() {
   // 1. Probar IPs guardadas primero (rapido)
   const lista = await getIpsGuardadas();
   if (lista.length > 0) {
-    const resultados = await Promise.allSettled(lista.map(ip => probarHost(ip, pwd, 3000)));
+    const resultados = await Promise.allSettled(lista.map(ip => probarHost(ip, 3000)));
     for (let i = 0; i < resultados.length; i++) {
       if (resultados[i].status === 'fulfilled' && resultados[i].value) {
         await AsyncStorage.setItem(KEY_IP_ACTIVA, lista[i]);
@@ -106,7 +101,7 @@ export async function detectarIpActiva(password) {
   const LOTE = 50;
   for (let i = 0; i < candidatos.length; i += LOTE) {
     const lote = candidatos.slice(i, i + LOTE);
-    const res = await Promise.allSettled(lote.map(ip => probarHost(ip, pwd, 800)));
+    const res = await Promise.allSettled(lote.map(ip => probarHost(ip, 800)));
     for (let j = 0; j < res.length; j++) {
       if (res[j].status === 'fulfilled' && res[j].value) {
         const ipEncontrada = lote[j];
@@ -122,21 +117,15 @@ export async function detectarIpActiva(password) {
 
 export async function getApiBaseUrl() {
   const ip = await getServerIp();
-  // En producción, usar puerto 80 (Nginx proxy). En desarrollo, puerto 8000 (API directo)
-  const puerto = ip === '68.155.145.217' ? '' : ':8000';
-  return `http://${ip}${puerto}/api/mobile`;
+  return `http://${ip}:8000/api/mobile`;
 }
 
 export async function getAuthBaseUrl() {
   const ip = await getServerIp();
-  // En producción, usar puerto 80 (Nginx proxy). En desarrollo, puerto 8000 (API directo)
-  const puerto = ip === '68.155.145.217' ? '' : ':8000';
-  return `http://${ip}${puerto}`;
+  return `http://${ip}:8000`;
 }
 
 export async function getPdfBaseUrl() {
   const ip = await getServerIp();
-  // En producción, usar puerto 80 (Nginx proxy). En desarrollo, puerto 8000 (API directo)
-  const puerto = ip === '68.155.145.217' ? '' : ':8000';
-  return `http://${ip}${puerto}`;
+  return `http://${ip}:8000`;
 }

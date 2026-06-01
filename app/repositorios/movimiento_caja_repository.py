@@ -85,6 +85,7 @@ class MovimientoCajaRepository:
         self,
         fecha_desde: date,
         fecha_hasta: date,
+        taller_id: int,
     ) -> list[dict[str, Any]]:
         """
         Obtiene histórico económico agrupado por fecha usando GROUP BY.
@@ -119,6 +120,7 @@ class MovimientoCajaRepository:
                 func.count(MovimientoCaja.id).label("total_movimientos"),
             )
             .filter(
+                MovimientoCaja.taller_id == taller_id,
                 func.date(MovimientoCaja.fecha_creacion) >= fecha_desde,
                 func.date(MovimientoCaja.fecha_creacion) <= fecha_hasta,
             )

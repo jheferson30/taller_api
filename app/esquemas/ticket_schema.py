@@ -23,6 +23,9 @@ class TicketIngresoCrear(BaseModel):
     recepcionado_por: str | None = Field(
         None, max_length=120, description="Nombre del recepcionista"
     )
+    asignado_a_user_id: int | None = Field(
+        None, description="ID del usuario del taller asignado al ticket"
+    )
 
     class Config:
         json_schema_extra = {
@@ -51,6 +54,7 @@ class TicketRespuesta(BaseModel):
     anticipo_recibido: int
     metodo_pago_anticipo: str | None
     recepcionado_por: str | None
+    asignado_a_user_id: int | None
     estado: str
     total_servicio: int | None
     saldo_pendiente: int | None
@@ -103,7 +107,10 @@ class TicketProcesoCrear(BaseModel):
         None, max_length=400, description="Descripción detallada del proceso"
     )
     mecanico: str | None = Field(
-        None, max_length=120, description="Nombre del mecánico que realizó el proceso"
+        None, max_length=120, description="Nombre del mecánico (legacy — app mobile)"
+    )
+    mecanico_user_id: int | None = Field(
+        None, description="ID del usuario asignado como mecánico (web)"
     )
     foto_url: str | None = Field(None, max_length=500, description="URL de la foto del proceso")
 
@@ -112,7 +119,7 @@ class TicketProcesoCrear(BaseModel):
             "example": {
                 "nombre": "Cambio de aceite",
                 "descripcion": "Cambio de aceite 20W50 sintético, filtro nuevo",
-                "mecanico": "Carlos Méndez",
+                "mecanico_user_id": 3,
                 "foto_url": "/uploads/fotos/proceso_123.jpg",
             }
         }
@@ -124,6 +131,7 @@ class TicketProcesoRespuesta(BaseModel):
     nombre: str
     descripcion: str | None
     mecanico: str | None
+    mecanico_user_id: int | None
     foto_url: str | None
     fecha_creacion: datetime
 
@@ -189,7 +197,8 @@ class TicketCompraCrear(BaseModel):
     valor: int = Field(..., gt=0)
     soporte_url: str | None = Field(None, max_length=255)
     nota: str | None = Field(None, max_length=500)
-    responsable: str | None = Field(None, max_length=120)
+    responsable: str | None = Field(None, max_length=120)  # legacy — app mobile
+    responsable_user_id: int | None = Field(None, description="ID del usuario responsable (web)")
 
 
 class TicketCompraRespuesta(BaseModel):
@@ -200,6 +209,7 @@ class TicketCompraRespuesta(BaseModel):
     soporte_url: str | None
     nota: str | None
     responsable: str | None
+    responsable_user_id: int | None
     fecha_creacion: datetime
 
     class Config:
@@ -241,6 +251,7 @@ class TicketEntregarPayload(BaseModel):
 class TicketCobroCrear(BaseModel):
     concepto: str = Field(..., min_length=2, max_length=200)
     valor: int = Field(..., gt=0)
+    metodo_pago: str | None = None
 
 
 class TicketCobroRespuesta(BaseModel):

@@ -10,15 +10,46 @@ Este módulo implementa:
 from collections.abc import Callable
 from functools import wraps
 
+import os
+
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.orm import joinedload
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.modelos.taller import EstadoTaller, Taller
 from app.modelos.user import User
 from app.repositorios.token_blacklist_repository import TokenBlacklistRepository
 from app.seguridad.token_manager import TokenManager
+
+
+def _cors_error_response(request: Request, status_code: int, detail: str) -> JSONResponse:
+    """
+    Construye un JSONResponse de error con los headers CORS necesarios.
+
+    El AuthMiddleware está fuera del CORSMiddleware en la cadena, por lo que
+    las respuestas de error que genera no pasan por CORS. Sin estos headers,
+    el browser bloquea la respuesta y axios reporta 'Network Error'.
+    """
+    origin = request.headers.get("origin", "")
+    allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "")
+    allowed_origins = (
+        [o.strip() for o in allowed_origins_raw.split(",") if o.strip()]
+        if allowed_origins_raw and allowed_origins_raw != "*"
+        else []
+    )
+
+    headers = {}
+    if origin and (not allowed_origins or origin in allowed_origins):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": detail},
+        headers=headers,
+    )
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -73,7 +104,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/info",
             "/info/conexion-qr",
             "/assets",
-            "/uploads",
             "/auth/login",
             "/auth/refresh",
             "/auth/forgot-password",
@@ -98,16 +128,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # No hay header de autorización, continuar sin user context
             # Los decoradores @require_auth se encargarán de validar
             request.state.user = None
+            request.state.taller_id = None
             return await call_next(request)
 
         # Validar formato "Bearer <token>"
         parts = auth_header.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={
-                    "detail": "Invalid authorization header format. Expected 'Bearer <token>'"
-                },
+            return _cors_error_response(
+                request,
+                status.HTTP_401_UNAUTHORIZED,
+                "Invalid authorization header format. Expected 'Bearer <token>'",
             )
 
         token = parts[1]
@@ -121,9 +151,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             user_id = payload.get("user_id")
 
             if not jti or not user_id:
-                return JSONResponse(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": "Invalid token payload"},
+                return _cors_error_response(
+                    request,
+                    status.HTTP_401_UNAUTHORIZED,
+                    "Invalid token payload",
                 )
 
             # Obtener sesión de base de datos
@@ -143,9 +174,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 # Verificar que el token no esté en blacklist
                 blacklist_repo = TokenBlacklistRepository(db)
                 if blacklist_repo.is_blacklisted(jti):
-                    return JSONResponse(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        content={"detail": "Token has been revoked"},
+                    return _cors_error_response(
+                        request,
+                        status.HTTP_401_UNAUTHORIZED,
+                        "Token has been revoked",
                     )
 
                 # Obtener usuario completo con roles
@@ -158,37 +190,60 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 )
 
                 if not user:
-                    return JSONResponse(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        content={"detail": "User not found"},
+                    return _cors_error_response(
+                        request,
+                        status.HTTP_401_UNAUTHORIZED,
+                        "User not found",
                     )
 
                 if not user.is_active:
-                    return JSONResponse(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        content={"detail": "User account is inactive"},
+                    return _cors_error_response(
+                        request,
+                        status.HTTP_401_UNAUTHORIZED,
+                        "User account is inactive",
                     )
+
+                # Verificar que el taller no esté suspendido o cancelado
+                # SUPER_ADMIN tiene taller_id=None, se salta esta verificación
+                taller_id_from_token = payload.get("taller_id")
+                if taller_id_from_token is not None:
+                    taller = (
+                        db.query(Taller)
+                        .filter(Taller.id == taller_id_from_token)
+                        .first()
+                    )
+                    if taller and taller.estado in (EstadoTaller.SUSPENDIDO, EstadoTaller.CANCELADO):
+                        mensaje = (
+                            "Tu taller está suspendido. Contacta al administrador de la plataforma."
+                            if taller.estado == EstadoTaller.SUSPENDIDO
+                            else "Tu taller ha sido cancelado. Contacta al administrador de la plataforma."
+                        )
+                        return _cors_error_response(
+                            request,
+                            status.HTTP_403_FORBIDDEN,
+                            mensaje,
+                        )
 
                 # Inyectar user context en request.state
                 request.state.user = user
+                # Inyectar taller_id desde el JWT payload para RLS
+                request.state.taller_id = payload.get("taller_id")
 
             finally:
                 if should_close:
                     db.close()
 
         except ExpiredSignatureError:
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": "Token has expired"}
+            return _cors_error_response(
+                request, status.HTTP_401_UNAUTHORIZED, "Token has expired"
             )
         except InvalidTokenError as e:
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": f"Invalid token: {str(e)}"},
+            return _cors_error_response(
+                request, status.HTTP_401_UNAUTHORIZED, f"Invalid token: {str(e)}"
             )
         except Exception as e:
-            return JSONResponse(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={"detail": f"Authentication error: {str(e)}"},
+            return _cors_error_response(
+                request, status.HTTP_500_INTERNAL_SERVER_ERROR, f"Authentication error: {str(e)}"
             )
 
         # Continuar con el request

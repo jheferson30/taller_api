@@ -1,0 +1,78 @@
+================================================================================
+SECURITY ROLE MIXING REPORT — @require_role mezclando SUPER_ADMIN con roles de taller
+Fecha: 2026-04-25
+Método: Análisis de todos los @require_role en app/rutas/
+================================================================================
+
+REGLA:
+  CORRECTO:   @require_role("SUPER_ADMIN")  — solo SUPER_ADMIN
+  INCORRECTO: @require_role("SUPER_ADMIN", "ADMIN")  — mezcla de roles
+  INCORRECTO: @require_role("ADMIN", "SUPER_ADMIN")  — mezcla de roles
+
+================================================================================
+INVENTARIO COMPLETO DE @require_role EN app/rutas/:
+
+app/rutas/super_admin_ruta.py:
+  ✅ @require_role("SUPER_ADMIN") — línea 55 (listar_talleres)
+  ✅ @require_role("SUPER_ADMIN") — línea 79 (crear_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 106 (obtener_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 130 (actualizar_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 158 (cambiar_estado_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 188 (listar_usuarios_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 213 (crear_admin_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 246 (subir_logo_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 293 (obtener_metricas_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 309 (obtener_metricas_globales)
+  ✅ @require_role("SUPER_ADMIN") — línea 326 (obtener_recursos_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 347 (forzar_reset_password)
+  ✅ @require_role("SUPER_ADMIN") — línea 372 (forzar_reset_password_masivo)
+  ✅ @require_role("SUPER_ADMIN") — línea 400 (activar_bloqueo_emergencia)
+  ✅ @require_role("SUPER_ADMIN") — línea 425 (levantar_bloqueo_emergencia)
+  ✅ @require_role("SUPER_ADMIN") — línea 453 (obtener_intentos_fallidos)
+  ✅ @require_role("SUPER_ADMIN") — línea 492 (obtener_auditoria_global)
+
+app/rutas/taller_ruta.py:
+  ✅ @require_role("SUPER_ADMIN") — línea 28 (crear_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 57 (listar_talleres)
+  ✅ @require_role("SUPER_ADMIN") — línea 67 (obtener_taller)
+  ✅ @require_role("SUPER_ADMIN") — línea 81 (actualizar_taller)
+
+app/rutas/users_ruta.py:
+  ✅ @require_role("ADMIN") — línea 135 (create_user)
+  ✅ @require_role("ADMIN") — línea 263 (get_users)
+  ✅ @require_role("ADMIN") — línea 354 (update_user)
+  ✅ @require_role("ADMIN") — línea 426 (delete_user)
+
+app/rutas/notificacion_ruta.py:
+  ⚠️ @require_role("ADMIN", "MECANICO") — línea 139 (obtener_no_leidas)
+  ⚠️ @require_role("ADMIN", "MECANICO") — línea 243 (marcar_como_leida)
+  ⚠️ @require_role("ADMIN", "MECANICO") — línea 328 (marcar_todas_como_leidas)
+
+================================================================================
+HALLAZGOS:
+
+HALLAZGO 1 — app/rutas/notificacion_ruta.py — REVISAR
+  Endpoints: obtener_no_leidas, marcar_como_leida, marcar_todas_como_leidas
+  Decorador: @require_role("ADMIN", "MECANICO")
+  DESCRIPCIÓN: Mezcla de roles de taller (ADMIN + MECANICO). Esto NO mezcla
+  SUPER_ADMIN con roles de taller — es una mezcla de dos roles de taller.
+  El código tiene documentación explícita:
+    "Rechaza SUPER_ADMIN (taller_id=null) con HTTP 403."
+  EVALUACIÓN: Técnicamente correcto — SUPER_ADMIN no está incluido.
+  La mezcla ADMIN+MECANICO es un patrón válido para endpoints que deben
+  ser accesibles por múltiples roles de taller.
+  SEVERIDAD: BAJO — no viola la regla de aislamiento SUPER_ADMIN.
+
+================================================================================
+RESUMEN:
+
+  Mezclas SUPER_ADMIN + roles de taller: 0 ✅
+  Mezclas de roles de taller entre sí: 3 (ADMIN + MECANICO en notificaciones)
+  Todos los endpoints SUPER_ADMIN usan @require_role("SUPER_ADMIN") solo: ✅
+
+  CONCLUSIÓN: NO SE ENCONTRARON VIOLACIONES DE LA REGLA DE AISLAMIENTO.
+  El SUPER_ADMIN nunca está mezclado con roles de taller en ningún decorador.
+  Los endpoints de notificación mezclan ADMIN+MECANICO, lo cual es correcto
+  y está documentado explícitamente en el código.
+
+================================================================================

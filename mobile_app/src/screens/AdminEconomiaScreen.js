@@ -5,10 +5,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../api";
 import { colors } from "../theme";
 import { getAuthBaseUrl } from "../config";
+import authService from "../services/authService";
 
 const fmt = (n) => "$" + Number(n ?? 0).toLocaleString("es-CO");
 
@@ -81,10 +81,19 @@ export default function AdminEconomiaScreen() {
     setDescargando(true);
     try {
       const baseUrl = await getAuthBaseUrl();
-      const token = await AsyncStorage.getItem("@auth_access_token");
       const url = `${baseUrl}/economia-dia/pdf?fecha=${fecha}`;
       const destino = FileSystem.documentDirectory + `economia_${fecha}.pdf`;
 
+      // Usar authService para el request autenticado con retry automático en 401
+      const response = await authService.authenticatedRequest(url, { method: 'GET' });
+
+      if (!response.ok) {
+        Alert.alert("Error", "No se pudo descargar el PDF");
+        return;
+      }
+
+      // Descargar con el token fresco (authService ya lo renovó si era necesario)
+      const token = authService.accessToken;
       const resultado = await FileSystem.downloadAsync(url, destino, {
         headers: { Authorization: `Bearer ${token}` },
       });

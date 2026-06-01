@@ -36,8 +36,14 @@ def _get_database_url() -> str:
             "database-password", fallback_env_var="DATABASE_PASSWORD"
         )
     except Exception:
-        # Si falla, usar contraseña de variable de entorno o por defecto
-        db_password = os.getenv("DATABASE_PASSWORD", "123456")
+        # Si falla SecretsManager, intentar variable de entorno directamente
+        db_password = os.getenv("DATABASE_PASSWORD")
+        if not db_password:
+            raise RuntimeError(
+                "Secreto requerido no configurado: 'DATABASE_PASSWORD'. "
+                "Configurar en Azure Key Vault como 'database-password' "
+                "o como variable de entorno 'DATABASE_PASSWORD'."
+            )
 
     # URL encode la contraseña para manejar caracteres especiales
     db_password_encoded = quote_plus(db_password)

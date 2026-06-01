@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
@@ -22,6 +22,21 @@ export default function CobroRapidoScreen({ route, navigation }) {
   const [valor, setValor] = useState('');
   const [metodo, setMetodo] = useState('EFECTIVO');
   const [loading, setLoading] = useState(false);
+
+  const placaRef = useRef(null);
+  const descripcionRef = useRef(null);
+
+  // Enfocar el campo correcto al montar la pantalla
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (placaInicial) {
+        descripcionRef.current?.focus();
+      } else {
+        placaRef.current?.focus();
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleRegistrar = async () => {
     if (!placa.trim()) { toast('La placa es obligatoria', 'warning'); return; }
@@ -72,23 +87,23 @@ export default function CobroRapidoScreen({ route, navigation }) {
       <View style={styles.form}>
         <Text style={styles.label}>Placa *</Text>
         <TextInput
+          ref={placaRef}
           style={styles.input}
           placeholder="Ej: ABC123"
           placeholderTextColor={colors.textMuted}
           value={placa}
           onChangeText={(t) => setPlaca(t.toUpperCase())}
           autoCapitalize="characters"
-          autoFocus={!placaInicial}
         />
 
         <Text style={styles.label}>Descripción *</Text>
         <TextInput
+          ref={descripcionRef}
           style={styles.input}
           placeholder="Ej: Cambio de aceite, diagnóstico..."
           placeholderTextColor={colors.textMuted}
           value={descripcion}
           onChangeText={setDescripcion}
-          autoFocus={!!placaInicial}
         />
 
         <Text style={styles.label}>Valor *</Text>

@@ -31,6 +31,7 @@ const emptyTicket = {
   anticipo_recibido: '',
   metodo_pago_anticipo: 'EFECTIVO',
   recepcionado_por: '',
+  asignado_a_user_id: null,
 };
 
 // ── Sección con título ────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ function HistorialVisitas({ historial }) {
 }
 
 // ── Formulario del ticket ─────────────────────────────────────────────────────
-function FormTicket({ ticket, setTicket, mecanicos }) {
+function FormTicket({ ticket, setTicket, personal, usuarios }) {
   return (
     <Seccion titulo="Nuevo Ticket de Ingreso">
       <Campo label="¿Por qué viene el cliente? *">
@@ -169,29 +170,44 @@ function FormTicket({ ticket, setTicket, mecanicos }) {
           </Campo>
         </View>
       </View>
-      <Campo label="Recepcionado por">
-        {mecanicos.length > 0 ? (
-          <View style={s.pickerWrapper}>
-            <Picker
-              selectedValue={ticket.recepcionado_por}
-              onValueChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
-              style={s.picker}
-              dropdownIconColor={colors.textMuted}
-            >
-              <Picker.Item label="— Sin asignar —" value="" />
-              {mecanicos.filter((m) => m.activo).map((m) => (
-                <Picker.Item key={m.id} label={m.nombre} value={m.nombre} />
-              ))}
-            </Picker>
-          </View>
-        ) : (
-          <Input
-            value={ticket.recepcionado_por}
-            onChangeText={(v) => setTicket({ ...ticket, recepcionado_por: v })}
-            placeholder="Nombre del recepcionista"
-          />
-        )}
-      </Campo>
+
+      {/* Recepcionado Por + Asignado a — lado a lado igual que la web */}
+      <View style={s.fila}>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Campo label="Recepcionado por">
+            <View style={s.pickerWrapper}>
+              <Picker
+                selectedValue={ticket.recepcionado_por}
+                onValueChange={(v) => setTicket({ ...ticket, recepcionado_por: v })}
+                style={s.picker}
+                dropdownIconColor={colors.textMuted}
+              >
+                <Picker.Item label="Sin asignar" value="" />
+                {personal.map((p) => (
+                  <Picker.Item key={p.id} label={p.nombre} value={p.nombre} />
+                ))}
+              </Picker>
+            </View>
+          </Campo>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Campo label="Asignado a">
+            <View style={s.pickerWrapper}>
+              <Picker
+                selectedValue={ticket.asignado_a_user_id}
+                onValueChange={(v) => setTicket({ ...ticket, asignado_a_user_id: v || null })}
+                style={s.picker}
+                dropdownIconColor={colors.textMuted}
+              >
+                <Picker.Item label="Sin asignar" value={null} />
+                {usuarios.map((u) => (
+                  <Picker.Item key={u.id} label={u.nombre} value={u.id} />
+                ))}
+              </Picker>
+            </View>
+          </Campo>
+        </View>
+      </View>
     </Seccion>
   );
 }
@@ -199,18 +215,33 @@ function FormTicket({ ticket, setTicket, mecanicos }) {
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export default function RecepcionScreen({ navigation }) {
   const toast = useToast();
-  const [step, setStep] = useState('search'); // search | new | existing
+  const [step, setStep] = useState('search');
   const [placaBusqueda, setPlacaBusqueda] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [vehiculo, setVehiculo] = useState(emptyVehiculo);
   const [ticket, setTicket] = useState(emptyTicket);
   const [ficha, setFicha] = useState(null);
-  const [mecanicos, setMecanicos] = useState([]);
-  const [esNuevo, setEsNuevo] = useState(false); // true = crear vehículo, false = solo ticket
+  const [personal, setPersonal] = useState([]);   // para "Recepcionado por" (nombres)
+  const [usuarios, setUsuarios] = useState([]);   // para "Asignado a" (id + nombre)
+  const [esNuevo, setEsNuevo] = useState(false);
 
   useEffect(() => {
-    api.getMecanicos().then(setMecanicos).catch(() => {});
+    // Cargar personal (nombres) y usuarios (id) en paralelo, igual que la web
+    api.getPersonal()
+      .then((data) => {
+        setPersonal(data);
+        setUsuarios(data); // misma lista sirve para ambos selectores
+      })
+      .catch(() => {
+        api.getMecanicos()
+          .then((data) => {
+            const lista = data.map((m) => ({ id: m.id, nombre: m.nombre }));
+            setPersonal(lista);
+            setUsuarios(lista);
+          })
+          .catch(() => {});
+      });
   }, []);
 
   function resetForm() {
@@ -287,6 +318,7 @@ export default function RecepcionScreen({ navigation }) {
         anticipo_recibido: Number(ticket.anticipo_recibido || 0),
         metodo_pago_anticipo: ticket.metodo_pago_anticipo,
         recepcionado_por: ticket.recepcionado_por || null,
+        asignado_a_user_id: ticket.asignado_a_user_id ? Number(ticket.asignado_a_user_id) : null,
       });
       toast('✓ Ticket creado exitosamente', 'success');
       // Navegar al detalle del ticket recién creado
@@ -459,7 +491,7 @@ export default function RecepcionScreen({ navigation }) {
         )}
 
         {/* Formulario del ticket */}
-        <FormTicket ticket={ticket} setTicket={setTicket} mecanicos={mecanicos} />
+        <FormTicket ticket={ticket} setTicket={setTicket} personal={personal} usuarios={usuarios} />
 
         {/* Botones */}
         <View style={s.acciones}>

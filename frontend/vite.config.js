@@ -5,6 +5,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    host: "0.0.0.0",
+    watch: {
+      // En Windows con Docker, los eventos inotify no se propagan.
+      // usePolling fuerza a Vite a revisar cambios periódicamente.
+      usePolling: true,
+      interval: 1000,
+    },
   },
   test: {
     globals: true,

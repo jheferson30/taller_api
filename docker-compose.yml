@@ -9,12 +9,65 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # Base de datos y caché
       - DATABASE_URL=postgresql+psycopg2://postgres:${DB_PASSWORD:-postgres}@db:5432/taller_db?client_encoding=utf8
+      - DATABASE_PASSWORD=${DB_PASSWORD:-postgres}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - ENVIRONMENT=production
+      
+      # Entorno
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      
+      # Gestión de secretos (Azure Key Vault)
       - AZURE_KEY_VAULT_URL=${AZURE_KEY_VAULT_URL:-}
+      
+      # Seguridad JWT
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_SECRET_KEY_PREVIOUS=${JWT_SECRET_KEY_PREVIOUS:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      
+      # Protección CSRF
+      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY}
+      
+      # Cifrado de PII (REQUERIDO)
+      - PII_MASTER_KEY=${PII_MASTER_KEY}
+      
+      # Alertas de seguridad
+      - SECURITY_WEBHOOK_URL=${SECURITY_WEBHOOK_URL:-}
+      - SECURITY_ALERT_SMTP_HOST=${SECURITY_ALERT_SMTP_HOST:-}
+      - SECURITY_ALERT_SMTP_PORT=${SECURITY_ALERT_SMTP_PORT:-587}
+      - SECURITY_ALERT_SMTP_USER=${SECURITY_ALERT_SMTP_USER:-}
+      - SECURITY_ALERT_SMTP_PASSWORD=${SECURITY_ALERT_SMTP_PASSWORD:-}
+      - SECURITY_ALERT_SMTP_FROM=${SECURITY_ALERT_SMTP_FROM:-}
+      - SECURITY_ALERT_SMTP_TO=${SECURITY_ALERT_SMTP_TO:-}
+      
+      # Rate limiting
+      - RATE_LIMIT_AUTH_PER_MINUTE=${RATE_LIMIT_AUTH_PER_MINUTE:-5}
+      - RATE_LIMIT_CREATE_PER_MINUTE=${RATE_LIMIT_CREATE_PER_MINUTE:-30}
+      - RATE_LIMIT_READ_PER_MINUTE=${RATE_LIMIT_READ_PER_MINUTE:-100}
+      - RATE_LIMIT_UPLOAD_PER_MINUTE=${RATE_LIMIT_UPLOAD_PER_MINUTE:-10}
+      - RATE_LIMIT_WHATSAPP_PER_MINUTE=${RATE_LIMIT_WHATSAPP_PER_MINUTE:-5}
+      - RATE_LIMIT_TICKETS_PER_MINUTE=${RATE_LIMIT_TICKETS_PER_MINUTE:-30}
+      
+      # CORS y hosts confiables
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      
+      # Contraseñas y hashing
+      - PASSWORD_HASHER=${PASSWORD_HASHER:-bcrypt}
+      - BCRYPT_COST_FACTOR=${BCRYPT_COST_FACTOR:-12}
+      - PASSWORD_MIN_LENGTH=${PASSWORD_MIN_LENGTH:-8}
+      
+      # Auditoría
+      - AUDIT_LOG_RETENTION_DAYS=${AUDIT_LOG_RETENTION_DAYS:-90}
+      
+      # Legacy (compatibilidad)
+      - ENABLE_LEGACY_AUTH=${ENABLE_LEGACY_AUTH:-true}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - PDF_PASSWORD=${PDF_PASSWORD:-}
     env_file:
       - .env
     depends_on:
@@ -78,13 +131,37 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: taller-celery-worker
+    entrypoint: []
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
     environment:
+      # Base de datos y caché
       - DATABASE_URL=postgresql+psycopg2://postgres:${DB_PASSWORD:-postgres}@db:5432/taller_db?client_encoding=utf8
+      - DATABASE_PASSWORD=${DB_PASSWORD:-postgres}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      
+      # Entorno
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      
+      # Gestión de secretos (Azure Key Vault)
       - AZURE_KEY_VAULT_URL=${AZURE_KEY_VAULT_URL:-}
+      
+      # Seguridad JWT
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_SECRET_KEY_PREVIOUS=${JWT_SECRET_KEY_PREVIOUS:-}
+      
+      # Cifrado de PII (REQUERIDO)
+      - PII_MASTER_KEY=${PII_MASTER_KEY}
+      
+      # Alertas de seguridad
+      - SECURITY_WEBHOOK_URL=${SECURITY_WEBHOOK_URL:-}
+      - SECURITY_ALERT_SMTP_HOST=${SECURITY_ALERT_SMTP_HOST:-}
+      - SECURITY_ALERT_SMTP_PORT=${SECURITY_ALERT_SMTP_PORT:-587}
+      - SECURITY_ALERT_SMTP_USER=${SECURITY_ALERT_SMTP_USER:-}
+      - SECURITY_ALERT_SMTP_PASSWORD=${SECURITY_ALERT_SMTP_PASSWORD:-}
+      - SECURITY_ALERT_SMTP_FROM=${SECURITY_ALERT_SMTP_FROM:-}
+      - SECURITY_ALERT_SMTP_TO=${SECURITY_ALERT_SMTP_TO:-}
     env_file:
       - .env
     depends_on:

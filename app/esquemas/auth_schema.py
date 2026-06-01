@@ -42,6 +42,7 @@ class LoginResponse(BaseModel):
 
     access_token: str = Field(..., description="JWT access token (15 min expiry)")
     refresh_token: str = Field(..., description="JWT refresh token (7 days expiry)")
+    csrf_token: str = Field(..., description="CSRF token para incluir en header X-CSRF-Token")
     user: UserResponse = Field(..., description="Datos del usuario autenticado")
 
     class Config:

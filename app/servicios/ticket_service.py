@@ -125,16 +125,18 @@ class TicketService:
         if proximo_mantenimiento is not None:
             ticket.proximo_mantenimiento = InputSanitizer.sanitize_html(proximo_mantenimiento)
 
-        # Registrar ingreso final en caja al momento de la entrega (cliente paga al recoger)
-        valor_ingreso = (ticket.total_servicio or 0) - (ticket.anticipo_recibido or 0)
-        if valor_ingreso > 0:
+        # Registrar en caja solo el saldo que queda pendiente al momento de la entrega.
+        # Los cobros parciales ya fueron registrados como MovimientoCaja al agregarse.
+        saldo_al_entregar = self.calcular_saldo_pendiente(ticket)
+        if saldo_al_entregar > 0:
             movimiento = MovimientoCaja(
+                taller_id=ticket.taller_id,
                 tipo=TipoMovimiento.INGRESO_FINAL,
                 ticket_id=ticket.id,
                 ticket_codigo=ticket.ticket_codigo,
                 placa=ticket.placa,
                 estado_ticket=EstadoTicket.ENTREGADO,
-                valor=valor_ingreso,
+                valor=saldo_al_entregar,
                 metodo_pago=ticket.metodo_pago_final,
                 responsable=ticket.recepcionado_por,
                 concepto=f"Cobro final ticket {ticket.ticket_codigo}",
@@ -171,6 +173,7 @@ class TicketService:
         responsable: str,
         nota: str | None = None,
         soporte_url: str | None = None,
+        responsable_user_id: int | None = None,
     ) -> TicketCompra:
         """
         Crea una compra y su movimiento de caja asociado.
@@ -187,9 +190,11 @@ class TicketService:
         # Crear compra
         compra = TicketCompra(
             ticket_id=ticket.id,
+            taller_id=ticket.taller_id,
             descripcion=descripcion_sanitized,
             valor=valor,
             responsable=responsable,
+            responsable_user_id=responsable_user_id,
             nota=nota_sanitized,
             soporte_url=soporte_url,
         )
@@ -198,6 +203,7 @@ class TicketService:
 
         # Crear movimiento de caja
         movimiento = MovimientoCaja(
+            taller_id=ticket.taller_id,
             tipo=TipoMovimiento.EGRESO,
             ticket_id=ticket.id,
             ticket_codigo=ticket.ticket_codigo,

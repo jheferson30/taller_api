@@ -18,6 +18,36 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+# Directorio raíz del proyecto (donde vive la carpeta uploads/)
+# En Docker: WORKDIR=/app, uploads montado en /app/uploads
+_PROJECT_ROOT = os.environ.get("PROJECT_ROOT", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+
+def _resolver_path_foto(archivo_url: str) -> str:
+    """
+    Convierte una URL de foto almacenada en BD a un path absoluto del filesystem.
+
+    Soporta:
+    - /uploads/talleres/{id}/fotos/{file}  (nuevo, multi-tenant)
+    - /uploads/fotos/{file}                (legacy, mobile)
+    - http://127.0.0.1:8000/uploads/...    (legacy, URL completa)
+    """
+    if not archivo_url:
+        return ""
+    path = archivo_url
+    # Quitar prefijo de URL completa
+    if path.startswith("http://") or path.startswith("https://"):
+        # Extraer solo la parte del path después del host
+        try:
+            from urllib.parse import urlparse
+            path = urlparse(path).path
+        except Exception:
+            pass
+    # Quitar slash inicial para obtener path relativo
+    path = path.lstrip("/")
+    # Construir path absoluto desde la raíz del proyecto
+    return os.path.join(_PROJECT_ROOT, path)
+
 # ── Paleta ──────────────────────────────────────────────────────────────────
 AZUL = colors.HexColor("#1e3a5f")
 AZUL_MEDIO = colors.HexColor("#2563eb")
@@ -47,10 +77,10 @@ def campo(label: str, valor, style_label, style_val):
 
 
 def resolver_ruta_img(url: str) -> str:
-    """Convierte URL o ruta relativa a ruta local del sistema de archivos."""
+    """Convierte URL o ruta relativa a ruta absoluta del filesystem.
+    Previene path traversal y soporta todos los formatos de URL usados en el sistema."""
     if not url:
         return ""
-    import os
     import re
 
     def _sanitizar(ruta: str) -> str:
@@ -71,17 +101,17 @@ def resolver_ruta_img(url: str) -> str:
         ruta = _sanitizar(match.group(1))
         if not ruta:
             return ""
-        return os.path.join("uploads", *ruta.split("/"))
+        return os.path.join(_PROJECT_ROOT, "uploads", *ruta.split("/"))
     if url.startswith("/uploads/"):
-        ruta = _sanitizar(url[len("/uploads/") :])
+        ruta = _sanitizar(url[len("/uploads/"):])
         if not ruta:
             return ""
-        return os.path.join("uploads", *ruta.split("/"))
+        return os.path.join(_PROJECT_ROOT, "uploads", *ruta.split("/"))
     if url.startswith("uploads/"):
-        ruta = _sanitizar(url[len("uploads/") :])
+        ruta = _sanitizar(url[len("uploads/"):])
         if not ruta:
             return ""
-        return os.path.join("uploads", *ruta.split("/"))
+        return os.path.join(_PROJECT_ROOT, "uploads", *ruta.split("/"))
     return ""
 
 
@@ -197,11 +227,11 @@ def generar_pdf_ticket_completo(
     logo_url_taller = t.get("logo_url") or ""
     if logo_url_taller:
         # logo_url tiene formato /uploads/logo/logo_xxx.png
-        ruta_relativa = logo_url_taller.lstrip("/")
-        if os.path.exists(ruta_relativa):
-            logo_path = ruta_relativa
+        ruta_abs = resolver_ruta_img(logo_url_taller)
+        if ruta_abs and os.path.exists(ruta_abs):
+            logo_path = ruta_abs
     if not logo_path:
-        fallback = os.path.join("frontend", "public", "assets", "logo.png")
+        fallback = os.path.join(_PROJECT_ROOT, "frontend", "public", "assets", "logo.png")
         if os.path.exists(fallback):
             logo_path = fallback
 
@@ -573,12 +603,7 @@ def generar_pdf_ticket_completo(
     if fotos:
         foto_items = []
         for f in fotos:
-            img_path = f.get("archivo_url", "")
-            if img_path:
-                if img_path.startswith("http://127.0.0.1:8000/uploads/"):
-                    img_path = img_path.replace("http://127.0.0.1:8000/uploads/", "uploads/")
-                elif img_path.startswith("/uploads/"):
-                    img_path = img_path.lstrip("/")
+            img_path = _resolver_path_foto(f.get("archivo_url", ""))
             celda = []
             tipo = f.get("tipo", "FOTO").upper()
             desc = f.get("descripcion") or ""

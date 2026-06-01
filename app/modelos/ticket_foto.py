@@ -9,6 +9,7 @@ class TicketFoto(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False, index=True)
+    taller_id = Column(Integer, ForeignKey("talleres.id"), nullable=False, index=True)
     tipo = Column(String(30), nullable=False, default="OTRA")
     archivo_url = Column(String(255), nullable=False)
     descripcion = Column(String(250), nullable=True)

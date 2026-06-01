@@ -151,6 +151,7 @@ class AuthService {
       headers: {
         ...options.headers,
         'Authorization': `Bearer ${token}`,
+        'X-Mobile-App': 'taller-app',
       },
     });
 
@@ -165,6 +166,7 @@ class AuthService {
           headers: {
             ...options.headers,
             'Authorization': `Bearer ${token}`,
+            'X-Mobile-App': 'taller-app',
           },
         });
       } catch (error) {
@@ -196,11 +198,34 @@ class AuthService {
   }
 
   /**
-   * Verifica si el usuario está autenticado
+   * Verifica si el usuario está autenticado y el token no ha expirado.
+   * Decodifica el JWT localmente para revisar el campo `exp` sin hacer
+   * una llamada de red — si el token expiró, limpia la sesión.
    */
   async isAuthenticated() {
     const token = this.accessToken || await AsyncStorage.getItem(TOKEN_KEY);
-    return !!token;
+    if (!token) return false;
+
+    try {
+      // Decodificar payload del JWT (base64url, sin verificar firma)
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.exp && Date.now() / 1000 > payload.exp) {
+        // Token expirado — intentar refrescar antes de descartar la sesión
+        try {
+          await this.refreshAccessToken();
+          return true;
+        } catch {
+          await this.logout();
+          return false;
+        }
+      }
+      return true;
+    } catch {
+      // Si no se puede decodificar, asumir válido y dejar que la API lo rechace
+      return true;
+    }
   }
 
   /**

@@ -23,10 +23,14 @@ export default function AddCompraScreen({ route, navigation }) {
   const [nota, setNota] = useState('');
   const [uri, setUri] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [mecanicos, setMecanicos] = useState([]);
+  const [personal, setPersonal] = useState([]);
 
   useEffect(() => {
-    api.getMecanicos().then((data) => setMecanicos(data)).catch(() => {});
+    api.getPersonal().then(setPersonal).catch(() => {
+      api.getMecanicos().then((data) =>
+        setPersonal(data.map((m) => ({ id: m.id, nombre: m.nombre })))
+      ).catch(() => {});
+    });
   }, []);
 
   const seleccionarSoporte = async () => {
@@ -135,29 +139,19 @@ export default function AddCompraScreen({ route, navigation }) {
           />
 
           <Text style={styles.label}>Responsable</Text>
-          {mecanicos.length > 0 ? (
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={responsable}
-                onValueChange={(v) => setResponsable(v)}
-                style={styles.picker}
-                dropdownIconColor={colors.textMuted}
-              >
-                <Picker.Item label="— Sin asignar —" value="" />
-                {mecanicos.filter(m => m.activo).map((m) => (
-                  <Picker.Item key={m.id} label={m.nombre} value={m.nombre} />
-                ))}
-              </Picker>
-            </View>
-          ) : (
-            <TextInput
-              style={styles.input}
-              placeholder="Nombre del responsable"
-              placeholderTextColor={colors.textMuted}
-              value={responsable}
-              onChangeText={setResponsable}
-            />
-          )}
+          <View style={styles.pickerWrapper}>
+            <Picker
+              selectedValue={responsable}
+              onValueChange={(v) => setResponsable(v)}
+              style={styles.picker}
+              dropdownIconColor={colors.textMuted}
+            >
+              <Picker.Item label="— Sin asignar —" value="" />
+              {personal.map((p) => (
+                <Picker.Item key={p.id} label={p.nombre} value={p.nombre} />
+              ))}
+            </Picker>
+          </View>
 
           <Text style={styles.label}>Nota</Text>
           <TextInput

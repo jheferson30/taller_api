@@ -1,12 +1,11 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { getServerIp, saveServerIp, getIpsGuardadas, eliminarIp, detectarIpActiva, getAdminPassword, saveAdminPassword } from '../config';
+import { getServerIp, saveServerIp, getIpsGuardadas, eliminarIp, detectarIpActiva } from '../config';
 import authService from '../services/authService';
 
 export default function ConfiguracionScreen({ navigation, route }) {
   const [ip, setIp] = useState('');
-  const [password, setPassword] = useState('');
   const [ipsGuardadas, setIpsGuardadas] = useState([]);
   const [buscando, setBuscando] = useState(false);
   const [user, setUser] = useState(null);
@@ -18,16 +17,15 @@ export default function ConfiguracionScreen({ navigation, route }) {
   useEffect(() => { cargarDatos(); }, []);
 
   const cargarDatos = async () => {
-    const [ipActual, pwd, lista, currentUser] = await Promise.all([
-      getServerIp(), getAdminPassword(), getIpsGuardadas(), authService.getUser(),
+    const [ipActual, lista, currentUser] = await Promise.all([
+      getServerIp(), getIpsGuardadas(), authService.getUser(),
     ]);
-    setIp(ipActual); setPassword(pwd); setIpsGuardadas(lista); setUser(currentUser);
+    setIp(ipActual); setIpsGuardadas(lista); setUser(currentUser);
   };
 
   const guardar = async () => {
     if (!ip) { Alert.alert('Error', 'Ingresa una IP valida'); return; }
     await saveServerIp(ip);
-    await saveAdminPassword(password);
     Alert.alert('Exito', 'Configuracion guardada');
     await cargarDatos();
     if (primeraVez) navigation.replace('Login');
@@ -36,7 +34,7 @@ export default function ConfiguracionScreen({ navigation, route }) {
   const buscarAutomatico = async () => {
     setBuscando(true);
     try {
-      const ipEncontrada = await detectarIpActiva(password);
+      const ipEncontrada = await detectarIpActiva();
       if (ipEncontrada) { setIp(ipEncontrada); Alert.alert('Exito', 'Servidor encontrado en ' + ipEncontrada); await cargarDatos(); }
       else Alert.alert('No encontrado', 'No se pudo detectar el servidor');
     } catch (e) { Alert.alert('Error', e.message); }
@@ -119,9 +117,13 @@ export default function ConfiguracionScreen({ navigation, route }) {
           <Text style={s.title}>Servidor</Text>
           <Text style={s.label}>IP del Servidor</Text>
           <TextInput style={s.input} placeholder="192.168.1.100" placeholderTextColor="#64748b" value={ip} onChangeText={setIp} keyboardType="decimal-pad" autoCorrect={false} autoCapitalize="none" />
-          <Text style={s.label}>Contrasena Admin</Text>
-          <TextInput style={s.input} placeholder="Contrasena" placeholderTextColor="#64748b" value={password} onChangeText={setPassword} secureTextEntry />
           <TouchableOpacity style={s.btn} onPress={guardar}><Text style={s.btnTxt}>Guardar</Text></TouchableOpacity>
+          <TouchableOpacity style={[s.btn, s.btnGray]} onPress={buscarAutomatico} disabled={buscando}>
+            {buscando
+              ? <Text style={s.btnTxtWhite}>Buscando servidor...</Text>
+              : <Text style={s.btnTxtWhite}>🔍 Detectar servidor automáticamente</Text>
+            }
+          </TouchableOpacity>
           <TouchableOpacity style={[s.btn, s.btnQr]} onPress={abrirScanner}>
             <Text style={s.btnTxtWhite}>📷 Escanear QR del Servidor</Text>
           </TouchableOpacity>
