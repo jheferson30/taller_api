@@ -8,6 +8,7 @@ services:
     container_name: taller-api
     environment:
       - DATABASE_URL=postgresql+psycopg2://postgres:${DB_PASSWORD}@db:5432/taller_db?client_encoding=utf8
+      - DATABASE_PASSWORD=${DB_PASSWORD}
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=production
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
@@ -17,6 +18,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - PDF_PASSWORD=${PDF_PASSWORD}
       - CSRF_SECRET_KEY=${CSRF_SECRET_KEY}
+      - PII_MASTER_KEY=${PII_MASTER_KEY}
       - PASSWORD_HASHER=bcrypt
       - BCRYPT_COST_FACTOR=12
     env_file:
@@ -112,10 +114,12 @@ services:
     command: celery -A app.tasks.celery_app worker --loglevel=warning --concurrency=2
     environment:
       - DATABASE_URL=postgresql+psycopg2://postgres:${DB_PASSWORD}@db:5432/taller_db?client_encoding=utf8
+      - DATABASE_PASSWORD=${DB_PASSWORD}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=production
+      - PII_MASTER_KEY=${PII_MASTER_KEY}
     env_file:
       - .env.production
     depends_on:
