@@ -765,9 +765,10 @@ export default function TicketPage() {
                             const idx = comprasUsadas[r.nombre] || 0;
                             const compra = cola[idx] || null;
                             comprasUsadas[r.nombre] = idx + 1;
-                            const fotoSrc = r.foto_url
-                              ? resolverUrl(r.foto_url)
-                              : compra?.soporte_url ? resolverUrl(compra.soporte_url) : null;
+                            // La foto del repuesto viene SOLO de r.foto_url (foto propia del repuesto).
+                            // El soporte_url de la compra es el comprobante del gasto, no una foto
+                            // del repuesto — nunca se hereda entre repuestos con el mismo nombre.
+                            const fotoSrc = r.foto_url ? resolverUrl(r.foto_url) : null;
                             return (
                               <div key={r.id} className="item-card" style={{ position: "relative" }}>
                                 {isEditable && (
